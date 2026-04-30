@@ -50,6 +50,11 @@ class CopilotQueryModel(Base):
     context_finding_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     context_asset_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Session tracking
+    session_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), nullable=True, index=True
+    )
+
     # Streaming
     was_streamed: Mapped[bool] = mapped_column(Boolean, default=False)
 

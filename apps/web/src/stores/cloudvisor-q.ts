@@ -13,6 +13,17 @@ export interface HistoryEntry {
   created_at: string;
 }
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  description?: string;
+  message_count: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  last_message_at?: string;
+}
+
 interface CloudVisorQState {
   isOpen: boolean;
   width: number;
@@ -29,6 +40,14 @@ interface CloudVisorQState {
   setHistoryEntries: (entries: HistoryEntry[]) => void;
   selectedHistoryId: string | null;
   setSelectedHistoryId: (id: string | null) => void;
+
+  // Chat sessions
+  currentSessionId: string | null;
+  setCurrentSessionId: (id: string | null) => void;
+  sessions: ChatSession[];
+  setSessions: (sessions: ChatSession[]) => void;
+  addSession: (session: ChatSession) => void;
+  removeSession: (id: string) => void;
 }
 
 // Default width = 50% of viewport, computed at runtime
@@ -61,11 +80,25 @@ export const useCloudVisorQStore = create<CloudVisorQState>()(
       setHistoryEntries: (entries) => set({ historyEntries: entries }),
       selectedHistoryId: null,
       setSelectedHistoryId: (id) => set({ selectedHistoryId: id }),
+
+      // Chat sessions
+      currentSessionId: null,
+      setCurrentSessionId: (id) => set({ currentSessionId: id }),
+      sessions: [],
+      setSessions: (sessions) => set({ sessions }),
+      addSession: (session) => set((state) => ({
+        sessions: [session, ...state.sessions],
+      })),
+      removeSession: (id) => set((state) => ({
+        sessions: state.sessions.filter((s) => s.id !== id),
+      })),
     }),
     {
       name: 'cloudvisor-q-storage',
       partialize: () => ({
         // Don't persist width - always open at 50% of current viewport
+        // Persist current session ID for continuity
+        currentSessionId: true,
       }),
       skipHydration: true, // Prevent SSR hydration issues
     }

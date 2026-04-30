@@ -76,3 +76,8 @@ class CopilotQueryRequest(BaseModel):
         default=False,
         description="If true, returns Server-Sent Events (SSE) streaming response",
     )
+
+    session_id: str | None = Field(
+        default=None,
+        description="Optional chat session ID to group related queries",
+    )

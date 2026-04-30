@@ -10,6 +10,7 @@ import { useScopeStore } from '@/stores/scope';
 import { usePathname } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { CloudVisorQHistory } from './cloudvisor-q-history';
 
 // ─── History helpers ──────────────────────────────────────────────────────────
 const COPILOT_BASE_PANEL = process.env.NEXT_PUBLIC_COPILOT_URL || 'http://localhost:8010';
@@ -491,7 +492,7 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
   return (
     <div
       ref={panelRef}
-      className="flex flex-col h-full"
+      className="flex h-full"
       style={{
         width: panelWidth,
         backgroundColor: 'var(--bg-surface)',
@@ -499,6 +500,26 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
         transition: isResizing ? 'none' : 'width 0.2s ease-out',
       }}
     >
+      {/* History Sidebar */}
+      {showHistory && (
+        <div
+          className="flex-shrink-0"
+          style={{
+            width: '280px',
+            borderRight: '1px solid var(--border-default)',
+          }}
+        >
+          <CloudVisorQHistory
+            onClose={() => setShowHistory(false)}
+            onSelectSession={() => {
+              // Session selected, can add logic here if needed
+            }}
+          />
+        </div>
+      )}
+
+      {/* Main Chat Area */}
+      <div className="flex flex-col h-full flex-1">
       {/* Header */}
       <div
         className="flex items-center justify-between px-3 py-2 border-b flex-shrink-0"
@@ -691,6 +712,7 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
           }}
         />
       )}
+      </div>
     </div>
   );
 }

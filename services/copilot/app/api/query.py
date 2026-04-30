@@ -165,6 +165,8 @@ async def query_copilot(
                 model_used = "direct"
 
             query_log_repo = QueryLogRepository(db)
+            session_id = query_request.session_id if hasattr(query_request, 'session_id') else None
+            
             await query_log_repo.create(
                 organization_id=x_org_id,
                 user_id=user_id if _UUID_RE.match(user_id) else x_org_id,  # fallback to org_id for dev mode
@@ -178,7 +180,14 @@ async def query_copilot(
                 context_finding_id=query_request.context.finding_id if query_request.context else None,
                 context_asset_id=query_request.context.asset_id if query_request.context else None,
                 was_streamed=False,
+                session_id=session_id,
             )
+            
+            # Update session message count if session_id provided
+            if session_id:
+                from ..repositories.chat_session_repo import ChatSessionRepository
+                session_repo = ChatSessionRepository(db)
+                await session_repo.increment_message_count(session_id, x_org_id)
         except Exception as audit_err:
             logger.warning(f"Failed to write audit log (non-critical): {audit_err}")
 

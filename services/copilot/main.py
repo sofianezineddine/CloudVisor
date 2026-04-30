@@ -12,7 +12,7 @@ from cloudvisor_utils.tracing import setup_tracing, instrument_fastapi
 
 from app.core.dependencies import init_dependencies, shutdown_dependencies
 from app.core.config import get_copilot_settings
-from app.api import query_router
+from app.api import query_router, sessions_router
 
 logger = logging.getLogger("copilot")
 
@@ -108,6 +108,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(query_router, prefix="/v1")
+    app.include_router(sessions_router, prefix="/v1")
 
     return app
 
