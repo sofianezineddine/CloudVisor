@@ -29,7 +29,7 @@ _UUID_RE = re.compile(
     description="Ask a natural language question about your cloud security posture",
 )
 async def query_copilot(
-    request: CopilotQueryRequest,
+    query_request: CopilotQueryRequest,
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_org_id: str | None = Header(default=None, alias="X-Org-ID"),
     db: AsyncSession = Depends(get_db),
@@ -113,10 +113,10 @@ async def query_copilot(
     pipeline = RAGPipeline(settings, x_org_id, user_id, _session_factory)
 
     try:
-        result = await pipeline.execute(request)
+        result = await pipeline.execute(query_request)
 
         # ── Streaming response ──────────────────────────────────────────────
-        if request.stream:
+        if query_request.stream:
             async def generate():
                 full_response = []
                 async for chunk in result:
@@ -136,15 +136,15 @@ async def query_copilot(
                             await QR(audit_db).create(
                                 organization_id=x_org_id,
                                 user_id=user_id,
-                                query_text=request.query,
+                                query_text=query_request.query,
                                 intent=None,  # intent not available in streaming path
                                 response_text="".join(full_response),
                                 citations=None,
                                 data_sources=None,
                                 processing_ms=None,
                                 model_used=model_used,
-                                context_finding_id=request.context.finding_id if request.context else None,
-                                context_asset_id=request.context.asset_id if request.context else None,
+                                context_finding_id=query_request.context.finding_id if query_request.context else None,
+                                context_asset_id=query_request.context.asset_id if query_request.context else None,
                                 was_streamed=True,
                             )
                     except Exception as audit_err:
@@ -165,23 +165,20 @@ async def query_copilot(
                 model_used = "direct"
 
             query_log_repo = QueryLogRepository(db)
-            saved = await query_log_repo.create(
+            await query_log_repo.create(
                 organization_id=x_org_id,
-                user_id=user_id if _UUID_RE.match(user_id) else x_org_id,
-                query_text=request.query,
+                user_id=user_id if _UUID_RE.match(user_id) else x_org_id,  # fallback to org_id for dev mode
+                query_text=query_request.query,
                 intent=result.intent,
                 response_text=result.answer,
                 citations={"citations": [c.dict() for c in result.citations]},
                 data_sources=result.data_sources_used,
                 processing_ms=result.processing_ms,
                 model_used=model_used,
-                session_id=request.session_id,  # group into conversation
-                context_finding_id=request.context.finding_id if request.context else None,
-                context_asset_id=request.context.asset_id if request.context else None,
+                context_finding_id=query_request.context.finding_id if query_request.context else None,
+                context_asset_id=query_request.context.asset_id if query_request.context else None,
                 was_streamed=False,
             )
-            # Attach the session_id to the response so the frontend can continue the conversation
-            result.session_id = saved.session_id
         except Exception as audit_err:
             logger.warning(f"Failed to write audit log (non-critical): {audit_err}")
 
@@ -348,102 +345,3 @@ async def get_query_detail(
     if not entry:
         raise HTTPException(status_code=404, detail="Query not found")
     return entry
-
-
-def _get_org_from_request(
-    authorization: str | None,
-    x_org_id: str | None,
-) -> tuple[str | None, str | None]:
-    """Extract org_id and user_id from auth headers. Returns (org_id, user_id)."""
-    if not authorization:
-        return None, None
-    token = authorization.removeprefix("Bearer ").strip()
-    extracted_org_id: str | None = None
-    extracted_user_id: str | None = None
-    if token != "dev-token":
-        try:
-            import base64
-            import json as _json
-            payload_b64 = token.split(".")[1]
-            payload_b64 += "=" * (4 - len(payload_b64) % 4)
-            payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
-            extracted_org_id = payload.get("organization_id") or payload.get("org_id")
-            extracted_user_id = payload.get("sub") or payload.get("user_id")
-        except Exception:
-            pass
-    org_id = extracted_org_id if (extracted_org_id and _UUID_RE.match(extracted_org_id)) else (
-        x_org_id if (x_org_id and _UUID_RE.match(x_org_id)) else None
-    )
-    user_id = extracted_user_id if (extracted_user_id and _UUID_RE.match(extracted_user_id)) else None
-    return org_id, user_id
-
-
-@router.get(
-    "/sessions",
-    summary="Get chat sessions",
-    description="List all chat sessions (conversations) for the current user",
-)
-async def get_sessions(
-    limit: int = 50,
-    offset: int = 0,
-    authorization: str | None = Header(default=None, alias="Authorization"),
-    x_org_id: str | None = Header(default=None, alias="X-Org-ID"),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """
-    Get chat sessions — each session is a conversation with multiple messages.
-    Returns: session_id, title (first message), message_count, last_message_at.
-    """
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    org_id, user_id = _get_org_from_request(authorization, x_org_id)
-
-    if not org_id:
-        from sqlalchemy import text as _text
-        result = await db.execute(_text("SELECT id::text FROM organizations LIMIT 1"))
-        row = result.first()
-        org_id = row[0] if row else None
-        if not org_id:
-            raise HTTPException(status_code=401, detail="Cannot determine organization.")
-
-    query_log_repo = QueryLogRepository(db)
-    sessions = await query_log_repo.get_sessions(
-        organization_id=org_id,
-        user_id=user_id,
-        limit=limit,
-        offset=offset,
-    )
-    return {"sessions": sessions, "total": len(sessions)}
-
-
-@router.get(
-    "/sessions/{session_id}",
-    summary="Get all messages in a session",
-    description="Retrieve the full conversation for a session ID",
-)
-async def get_session_messages(
-    session_id: str,
-    authorization: str | None = Header(default=None, alias="Authorization"),
-    x_org_id: str | None = Header(default=None, alias="X-Org-ID"),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """Get all messages in a chat session, ordered by time."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    org_id, _ = _get_org_from_request(authorization, x_org_id)
-
-    if not org_id:
-        from sqlalchemy import text as _text
-        result = await db.execute(_text("SELECT id::text FROM organizations LIMIT 1"))
-        row = result.first()
-        org_id = row[0] if row else None
-        if not org_id:
-            raise HTTPException(status_code=401, detail="Cannot determine organization.")
-
-    query_log_repo = QueryLogRepository(db)
-    messages = await query_log_repo.get_session_messages(session_id, org_id)
-    if not messages:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return {"session_id": session_id, "messages": messages, "total": len(messages)}

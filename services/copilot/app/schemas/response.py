@@ -42,8 +42,6 @@ class CopilotQueryResponse(BaseModel):
 
     query_id: str = Field(..., description="Unique query identifier for audit trail")
 
-    session_id: str | None = Field(default=None, description="Session ID — use this to continue the conversation")
-
     answer: str = Field(..., description="Natural language answer grounded in actual data")
 
     intent: IntentType = Field(..., description="Detected query intent")

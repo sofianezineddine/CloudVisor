@@ -74,7 +74,6 @@ class RAGPipeline:
                 logger.info(f"Direct answer generated in {processing_ms}ms")
                 return CopilotQueryResponse(
                     query_id=query_id,
-                    session_id=request.session_id,
                     answer=answer,
                     intent=intent,
                     citations=[],
@@ -117,7 +116,6 @@ class RAGPipeline:
 
         response = CopilotQueryResponse(
             query_id=query_id,
-            session_id=getattr(request, 'session_id', None),
             answer=answer,
             intent=intent,
             citations=citations,

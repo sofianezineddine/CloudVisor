@@ -76,8 +76,3 @@ class CopilotQueryRequest(BaseModel):
         default=False,
         description="If true, returns Server-Sent Events (SSE) streaming response",
     )
-
-    session_id: str | None = Field(
-        default=None,
-        description="Session ID to group this message with an existing conversation. If None, a new session is created.",
-    )
