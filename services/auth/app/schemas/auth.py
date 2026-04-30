@@ -1,0 +1,154 @@
+"""Pydantic schemas for Auth service."""
+
+from datetime import datetime
+from typing import Any
+from pydantic import BaseModel, Field, EmailStr
+
+
+class RegisterRequest(BaseModel):
+    """Registration request."""
+
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    organization_name: str = Field(..., min_length=1, max_length=255)
+    first_name: str | None = None
+    last_name: str | None = None
+
+
+class LoginRequest(BaseModel):
+    """Login request."""
+
+    email: EmailStr
+    password: str
+    mfa_code: str | None = None
+
+
+class RefreshTokenRequest(BaseModel):
+    """Refresh token request."""
+
+    refresh_token: str
+
+
+class TokenResponse(BaseModel):
+    """Token response."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "Bearer"
+
+
+class UserResponse(BaseModel):
+    """User response."""
+
+    id: str
+    email: str
+    first_name: str | None
+    last_name: str | None
+    organization_id: str
+    role: str = "Owner"  # Default to Owner since every registrant creates their org
+    mfa_enabled: bool
+    provider: str  # local, google, github
+    created_at: datetime
+
+
+class UserProfileResponse(BaseModel):
+    """User profile response."""
+
+    id: str
+    email: str
+    first_name: str | None
+    last_name: str | None
+    organization: dict[str, Any]
+    role: dict[str, Any] | None
+    mfa_enabled: bool
+    last_login_at: datetime | None
+
+
+class MfaEnrollResponse(BaseModel):
+    """MFA enrollment response."""
+
+    secret: str
+    qr_code: str
+
+
+class MfaVerifyRequest(BaseModel):
+    """MFA verification request."""
+
+    code: str
+
+
+class MfaBackupCodesResponse(BaseModel):
+    """MFA backup codes response."""
+
+    backup_codes: list[str]
+
+
+class ApiKeyCreateRequest(BaseModel):
+    """API key creation request."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    scopes: list[str] = Field(default_factory=lambda: ["read"])
+    expires_at: datetime | None = None
+
+
+class ApiKeyResponse(BaseModel):
+    """API key response."""
+
+    id: str
+    name: str
+    key: str | None = None
+    scopes: list[str]
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class ApiKeyListResponse(BaseModel):
+    """API key list response."""
+
+    keys: list[dict[str, Any]]
+
+
+class RoleResponse(BaseModel):
+    """Role response."""
+
+    id: str
+    name: str
+    description: str | None
+    permissions: list[str]
+    is_builtin: bool
+    is_default: bool
+
+
+class RoleListResponse(BaseModel):
+    """Role list response."""
+
+    roles: list[RoleResponse]
+
+
+class SessionResponse(BaseModel):
+    """Session response."""
+
+    id: str
+    device_info: str | None
+    ip_address: str | None
+    last_active_at: datetime
+    created_at: datetime
+
+
+class SessionListResponse(BaseModel):
+    """Session list response."""
+
+    sessions: list[SessionResponse]
+
+
+class AssignRoleRequest(BaseModel):
+    """Assign role request."""
+
+    role_id: str
+
+
+class ErrorResponse(BaseModel):
+    """Error response."""
+
+    error: str
+    detail: str | None = None

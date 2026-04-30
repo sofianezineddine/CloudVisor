@@ -1,0 +1,209 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ─── Light mode (default) ───────────────────────────────────────────────── */
+  :root {
+    /* Backgrounds */
+    --bg-base:            #f2f3f3;
+    --bg-surface:         #ffffff;
+    --bg-elevated:        #f8f8f8;
+    --bg-overlay:         #ffffff;
+
+    /* Header bars */
+    --bar1-bg:            #232f3e;
+    --bar2-bg:            #31465f;
+    --bar3-bg:            #ffffff;
+    --bar3-border:        #d5dbdb;
+
+    /* Sidebar */
+    --sidebar-bg:         #ffffff;
+    --sidebar-border:     #d5dbdb;
+
+    /* Borders */
+    --border-faint:       #eaeded;
+    --border-default:     #d5dbdb;
+    --border-strong:      #aab7b8;
+
+    /* Text */
+    --text-primary:       #0f1b2d;
+    --text-secondary:     #545b64;
+    --text-tertiary:      #687078;
+    --text-link:          #0073bb;
+    --text-link-hover:    #005276;
+    --text-inverse:       #ffffff;
+
+    /* Accent */
+    --accent:             #0073bb;
+    --accent-hover:       #005276;
+    --accent-dim:         rgba(0,115,187,0.10);
+
+    /* Severity */
+    --critical:           #d13212;
+    --critical-bg:        #fdf3f1;
+    --critical-border:    #f5cec7;
+    --critical-dim:       rgba(209,50,18,0.10);
+    --high:               #d45b07;
+    --high-bg:            #fef6ee;
+    --high-dim:           rgba(212,91,7,0.10);
+    --medium:             #8d6605;
+    --medium-bg:          #fefaec;
+    --medium-dim:         rgba(141,102,5,0.10);
+    --low:                #1a6b3c;
+    --low-bg:             #f2f8f5;
+    --low-dim:            rgba(26,107,60,0.10);
+    --info:               #0073bb;
+    --info-bg:            #f0f8ff;
+    --info-dim:           rgba(0,115,187,0.10);
+    --success:            #1a6b3c;
+    --success-bg:         #f2f8f5;
+    --success-dim:        rgba(26,107,60,0.10);
+    --warning:            #8d6605;
+    --warning-bg:         #fefaec;
+    --warning-dim:        rgba(141,102,5,0.10);
+    --danger:             #d13212;
+    --danger-dim:         rgba(209,50,18,0.10);
+
+    /* Buttons */
+    --btn-primary-bg:     #ec7211;
+    --btn-primary-hover:  #eb5f07;
+    --btn-normal-bg:      #ffffff;
+    --btn-normal-border:  #aab7b8;
+    --btn-normal-hover:   #f2f3f3;
+    --btn-normal-text:    #0f1b2d;
+
+    /* Shadows */
+    --shadow-sm:          0 1px 2px rgba(0,28,36,0.12);
+    --shadow-md:          0 2px 8px rgba(0,28,36,0.15);
+    --shadow-popover:     0 2px 8px rgba(0,28,36,0.15), 0 0 0 1px rgba(0,28,36,0.08);
+
+    /* Typography */
+    --font-sans:          'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono:          'Courier New', Courier, monospace;
+
+    /* Radius */
+    --radius-sm:          2px;
+    --radius-md:          4px;
+  }
+
+  /* ─── Dark mode ──────────────────────────────────────────────────────────── */
+  [data-theme="dark"] {
+    --bg-base:            #0d1117;
+    --bg-surface:         #161b22;
+    --bg-elevated:        #1c2433;
+    --bg-overlay:         #1c2433;
+    --bar1-bg:            #161e2d;
+    --bar2-bg:            #1f2d3d;
+    --bar3-bg:            #1a2332;
+    --bar3-border:        rgba(255,255,255,0.10);
+    --sidebar-bg:         #161b22;
+    --sidebar-border:     rgba(255,255,255,0.10);
+    --border-faint:       rgba(255,255,255,0.06);
+    --border-default:     rgba(255,255,255,0.12);
+    --border-strong:      rgba(255,255,255,0.22);
+    --text-primary:       #e2e8f0;
+    --text-secondary:     #8899b4;
+    --text-tertiary:      #4a5568;
+    --text-link:          #4db8ff;
+    --text-link-hover:    #79ccff;
+    --btn-normal-bg:      #1c2433;
+    --btn-normal-border:  rgba(255,255,255,0.20);
+    --btn-normal-hover:   #243040;
+    --btn-normal-text:    #d5dbdb;
+    --critical-bg:        rgba(209,50,18,0.12);
+    --critical-border:    rgba(209,50,18,0.30);
+    --high-bg:            rgba(212,91,7,0.12);
+    --medium-bg:          rgba(141,102,5,0.12);
+    --low-bg:             rgba(26,107,60,0.12);
+    --info-bg:            rgba(0,115,187,0.12);
+    --success-bg:         rgba(26,107,60,0.12);
+    --warning-bg:         rgba(141,102,5,0.12);
+    --accent-dim:         rgba(0,115,187,0.15);
+    --success-dim:        rgba(26,107,60,0.12);
+    --warning-dim:        rgba(141,102,5,0.12);
+    --critical-dim:       rgba(209,50,18,0.12);
+    --high-dim:           rgba(212,91,7,0.12);
+    --medium-dim:         rgba(141,102,5,0.12);
+    --low-dim:            rgba(26,107,60,0.12);
+    --info-dim:           rgba(0,115,187,0.12);
+    --danger-dim:         rgba(209,50,18,0.12);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-default) transparent;
+  }
+  *::-webkit-scrollbar { width: 6px; height: 6px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background-color: var(--border-default); border-radius: 3px; }
+}
+
+@layer components {
+  /* AWS-style container */
+  .cv-container {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 0px;
+  }
+
+  /* Admin card */
+  .admin-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+  }
+
+  /* AWS-style button */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    background-color: var(--btn-primary-bg);
+    color: #ffffff;
+    border: 1px solid var(--btn-primary-bg);
+    border-radius: 2px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.1s;
+  }
+  .btn-primary:hover { background-color: var(--btn-primary-hover); }
+
+  .btn-normal {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    background-color: var(--btn-normal-bg);
+    color: var(--btn-normal-text);
+    border: 1px solid var(--btn-normal-border);
+    border-radius: 2px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.1s;
+  }
+  .btn-normal:hover { background-color: var(--btn-normal-hover); }
+
+  /* Severity badges */
+  .badge-critical { background-color: var(--critical-bg); color: var(--critical); border: 1px solid var(--critical-border); border-radius: 2px; padding: 1px 6px; font-size: 11px; font-weight: 600; }
+  .badge-success  { background-color: var(--success-bg);  color: var(--success);  border: 1px solid rgba(26,107,60,0.25); border-radius: 2px; padding: 1px 6px; font-size: 11px; font-weight: 600; }
+  .badge-warning  { background-color: var(--warning-bg);  color: var(--warning);  border: 1px solid rgba(141,102,5,0.25); border-radius: 2px; padding: 1px 6px; font-size: 11px; font-weight: 600; }
+  .badge-info     { background-color: var(--info-bg);     color: var(--info);     border: 1px solid rgba(0,115,187,0.25); border-radius: 2px; padding: 1px 6px; font-size: 11px; font-weight: 600; }
+}

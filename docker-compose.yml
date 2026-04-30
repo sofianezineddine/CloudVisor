@@ -1,0 +1,556 @@
+
+networks:
+  cloudvisor:
+    driver: bridge
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Each backend service loads its own env file from services/<name>/.env
+# Docker-specific overrides (container hostnames) are applied on top via
+# the `environment:` block, which takes precedence over env_file values.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ─── Infrastructure ───────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: cv-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cvadmin
+      POSTGRES_PASSWORD: cvpassword
+      POSTGRES_DB: cloudvisor
+    volumes:
+      - ./infra/db/postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - cloudvisor
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "cvadmin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: cv-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: "neo4j/password"
+    ports:
+      - "7687:7687"
+      - "7474:7474"
+    volumes:
+      - ./infra/db/neo4j:/data
+    networks:
+      - cloudvisor
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: cv-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx1g
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - esdata1:/usr/share/elasticsearch/data
+    networks:
+      - cloudvisor
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: cv-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - cloudvisor
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: cv-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: cv-zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://cv-kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    networks:
+      - cloudvisor
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: cv-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - cloudvisor
+
+  opa:
+    image: openpolicyagent/opa:latest
+    container_name: cv-opa
+    restart: unless-stopped
+    ports:
+      - "8181:8181"
+    command: ["run", "--server", "--addr=0.0.0.0:8181"]
+    networks:
+      - cloudvisor
+
+  adminer:
+    image: adminer:latest
+    container_name: cv-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - cloudvisor
+
+  # ─── HashiCorp Vault ──────────────────────────────────────────────────────
+
+  vault:
+    image: hashicorp/vault:1.15
+    container_name: cv-vault
+    restart: unless-stopped
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_ADDR: "http://127.0.0.1:8200"
+      VAULT_TOKEN: "cloudvisor-root-token"
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - vault_data:/vault/data
+      - vault_logs:/vault/logs
+      - ./infra/vault/config:/vault/config:ro
+    command: vault server -config=/vault/config/vault.hcl
+    networks:
+      - cloudvisor
+    healthcheck:
+      test: ["CMD", "sh", "-c", "VAULT_ADDR=http://127.0.0.1:8200 vault status 2>&1 | grep -q 'Initialized'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  vault-init:
+    image: python:3.12-alpine
+    container_name: cv-vault-init
+    restart: always
+    environment:
+      VAULT_ADDR: "http://cv-vault:8200"
+    command: >
+      sh -c "pip install hvac -q && python3 /vault/init/init.py && sleep infinity"
+    volumes:
+      - vault_data:/vault/data
+      - ./infra/vault:/vault/init:ro
+    depends_on:
+      vault:
+        condition: service_started
+    networks:
+      - cloudvisor
+
+  # ─── Ollama (local LLM) ───────────────────────────────────────────────────
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: cv-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G
+        reservations:
+          cpus: "2.0"
+          memory: 4G
+
+  # ─── Auth Service (port 8002) ─────────────────────────────────────────────
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    container_name: cv-auth
+    ports:
+      - "8002:8002"
+    env_file:
+      - services/auth/.env
+    environment:
+      # Docker network overrides — replace localhost with container names
+      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      REDIS_URL: redis://cv-redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
+      APP_ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ─── Connector Service (port 8000) ────────────────────────────────────────
+
+  connector-service:
+    build:
+      context: .
+      dockerfile: services/connector/Dockerfile
+    container_name: cv-connector
+    ports:
+      - "8000:8000"
+    env_file:
+      - services/connector/.env
+    environment:
+      # Docker network overrides
+      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      REDIS_URL: redis://cv-redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
+      KAFKA_SCHEMA_REGISTRY_URL: http://cv-kafka:8081
+      APP_ENVIRONMENT: production
+      # Vault — use container name and token file written by vault-init
+      VAULT_ENABLED: "true"
+      VAULT_URL: http://cv-vault:8200
+      VAULT_TOKEN: ""
+      VAULT_TOKEN_FILE: /vault/data/vault_token
+      VAULT_MOUNT_POINT: cloudvisor/credentials
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+      vault:
+        condition: service_started
+      vault-init:
+        condition: service_started
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    volumes:
+      - vault_data:/vault/data:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Graph Service (port 8001) ────────────────────────────────────────────
+
+  graph-service:
+    build:
+      context: .
+      dockerfile: services/graph/Dockerfile
+    container_name: cv-graph
+    ports:
+      - "8001:8001"
+    env_file:
+      - services/graph/.env
+    environment:
+      # Docker network overrides
+      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      REDIS_URL: redis://cv-redis:6379/1
+      KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
+      APP_ENVIRONMENT: production
+      GRAPH_NEO4J_URI: bolt://cv-neo4j:7687
+      GRAPH_ELASTICSEARCH_URL: http://cv-elasticsearch:9200
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+      neo4j:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ─── Policy Service (port 8003) ───────────────────────────────────────────
+
+  policy-service:
+    build:
+      context: .
+      dockerfile: services/policy/Dockerfile
+    container_name: cv-policy
+    ports:
+      - "8003:8003"
+    env_file:
+      - services/policy/.env
+    environment:
+      # Docker network overrides
+      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      REDIS_URL: redis://cv-redis:6379/2
+      KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
+      APP_ENVIRONMENT: production
+      POLICY_OPA_URL: http://cv-opa:8181
+      POLICY_RULES_REPO_PATH: /app/rules/rego
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+      opa:
+        condition: service_started
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ─── Alert Service (port 8004) ────────────────────────────────────────────
+
+  alert-service:
+    build:
+      context: .
+      dockerfile: services/alert/Dockerfile
+    container_name: cv-alert
+    ports:
+      - "8004:8004"
+    env_file:
+      - services/alert/.env
+    environment:
+      # Docker network overrides
+      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      REDIS_URL: redis://cv-redis:6379/3
+      KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
+      APP_ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ─── Public API Gateway (port 8005) ──────────────────────────────────────
+
+  api-service:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    container_name: cv-api
+    ports:
+      - "8005:8005"
+    env_file:
+      - services/api/.env
+    environment:
+      # Docker network overrides
+      REDIS_URL: redis://cv-redis:6379/4
+      APP_ENVIRONMENT: production
+      API_AUTH_SERVICE_URL: http://cv-auth:8002
+      API_CONNECTOR_SERVICE_URL: http://cv-connector:8000
+      API_GRAPH_SERVICE_URL: http://cv-graph:8001
+      API_POLICY_SERVICE_URL: http://cv-policy:8003
+      API_ALERT_SERVICE_URL: http://cv-alert:8004
+      API_CSPM_SERVICE_URL: http://cv-cspm:8006
+      API_COPILOT_SERVICE_URL: http://cv-copilot:8010
+    depends_on:
+      redis:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      connector-service:
+        condition: service_started
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ─── CSPM Service (port 8006) ─────────────────────────────────────────────
+
+  cspm-service:
+    build:
+      context: .
+      dockerfile: services/security/cspm/Dockerfile
+    container_name: cv-cspm
+    ports:
+      - "8006:8006"
+    env_file:
+      - services/security/cspm/.env
+    environment:
+      # Docker network overrides
+      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      REDIS_URL: redis://cv-redis:6379/5
+      KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
+      APP_ENVIRONMENT: production
+      POLICY_SERVICE_URL: http://cv-policy:8003
+      ALERT_SERVICE_URL: http://cv-alert:8004
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+      policy-service:
+        condition: service_started
+      alert-service:
+        condition: service_started
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Copilot Service / CloudVisor Q (port 8010) ───────────────────────────
+
+  copilot-service:
+    build:
+      context: .
+      dockerfile: services/copilot/Dockerfile
+    container_name: cv-copilot
+    ports:
+      - "8010:8010"
+    env_file:
+      - services/copilot/.env
+    environment:
+      # Docker network overrides
+      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      REDIS_URL: redis://cv-redis:6379/6
+      KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
+      APP_ENVIRONMENT: production
+      COPILOT_OLLAMA_BASE_URL: http://cv-ollama:11434
+      COPILOT_OLLAMA_MODEL: qwen2.5:0.5b
+      COPILOT_OLLAMA_TIMEOUT: "600"
+      COPILOT_GRAPH_SERVICE_URL: http://cv-graph:8001
+      COPILOT_POLICY_SERVICE_URL: http://cv-policy:8003
+      COPILOT_ELASTICSEARCH_URL: http://cv-elasticsearch:9200
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
+      graph-service:
+        condition: service_started
+      policy-service:
+        condition: service_started
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  esdata1:
+  postgres_data:
+  neo4j_data:
+  vault_data:
+  vault_logs:
+  ollama_data:

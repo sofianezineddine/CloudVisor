@@ -1,0 +1,187 @@
+{
+  "rules": [
+    {
+      "id": "aws-s3-public-access-block-disabled",
+      "file": "s3_public_access.rego",
+      "title": "S3 Bucket Public Access Block Disabled",
+      "severity": "CRITICAL",
+      "category": "Storage",
+      "resource_type": "aws::s3::bucket",
+      "compliance": ["CIS-AWS-2.1.5", "SOC2-CC6.1", "PCI-DSS-1.3"]
+    },
+    {
+      "id": "aws-s3-encryption-disabled",
+      "file": "s3_encryption.rego",
+      "title": "S3 Bucket Server-Side Encryption Disabled",
+      "severity": "HIGH",
+      "category": "Storage",
+      "resource_type": "aws::s3::bucket",
+      "compliance": ["CIS-AWS-2.1.1", "SOC2-CC6.1", "HIPAA-164.312(a)(2)(iv)"]
+    },
+    {
+      "id": "aws-iam-root-mfa-disabled",
+      "file": "iam_root_mfa.rego",
+      "title": "Root Account MFA Not Enabled",
+      "severity": "CRITICAL",
+      "category": "Identity",
+      "resource_type": "aws::iam::account-summary",
+      "compliance": ["CIS-AWS-1.5", "SOC2-CC6.1", "NIST-800-53-IA-2(1)"]
+    },
+    {
+      "id": "aws-iam-wildcard-actions",
+      "file": "iam_wildcard_policies.rego",
+      "title": "IAM Policy Grants Wildcard Actions",
+      "severity": "HIGH",
+      "category": "Identity",
+      "resource_type": "aws::iam::policy",
+      "compliance": ["CIS-AWS-1.16", "SOC2-CC6.1", "NIST-800-53-AC-6(1)"]
+    },
+    {
+      "id": "aws-ec2-imdsv1-enabled",
+      "file": "ec2_imdsv1.rego",
+      "title": "EC2 Instance Uses IMDSv1",
+      "severity": "HIGH",
+      "category": "Compute",
+      "resource_type": "aws::ec2::instance",
+      "compliance": ["CIS-AWS-2.2.1", "SOC2-CC6.1"]
+    },
+    {
+      "id": "aws-ebs-volume-not-encrypted",
+      "file": "ebs_encryption.rego",
+      "title": "EBS Volume Not Encrypted",
+      "severity": "HIGH",
+      "category": "Compute",
+      "resource_type": "aws::ec2::volume",
+      "compliance": ["CIS-AWS-2.2.1", "SOC2-CC6.1", "HIPAA-164.312(a)(2)(iv)"]
+    },
+    {
+      "id": "aws-rds-publicly-accessible",
+      "file": "rds_public_access.rego",
+      "title": "RDS Instance Publicly Accessible",
+      "severity": "CRITICAL",
+      "category": "Database",
+      "resource_type": "aws::rds::db-instance",
+      "compliance": ["CIS-AWS-2.3.1", "SOC2-CC6.1", "PCI-DSS-1.3"]
+    },
+    {
+      "id": "aws-rds-backup-disabled",
+      "file": "rds_backup.rego",
+      "title": "RDS Instance Automated Backups Disabled",
+      "severity": "MEDIUM",
+      "category": "Database",
+      "resource_type": "aws::rds::db-instance",
+      "compliance": ["CIS-AWS-2.3.2", "SOC2-CC5.2"]
+    },
+    {
+      "id": "aws-sg-ssh-unrestricted",
+      "file": "security_group_ssh.rego",
+      "title": "Security Group Allows Unrestricted SSH Access",
+      "severity": "HIGH",
+      "category": "Networking",
+      "resource_type": "aws::ec2::security-group",
+      "compliance": ["CIS-AWS-4.1", "SOC2-CC6.1", "PCI-DSS-1.3"]
+    },
+    {
+      "id": "aws-sg-rdp-unrestricted",
+      "file": "security_group_rdp.rego",
+      "title": "Security Group Allows Unrestricted RDP Access",
+      "severity": "HIGH",
+      "category": "Networking",
+      "resource_type": "aws::ec2::security-group",
+      "compliance": ["CIS-AWS-4.2", "SOC2-CC6.1", "PCI-DSS-1.3"]
+    },
+    {
+      "id": "aws-vpc-flow-logs-disabled",
+      "file": "vpc_flow_logs.rego",
+      "title": "VPC Flow Logs Not Enabled",
+      "severity": "MEDIUM",
+      "category": "Networking",
+      "resource_type": "aws::ec2::vpc",
+      "compliance": ["CIS-AWS-3.9", "SOC2-CC6.1", "NIST-800-53-AU-2"]
+    },
+    {
+      "id": "aws-cloudtrail-not-enabled",
+      "file": "cloudtrail_enabled.rego",
+      "title": "CloudTrail Not Enabled",
+      "severity": "HIGH",
+      "category": "Logging",
+      "resource_type": "aws::cloudtrail::trail",
+      "compliance": ["CIS-AWS-3.1", "SOC2-CC6.1", "NIST-800-53-AU-2"]
+    },
+    {
+      "id": "aws-kms-key-rotation-disabled",
+      "file": "kms_key_rotation.rego",
+      "title": "KMS Key Rotation Not Enabled",
+      "severity": "MEDIUM",
+      "category": "Encryption",
+      "resource_type": "aws::kms::key",
+      "compliance": ["CIS-AWS-3.8", "SOC2-CC6.1", "NIST-800-53-SC-12"]
+    },
+    {
+      "id": "aws-lambda-public-access-wildcard",
+      "file": "lambda_public_access.rego",
+      "title": "Lambda Function Allows Public Invocation",
+      "severity": "HIGH",
+      "category": "Serverless",
+      "resource_type": "aws::lambda::function",
+      "compliance": ["CIS-AWS-2.4.1", "SOC2-CC6.1", "PCI-DSS-1.3"]
+    },
+    {
+      "id": "aws-ec2-public-ip",
+      "file": "ec2_public_ip.rego",
+      "title": "EC2 Instance Has Public IP",
+      "severity": "MEDIUM",
+      "category": "Compute",
+      "resource_type": "aws::ec2::instance",
+      "compliance": ["CIS-AWS-5.2", "SOC2-CC6.1"]
+    },
+    {
+      "id": "aws-iam-no-mfa",
+      "file": "iam_no_mfa.rego",
+      "title": "IAM User Has No MFA",
+      "severity": "HIGH",
+      "category": "Identity",
+      "resource_type": "aws::iam::user",
+      "compliance": ["CIS-AWS-1.10", "SOC2-CC6.1"]
+    },
+    {
+      "id": "aws-sg-unrestricted-all",
+      "file": "sg_unrestricted_all.rego",
+      "title": "Security Group Allows All Traffic",
+      "severity": "CRITICAL",
+      "category": "Networking",
+      "resource_type": "aws::ec2::security-group",
+      "compliance": ["CIS-AWS-4.1", "SOC2-CC6.1", "PCI-DSS-1.3"]
+    },
+    {
+      "id": "aws-s3-no-versioning",
+      "file": "s3_versioning.rego",
+      "title": "S3 Bucket Versioning Disabled",
+      "severity": "LOW",
+      "category": "Storage",
+      "resource_type": "aws::s3::bucket",
+      "compliance": ["CIS-AWS-2.1.3", "SOC2-CC5.2"]
+    },
+    {
+      "id": "aws-rds-no-encryption",
+      "file": "rds_encryption.rego",
+      "title": "RDS Instance Not Encrypted",
+      "severity": "HIGH",
+      "category": "Database",
+      "resource_type": "aws::rds::db-instance",
+      "compliance": ["CIS-AWS-2.3.1", "HIPAA-164.312", "PCI-DSS-3.4"]
+    }
+  ],
+  "metadata": {
+    "total_rules": 19,
+    "provider": "aws",
+    "categories": ["Storage", "Identity", "Compute", "Database", "Networking", "Logging", "Encryption", "Serverless"],
+    "compliance_frameworks": ["CIS-AWS", "SOC2", "PCI-DSS", "HIPAA", "NIST-800-53"],
+    "severity_distribution": {
+      "CRITICAL": 4,
+      "HIGH": 11,
+      "MEDIUM": 4,
+      "LOW": 1
+    }
+  }
+}

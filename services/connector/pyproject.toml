@@ -1,0 +1,69 @@
+[project]
+name = "cloudvisor-connector"
+version = "0.1.0"
+description = "CloudVisor Cloud Connector - Asset ingestion service"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "faust>=1.13.0",
+    "boto3>=1.34.0",
+    "botocore>=1.34.0",
+    "azure-mgmt-resource>=2.4.0",
+    "azure-identity>=1.15.0",
+    "google-cloud-asset>=3.25.0",
+    "google-cloud-iam>=2.12.0",
+    "oci>=2.30.0",
+    "sqlalchemy[asyncio]>=2.0.25",
+    "asyncpg>=0.29.0",
+    "redis>=5.0.0",
+    "aiokafka>=0.10.0",
+    "confluent-kafka>=2.3.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "structlog>=24.1.0",
+    "opentelemetry-api>=1.22.0",
+    "opentelemetry-sdk>=1.22.0",
+    "opentelemetry-instrumentation-fastapi>=0.43b0",
+    "opentelemetry-exporter-otlp>=1.22.0",
+    "httpx>=0.26.0",
+    "tenacity>=8.2.0",
+    "pyyaml>=6.0.1",
+    "python-dateutil>=2.8.2",
+    "orjson>=3.9.0",
+    "cloudvisor-types @ file:///${WORKSPACE_ROOT}/packages/types",
+    "cloudvisor-utils @ file:///${WORKSPACE_ROOT}/packages/utils",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.8.0",
+    "ruff>=0.2.0",
+    "httpx>=0.26.0",
+    "fakeredis>=2.21.0",
+]
+
+[project.scripts]
+cloudvisor-connector = "connector.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["connector"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

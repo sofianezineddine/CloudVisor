@@ -1,0 +1,54 @@
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pycache
+
+# ─── Virtual environments ─────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ─── Environment files (secrets — never commit) ───────────────────────────────
+# .env files are committed for use across dev environments
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+
+# ─── IDE ─────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# ─── Build artifacts ─────────────────────────────────────────────────────────
+dist/
+build/
+target/
+*/dist/
+
+# ─── Database volumes ────────────────────────────────────────────────────────
+infra/db/postgres/
+infra/db/neo4j/
+
+# ─── Misc ────────────────────────────────────────────────────────────────────
+.qwen/
+*.ruff_cache/
+
+# ─── Next.js build output ────────────────────────────────────────────────────
+.next/
+**/.next/
+*.tsbuildinfo
+
+# ─── Node modules ────────────────────────────────────────────────────────────
+node_modules/
+*/node_modules/
+**/node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ─── Kiro workspace ──────────────────────────────────────────────────────────
+.kiro/

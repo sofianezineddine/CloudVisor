@@ -1,0 +1,553 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ─── AWS Console Design Tokens ──────────────────────────────────────────── */
+  :root {
+    /* ── AWS Top Navigation (always dark) ── */
+    --aws-nav-bg:           #232f3e;
+    --aws-nav-hover:        #37475a;
+    --aws-nav-active:       #1a2535;
+    --aws-nav-border:       #3a4a5c;
+    --aws-nav-text:         #d5dbdb;
+    --aws-nav-text-dim:     #8a9ba8;
+    --aws-orange:           #ff9900;
+    --aws-orange-hover:     #ec7211;
+
+    /* ── Sub-header (white bar below top nav) ── */
+    --subheader-bg:         #ffffff;
+    --subheader-border:     #d5dbdb;
+    --subheader-text:       #16191f;
+
+    /* ── Page / Content area ── */
+    --bg-base:              #f2f3f3;
+    --bg-surface:           #ffffff;
+    --bg-elevated:          #f8f8f8;
+    --bg-overlay:           #ffffff;
+
+    /* ── Sidebar (left nav) ── */
+    --sidebar-bg:           #ffffff;
+    --sidebar-border:       #d5dbdb;
+    --sidebar-hover:        #f2f3f3;
+    --sidebar-active-bg:    #f2f3f3;
+    --sidebar-active-border:#ec7211;
+    --sidebar-text:         #16191f;
+    --sidebar-text-dim:     #545b64;
+    --sidebar-section:      #879596;
+
+    /* ── Borders ── */
+    --border-faint:         #eaeded;
+    --border-default:       #d5dbdb;
+    --border-strong:        #aab7b8;
+
+    /* ── Text ── */
+    --text-primary:         #16191f;
+    --text-secondary:       #545b64;
+    --text-tertiary:        #879596;
+    --text-link:            #0073bb;
+    --text-link-hover:      #005276;
+    --text-inverse:         #ffffff;
+
+    /* ── Accent / Brand ── */
+    --accent:               #0073bb;
+    --accent-hover:         #005276;
+    --accent-dim:           rgba(0,115,187,0.08);
+    --accent-light:         #e8f4fb;
+
+    /* ── Buttons ── */
+    --btn-primary-bg:       #ec7211;
+    --btn-primary-hover:    #eb5f07;
+    --btn-primary-text:     #ffffff;
+    --btn-normal-bg:        #ffffff;
+    --btn-normal-border:    #aab7b8;
+    --btn-normal-hover:     #f2f3f3;
+    --btn-normal-text:      #16191f;
+
+    /* ── Severity ── */
+    --critical:             #d13212;
+    --critical-bg:          #fdf3f1;
+    --critical-border:      #f5cec7;
+    --critical-dim:         rgba(209,50,18,0.08);
+
+    --high:                 #d45b07;
+    --high-bg:              #fef6ee;
+    --high-border:          #f5cba7;
+    --high-dim:             rgba(212,91,7,0.08);
+
+    --medium:               #8d6605;
+    --medium-bg:            #fefaec;
+    --medium-border:        #f5e4a7;
+    --medium-dim:           rgba(141,102,5,0.08);
+
+    --low:                  #1a6b3c;
+    --low-bg:               #f2f8f5;
+    --low-border:           #a3d5b5;
+    --low-dim:              rgba(26,107,60,0.08);
+
+    --info:                 #0073bb;
+    --info-bg:              #f0f8ff;
+    --info-border:          #a3d0e8;
+    --info-dim:             rgba(0,115,187,0.08);
+
+    /* ── Semantic ── */
+    --success:              #1a6b3c;
+    --success-bg:           #f2f8f5;
+    --success-dim:          rgba(26,107,60,0.08);
+    --warning:              #8d6605;
+    --warning-bg:           #fefaec;
+    --warning-dim:          rgba(141,102,5,0.08);
+    --danger:               #d13212;
+    --danger-bg:            #fdf3f1;
+    --danger-dim:           rgba(209,50,18,0.08);
+
+    /* ── Cloud providers ── */
+    --aws:                  #ff9900;
+    --aws-bg:               rgba(255,153,0,0.10);
+    --azure:                #0078d4;
+    --azure-bg:             rgba(0,120,212,0.10);
+    --gcp:                  #4285f4;
+    --gcp-bg:               rgba(66,133,244,0.10);
+    --oci:                  #c74634;
+    --oci-bg:               rgba(199,70,52,0.10);
+
+    /* ── Shadows ── */
+    --shadow-sm:            0 1px 2px rgba(0,28,36,0.12);
+    --shadow-md:            0 2px 8px rgba(0,28,36,0.15);
+    --shadow-lg:            0 4px 16px rgba(0,28,36,0.18);
+    --shadow-popover:       0 2px 8px rgba(0,28,36,0.15), 0 0 0 1px rgba(0,28,36,0.08);
+    --shadow-modal:         0 4px 24px rgba(0,28,36,0.25);
+
+    /* ── Bar 3 (content bar) + sidebar theming ── */
+    --bar3-bg:            #ffffff;
+    --bar3-border:        #d5dbdb;
+    --sidebar-bg:         #ffffff;
+    --sidebar-border:     #d5dbdb;
+
+    /* ── Typography ── */
+    --font-sans:            'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:            'Courier New', Courier, monospace;
+
+    /* ── Radius ── */
+    --radius-sm:            2px;
+    --radius-md:            4px;
+    --radius-lg:            8px;
+    --radius-button:        2px;
+    --radius-container:     4px;
+    --radius-badge:         2px;
+    --radius-input:         2px;
+
+    /* Legacy compat */
+    --bg-topnav:            #232f3e;
+    --bg-topnav-hover:      #37475a;
+    --bg-sidenav:           #ffffff;
+    --bg-sidenav-hover:     #f2f3f3;
+    --bg-sidenav-active:    #f2f3f3;
+    --text-on-topnav:       #d5dbdb;
+    --border-accent:        rgba(0,115,187,0.40);
+    --bg-card:              #ffffff;
+    --bg-input:             #ffffff;
+    --bg-base-hsl:          0 0% 95%;
+  }
+
+  /* ─── Dark mode ──────────────────────────────────────────────────────────── */
+  [data-theme="dark"] {
+    --aws-nav-bg:           #161e2d;
+    --aws-nav-hover:        #1f2d3d;
+    --subheader-bg:         #1a2332;
+    --subheader-border:     #2d3a4a;
+    --subheader-text:       #d5dbdb;
+    --bg-base:              #0d1117;
+    --bg-surface:           #161b22;
+    --bg-elevated:          #1c2433;
+    --bg-overlay:           #1c2433;
+    /* Bar 3 + sidebar dark mode */
+    --bar3-bg:              #1a2332;
+    --bar3-border:          rgba(255,255,255,0.10);
+    --sidebar-bg:           #161b22;
+    --sidebar-border:       rgba(255,255,255,0.10);
+    --sidebar-hover:        #1c2433;
+    --sidebar-active-bg:    #1c2433;
+    --sidebar-text:         #d5dbdb;
+    --sidebar-text-dim:     #8a9ba8;
+    --border-faint:         rgba(255,255,255,0.06);
+    --border-default:       rgba(255,255,255,0.12);
+    --border-strong:        rgba(255,255,255,0.22);
+    --text-primary:         #e2e8f0;
+    --text-secondary:       #8899b4;
+    --text-tertiary:        #4a5568;
+    --text-link:            #4db8ff;
+    --btn-normal-bg:        #1c2433;
+    --btn-normal-border:    rgba(255,255,255,0.20);
+    --btn-normal-hover:     #243040;
+    --btn-normal-text:      #d5dbdb;
+    --bg-topnav:            #161e2d;
+    --bg-sidenav:           #161b22;
+    --bg-sidenav-hover:     #1c2433;
+    --bg-sidenav-active:    rgba(0,115,187,0.15);
+    --critical-bg:          rgba(209,50,18,0.12);
+    --critical-border:      rgba(209,50,18,0.30);
+    --high-bg:              rgba(212,91,7,0.12);
+    --high-border:          rgba(212,91,7,0.30);
+    --medium-bg:            rgba(141,102,5,0.12);
+    --medium-border:        rgba(141,102,5,0.30);
+    --low-bg:               rgba(26,107,60,0.12);
+    --low-border:           rgba(26,107,60,0.30);
+    --info-bg:              rgba(0,115,187,0.12);
+    --info-border:          rgba(0,115,187,0.30);
+    --success-bg:           rgba(26,107,60,0.12);
+    --warning-bg:           rgba(141,102,5,0.12);
+    --danger-bg:            rgba(209,50,18,0.12);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-default) transparent;
+  }
+  *::-webkit-scrollbar { width: 6px; height: 6px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background-color: var(--border-default); border-radius: 3px; }
+  *::-webkit-scrollbar-thumb:hover { background-color: var(--border-strong); }
+
+  ::selection { background-color: var(--accent-dim); color: var(--text-primary); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  html { scroll-behavior: smooth; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* ── AWS-style container (widget card) ───────────────────────────────────── */
+  .cv-container {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-container);
+  }
+
+  /* ── AWS widget header ───────────────────────────────────────────────────── */
+  .widget-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-faint);
+    min-height: 44px;
+  }
+
+  .widget-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .widget-drag-handle {
+    color: var(--text-tertiary);
+    cursor: grab;
+    font-size: 12px;
+    letter-spacing: -1px;
+    line-height: 1;
+    margin-right: 4px;
+  }
+
+  .info-link {
+    font-size: 12px;
+    color: var(--text-link);
+    text-decoration: none;
+    margin-left: 4px;
+  }
+  .info-link:hover { text-decoration: underline; }
+
+  /* ── AWS-style button ────────────────────────────────────────────────────── */
+  .aws-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 400;
+    border-radius: var(--radius-button);
+    border: 1px solid;
+    cursor: pointer;
+    transition: background-color 0.1s, border-color 0.1s;
+    white-space: nowrap;
+  }
+
+  .aws-btn-primary {
+    background-color: var(--btn-primary-bg);
+    border-color: var(--btn-primary-bg);
+    color: var(--btn-primary-text);
+  }
+  .aws-btn-primary:hover { background-color: var(--btn-primary-hover); border-color: var(--btn-primary-hover); }
+
+  .aws-btn-normal {
+    background-color: var(--btn-normal-bg);
+    border-color: var(--btn-normal-border);
+    color: var(--btn-normal-text);
+  }
+  .aws-btn-normal:hover { background-color: var(--btn-normal-hover); }
+
+  /* ── Severity borders ────────────────────────────────────────────────────── */
+  .severity-border-critical { border-left: 4px solid var(--critical); }
+  .severity-border-high     { border-left: 4px solid var(--high); }
+  .severity-border-medium   { border-left: 4px solid var(--medium); }
+  .severity-border-low      { border-left: 4px solid var(--low); }
+  .severity-border-info     { border-left: 4px solid var(--info); }
+
+  /* ── Typography ──────────────────────────────────────────────────────────── */
+  .text-h1    { font-size: 20px; font-weight: 700; line-height: 1.3; }
+  .text-h2    { font-size: 16px; font-weight: 700; line-height: 1.3; }
+  .text-h3    { font-size: 14px; font-weight: 700; line-height: 1.4; }
+  .text-body  { font-size: 14px; font-weight: 400; line-height: 1.5; }
+  .text-small { font-size: 12px; font-weight: 400; line-height: 1.4; }
+
+  /* ── Input ───────────────────────────────────────────────────────────────── */
+  .aws-input {
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-input);
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: var(--font-sans);
+  }
+  .aws-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  .aws-input::placeholder { color: var(--text-tertiary); }
+
+  /* ── Legacy card ─────────────────────────────────────────────────────────── */
+  .card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-container);
+  }
+
+  /* ── Page helpers ────────────────────────────────────────────────────────── */
+  .page-container { max-width: 1280px; margin: 0 auto; padding: 20px; }
+  .font-sans  { font-family: var(--font-sans); }
+  .font-mono  { font-family: var(--font-mono); }
+
+  /* ── Content wrapper — centered with responsive padding ─────────────────── */
+  .content-wrapper {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 12px;
+    width: 100%;
+  }
+
+  @media (min-width: 640px) {
+    .content-wrapper {
+      padding: 0 20px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .content-wrapper {
+      padding: 0 32px;
+    }
+  }
+}
+
+@layer utilities {
+  @keyframes fade-in        { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slide-in-top   { from { transform: translateY(-6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes slide-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  @keyframes spin           { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  .fade-in        { animation: fade-in 0.15s ease-out forwards; }
+  .slide-in-top   { animation: slide-in-top 0.15s ease-out forwards; }
+  .slide-in-right { animation: slide-in-right 0.2s ease-out forwards; }
+  .animate-spin   { animation: spin 1s linear infinite; }
+
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--border-faint) 50%, var(--bg-elevated) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  }
+  @keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ── CloudVisor Q Markdown Styles ────────────────────────────────────────── */
+  .markdown-content {
+    /* Reset prose defaults to use CloudVisor theme */
+    --tw-prose-body: var(--text-primary);
+    --tw-prose-headings: var(--text-primary);
+    --tw-prose-links: var(--text-link);
+    --tw-prose-bold: var(--text-primary);
+    --tw-prose-code: var(--text-primary);
+    --tw-prose-pre-bg: var(--bg-elevated);
+    --tw-prose-th-borders: var(--border-default);
+    --tw-prose-td-borders: var(--border-faint);
+  }
+
+  .markdown-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .markdown-content thead {
+    background-color: var(--bg-elevated);
+    border-bottom: 2px solid var(--border-default);
+  }
+
+  .markdown-content th {
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+    border-right: 1px solid var(--border-faint);
+  }
+
+  .markdown-content th:last-child {
+    border-right: none;
+  }
+
+  .markdown-content td {
+    padding: 8px 12px;
+    border-right: 1px solid var(--border-faint);
+    border-bottom: 1px solid var(--border-faint);
+    color: var(--text-primary);
+  }
+
+  .markdown-content td:last-child {
+    border-right: none;
+  }
+
+  .markdown-content tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .markdown-content tbody tr:hover {
+    background-color: var(--bg-elevated);
+  }
+
+  .markdown-content code {
+    background-color: var(--bg-elevated);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-primary);
+    border: 1px solid var(--border-faint);
+  }
+
+  .markdown-content pre {
+    background-color: var(--bg-elevated);
+    padding: 12px;
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    border: 1px solid var(--border-default);
+    margin: 12px 0;
+  }
+
+  .markdown-content pre code {
+    background-color: transparent;
+    padding: 0;
+    border: none;
+    font-size: 13px;
+  }
+
+  .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+    margin-top: 16px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .markdown-content h1 { font-size: 18px; }
+  .markdown-content h2 { font-size: 16px; }
+  .markdown-content h3 { font-size: 14px; }
+
+  .markdown-content p {
+    margin: 8px 0;
+    line-height: 1.6;
+  }
+
+  .markdown-content ul, .markdown-content ol {
+    margin: 8px 0;
+    padding-left: 24px;
+  }
+
+  .markdown-content li {
+    margin: 4px 0;
+  }
+
+  .markdown-content a {
+    color: var(--text-link);
+    text-decoration: none;
+  }
+
+  .markdown-content a:hover {
+    text-decoration: underline;
+    color: var(--text-link-hover);
+  }
+
+  .markdown-content strong {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .markdown-content blockquote {
+    border-left: 3px solid var(--border-default);
+    padding-left: 12px;
+    margin: 12px 0;
+    color: var(--text-secondary);
+    font-style: italic;
+  }
+}
+
+/* ─── Responsive Grid Adjustments for CloudVisor Q Panel ─────────────────── */
+@layer utilities {
+  /* Console grid - responsive to available width */
+  .console-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 500px), 1fr));
+  }
+
+  /* Force single column when container is narrow */
+  @container (max-width: 1100px) {
+    .console-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  /* Ensure content doesn't overflow */
+  main {
+    overflow-x: hidden;
+    container-type: inline-size;
+  }
+
+  /* Make widgets responsive */
+  .widget-body {
+    min-width: 0;
+    overflow: hidden;
+  }
+}

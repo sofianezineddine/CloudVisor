@@ -1,0 +1,176 @@
+/* ReactFlow style overrides for CloudVisor asset graph */
+
+.react-flow { background: #0d1117 !important; }
+.react-flow__renderer { background: transparent !important; }
+.react-flow__pane { cursor: grab; }
+.react-flow__pane:active { cursor: grabbing; }
+
+.react-flow__controls {
+  background: rgba(22,27,34,0.95) !important;
+  border: 1px solid #30363d !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+  overflow: hidden;
+  bottom: 20px !important;
+  left: 20px !important;
+}
+
+.react-flow__controls-button {
+  background: transparent !important;
+  border-bottom: 1px solid #21262d !important;
+  color: #6e7681 !important;
+  fill: #6e7681 !important;
+  width: 30px !important;
+  height: 30px !important;
+  transition: all 0.15s !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #21262d !important;
+  color: #e6edf3 !important;
+  fill: #e6edf3 !important;
+}
+
+.react-flow__controls-button:last-child { border-bottom: none !important; }
+
+.react-flow__minimap {
+  background: rgba(13,17,23,0.95) !important;
+  border: 1px solid #30363d !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  bottom: 20px !important;
+  right: 20px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+}
+
+.react-flow__minimap-mask { fill: rgba(13,17,23,0.6) !important; }
+.react-flow__edge-path { stroke-linecap: round; }
+.react-flow__edge-text { fill: #6e7681 !important; font-size: 9px !important; }
+.react-flow__edge-textbg { fill: transparent !important; }
+.react-flow__attribution { display: none !important; }
+
+.react-flow__handle {
+  width: 5px !important;
+  height: 5px !important;
+  border: none !important;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.react-flow__node:hover .react-flow__handle { opacity: 1; }
+.react-flow__node { transition: filter 0.12s; }
+.react-flow__node:hover { filter: brightness(1.12); z-index: 10 !important; }
+.react-flow__node.selected { z-index: 20 !important; }
+
+/* Container */
+.asset-graph-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #0d1117;
+}
+
+/* Loading state */
+.graph-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #0d1117;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #1f6feb;
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Empty state */
+.graph-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #0d1117;
+  text-align: center;
+}
+
+/* Legend toggle button */
+.legend-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(22,27,34,0.92);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  color: #8b949e;
+  fontSize: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.legend-toggle-btn:hover {
+  color: #e6edf3;
+  border-color: #6e7681;
+}
+
+/* Legend content */
+.legend-content {
+  background: rgba(22,27,34,0.95);
+  border: 1px solid #30363d;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 10px 14px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  min-width: 200px;
+  margin-top: -1px;
+}
+
+/* Fit view button */
+.fit-view-btn {
+  background: rgba(22,27,34,0.92);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  color: #8b949e;
+  fontSize: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.fit-view-btn:hover {
+  color: #e6edf3;
+  border-color: #6e7681;
+}
+
+/* Detail panel */
+.detail-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 260px;
+  z-index: 20;
+  background: rgba(22,27,34,0.97);
+  border: 1px solid rgba(139,148,158,0.2);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03);
+  backdrop-filter: blur(12px);
+}

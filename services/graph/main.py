@@ -1,0 +1,114 @@
+"""CloudVisor Graph Service — Unified Asset Graph & Inventory."""
+
+import logging
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from cloudvisor_utils.config import get_settings
+from cloudvisor_utils.logging_utils import configure_logging, get_logger
+
+from app.core.dependencies import (
+    init_dependencies,
+    shutdown_dependencies,
+    get_graph_settings_cached,
+    _neo4j_client,
+    _elasticsearch_client,
+    _redis_client,
+    _session_factory,
+)
+from app.core.config import get_graph_settings
+from app.api.routes import assets_router
+
+
+def create_app() -> FastAPI:
+    settings = get_settings()
+    graph_settings = get_graph_settings()
+
+    configure_logging(
+        service_name=graph_settings.service_name,
+        log_level=settings.app.log_level,
+    )
+
+    logger = get_logger("graph")
+    logger.info("Starting CloudVisor Graph service")
+
+    app = FastAPI(
+        title="CloudVisor Graph",
+        description="Unified Asset Graph & Inventory Service",
+        version="1.0.0",
+        docs_url="/docs",
+        redoc_url="/redoc",
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Prometheus metrics — Rule 9: observability is not optional
+    try:
+        from cloudvisor_utils.metrics import setup_metrics
+        setup_metrics(app, "graph")
+    except Exception as e:
+        logger.warning(f"Metrics setup failed: {e}")
+
+    @app.on_event("startup")
+    async def startup_event() -> None:
+        logger.info("Initializing Graph service dependencies")
+        await init_dependencies(settings, graph_settings)
+
+        # Wire app.state so route dependencies can access clients
+        import app.core.dependencies as deps
+        app.state.neo4j = deps._neo4j_client
+        app.state.elasticsearch = deps._elasticsearch_client
+        app.state.redis = deps._redis_client
+        app.state.session_factory = deps._session_factory
+        app.state.graph_settings = graph_settings
+        if app.state.neo4j:
+            try:
+                await app.state.neo4j.create_constraints()
+                logger.info("Neo4j constraints created")
+            except Exception as e:
+                logger.warning(f"Neo4j constraints: {e}")
+
+        if app.state.elasticsearch:
+            try:
+                from app.clients.elasticsearch import ASSET_MAPPINGS
+                await app.state.elasticsearch.create_index("assets", ASSET_MAPPINGS)
+                logger.info("Elasticsearch index ready")
+            except Exception as e:
+                logger.warning(f"Elasticsearch index: {e}")
+
+    @app.on_event("shutdown")
+    async def shutdown_event() -> None:
+        logger.info("Shutting down Graph service")
+        await shutdown_dependencies()
+
+    @app.get("/health")
+    async def health_check() -> dict:
+        return {"status": "healthy", "service": "graph"}
+
+    @app.get("/ready")
+    async def readiness_check() -> dict:
+        return {"status": "ready", "service": "graph"}
+
+    app.include_router(assets_router, prefix="/internal")
+
+    return app
+
+
+app = create_app()
+
+if __name__ == "__main__":
+    import uvicorn
+    settings = get_settings()
+    uvicorn.run(
+        "graph.main:app",
+        host="0.0.0.0",
+        port=8001,
+        reload=settings.app.environment == "development",
+    )

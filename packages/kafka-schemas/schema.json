@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "types": {
+    "cloudvisor.resource.event": {
+      "type": "record",
+      "name": "CloudResourceEvent",
+      "namespace": "cloudvisor",
+      "doc": "Base event for all resource discovery events from the connector",
+      "fields": [
+        {"name": "organization_id", "type": "string"},
+        {"name": "account_id", "type": "string"},
+        {"name": "provider", "type": "string"},
+        {"name": "region", "type": "string"},
+        {"name": "resource_type", "type": "string"},
+        {"name": "cloud_resource_id", "type": "string"},
+        {"name": "name", "type": "string"},
+        {"name": "tags", "type": {"type": "map", "values": "string"}},
+        {"name": "raw", "type": {"type": "map", "values": "string"}},
+        {"name": "is_public", "type": "boolean", "default": false},
+        {"name": "environment", "type": "string", "default": "unknown"},
+        {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"},
+        {"name": "correlation_id", "type": "string"}
+      ]
+    },
+    "cloudvisor.connector.sync": {
+      "type": "record",
+      "name": "ConnectorSyncEvent",
+      "namespace": "cloudvisor",
+      "doc": "Connector sync lifecycle events",
+      "fields": [
+        {"name": "organization_id", "type": "string"},
+        {"name": "account_id", "type": "string"},
+        {"name": "provider", "type": "string"},
+        {"name": "correlation_id", "type": "string"},
+        {"name": "status", "type": "string"},
+        {"name": "discovered", "type": "int", "default": 0},
+        {"name": "updated", "type": "int", "default": 0},
+        {"name": "deleted", "type": "int", "default": 0},
+        {"name": "errors", "type": "int", "default": 0},
+        {"name": "duration_seconds", "type": "double", "default": 0.0},
+        {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"}
+      ]
+    },
+    "cloudvisor.connector.health": {
+      "type": "record",
+      "name": "ConnectorHealthEvent",
+      "namespace": "cloudvisor",
+      "doc": "Connector health status change events",
+      "fields": [
+        {"name": "organization_id", "type": "string"},
+        {"name": "account_id", "type": "string"},
+        {"name": "provider", "type": "string"},
+        {"name": "previous_status", "type": "string"},
+        {"name": "new_status", "type": "string"},
+        {"name": "error_message", "type": ["null", "string"], "default": null},
+        {"name": "resource_count", "type": "int", "default": 0},
+        {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"}
+      ]
+    }
+  }
+}

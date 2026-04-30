@@ -1,0 +1,638 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.doc { max-width: 680px; padding: 0 0 2rem; color: var(--color-text-primary); font-family: var(--font-sans); }
+
+.section { margin-bottom: 20px; }
+.section-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 0 10px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  margin-bottom: 14px;
+}
+.section-icon { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+.section-header h2 { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+
+.card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px 16px; margin-bottom: 10px; }
+.card-body { font-size: 12px; color: var(--color-text-secondary); line-height: 1.7; }
+
+.pill { font-size: 11px; padding: 3px 9px; border-radius: 20px; border: 0.5px solid var(--color-border-secondary); color: var(--color-text-secondary); background: var(--color-background-secondary); white-space: nowrap; display: inline-block; }
+.pill.blue { background: rgba(26,115,232,0.08); border-color: rgba(26,115,232,0.25); color: #1a73e8; }
+.pill.green { background: rgba(22,163,74,0.08); border-color: rgba(22,163,74,0.25); color: #15803d; }
+.pill.amber { background: rgba(217,119,6,0.08); border-color: rgba(217,119,6,0.25); color: #b45309; }
+.pill.red { background: rgba(220,38,38,0.08); border-color: rgba(220,38,38,0.25); color: #dc2626; }
+.pill.purple { background: rgba(124,58,237,0.08); border-color: rgba(124,58,237,0.25); color: #7c3aed; }
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+/* Service interaction map */
+.svc-map { display: flex; flex-direction: column; gap: 6px; }
+.svc-row { display: flex; align-items: stretch; gap: 8px; }
+.svc-box {
+  flex: 1; padding: 10px 12px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+}
+.svc-name { font-size: 12px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 3px; }
+.svc-desc { font-size: 11px; color: var(--color-text-secondary); line-height: 1.5; }
+.svc-dir { font-size: 10px; padding: 2px 7px; border-radius: 10px; margin-bottom: 5px; display: inline-block; }
+.svc-dir.reads { background: rgba(26,115,232,0.1); color: #1a73e8; border: 0.5px solid rgba(26,115,232,0.2); }
+.svc-dir.writes { background: rgba(124,58,237,0.1); color: #7c3aed; border: 0.5px solid rgba(124,58,237,0.2); }
+.svc-dir.both { background: rgba(22,163,74,0.1); color: #15803d; border: 0.5px solid rgba(22,163,74,0.2); }
+
+/* Roadmap */
+.roadmap { display: flex; flex-direction: column; gap: 0; }
+.roadmap-item {
+  display: flex; gap: 0; align-items: stretch;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.roadmap-item:last-child { border-bottom: none; }
+.roadmap-left {
+  width: 28px; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 12px 0;
+  gap: 0;
+}
+.roadmap-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.roadmap-line { flex: 1; width: 1px; background: var(--color-border-tertiary); margin: 2px 0; }
+.roadmap-content { flex: 1; padding: 12px 0 12px 8px; }
+.roadmap-label { font-size: 12px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 2px; }
+.roadmap-desc { font-size: 11px; color: var(--color-text-secondary); line-height: 1.6; }
+.roadmap-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
+.status-done { background: rgba(22,163,74,0.1); color: #15803d; border: 0.5px solid rgba(22,163,74,0.25); }
+.status-partial { background: rgba(217,119,6,0.1); color: #b45309; border: 0.5px solid rgba(217,119,6,0.25); }
+.status-todo { background: rgba(107,114,128,0.1); color: #6b7280; border: 0.5px solid rgba(107,114,128,0.25); }
+.status-blocker { background: rgba(220,38,38,0.1); color: #dc2626; border: 0.5px solid rgba(220,38,38,0.25); }
+
+/* Query example cards */
+.query-cards { display: flex; flex-direction: column; gap: 8px; }
+.query-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+}
+.query-q {
+  padding: 9px 12px;
+  font-size: 12px; font-style: italic;
+  color: var(--color-text-primary);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+}
+.query-q::before { content: '"'; }
+.query-q::after { content: '"'; }
+.query-steps { padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.query-step { font-size: 11px; color: var(--color-text-secondary); display: flex; gap: 6px; align-items: flex-start; }
+.query-step-num { font-size: 10px; color: var(--color-text-tertiary); flex-shrink: 0; padding-top: 1px; }
+.query-step-code { font-family: var(--font-mono); font-size: 10px; background: var(--color-background-secondary); padding: 1px 5px; border-radius: 3px; color: var(--color-text-primary); }
+
+/* Compliance matrix */
+.compliance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.compliance-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 10px 12px;
+}
+.compliance-name { font-size: 12px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 3px; }
+.compliance-desc { font-size: 11px; color: var(--color-text-secondary); line-height: 1.5; }
+
+/* Priority score breakdown */
+.score-factors { display: flex; flex-direction: column; gap: 5px; }
+.score-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+}
+.score-factor { font-size: 12px; color: var(--color-text-primary); flex: 1; }
+.score-max { font-size: 11px; color: var(--color-text-secondary); font-family: var(--font-mono); min-width: 36px; text-align: right; }
+.score-bar-wrap { width: 100px; height: 6px; background: var(--color-background-secondary); border-radius: 3px; overflow: hidden; }
+.score-bar { height: 100%; border-radius: 3px; }
+
+/* Env vars table */
+.env-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.env-table th { text-align: left; font-weight: 500; font-size: 11px; color: var(--color-text-secondary); padding: 6px 8px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.env-table td { padding: 7px 8px; border-bottom: 0.5px solid var(--color-border-tertiary); vertical-align: top; font-size: 11px; }
+.env-table tr:last-child td { border-bottom: none; }
+.env-key { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-primary); }
+.env-default { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); }
+.env-note { font-size: 11px; color: var(--color-text-secondary); }
+
+/* DB schema */
+.db-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.db-table th { text-align: left; font-weight: 500; font-size: 11px; color: var(--color-text-secondary); padding: 5px 8px; border-bottom: 0.5px solid var(--color-border-tertiary); background: var(--color-background-secondary); }
+.db-table td { padding: 6px 8px; border-bottom: 0.5px solid var(--color-border-tertiary); vertical-align: top; }
+.db-table tr:last-child td { border-bottom: none; }
+.db-col { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-primary); }
+.db-type { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); }
+.db-note { font-size: 11px; color: var(--color-text-secondary); }
+.pk { font-size: 9px; padding: 1px 5px; border-radius: 4px; background: rgba(26,115,232,0.1); color: #1a73e8; border: 0.5px solid rgba(26,115,232,0.2); margin-left: 4px; }
+.fk { font-size: 9px; padding: 1px 5px; border-radius: 4px; background: rgba(124,58,237,0.1); color: #7c3aed; border: 0.5px solid rgba(124,58,237,0.2); margin-left: 4px; }
+
+/* Product positioning */
+.positioning-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pos-card {
+  padding: 10px 12px;
+  border-radius: var(--border-radius-md);
+  border: 0.5px solid var(--color-border-tertiary);
+}
+.pos-label { font-size: 10px; font-weight: 500; letter-spacing: 0.05em; margin-bottom: 5px; }
+.pos-text { font-size: 11px; color: var(--color-text-secondary); line-height: 1.6; }
+</style>
+
+<div class="doc">
+
+  <!-- PRODUCT STRATEGY -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:rgba(26,115,232,0.1)">🏆</div>
+      <h2>Product strategy — why Copilot is the competitive moat</h2>
+    </div>
+    <div class="positioning-grid">
+      <div class="pos-card" style="background: rgba(26,115,232,0.04); border-color: rgba(26,115,232,0.2);">
+        <div class="pos-label" style="color:#1a73e8">PHASE 3 — INTELLIGENCE & MOAT</div>
+        <div class="pos-text">Copilot is built last on purpose. It needs real customer data from all other modules before it can be useful. Once it has that data, it becomes the hardest thing for competitors to replicate — because they'd need your data volume and your graph depth, not just the LLM.</div>
+      </div>
+      <div class="pos-card" style="background: rgba(22,163,74,0.04); border-color: rgba(22,163,74,0.2);">
+        <div class="pos-label" style="color:#15803d">RETENTION DRIVER</div>
+        <div class="pos-text">The platform's target for Phase 3 is NRR > 120%. Copilot is explicitly called the "moat feature" — the one that makes customers unwilling to switch because it gets smarter the longer they use it. Their question history, their custom rules, their posture trends all make the answers better over time.</div>
+      </div>
+      <div class="pos-card" style="background: rgba(124,58,237,0.04); border-color: rgba(124,58,237,0.2);">
+        <div class="pos-label" style="color:#7c3aed">SIGNATURE FEATURE</div>
+        <div class="pos-text">The UI spec explicitly calls this "CloudVisor's signature feature — make it feel premium." It's the only page in the product with special design language: chat-style layout, token streaming, embedded rich results, and the "Powered by Claude AI" label in the page header.</div>
+      </div>
+      <div class="pos-card" style="background: rgba(217,119,6,0.04); border-color: rgba(217,119,6,0.2);">
+        <div class="pos-label" style="color:#b45309">PERSONA MULTIPLIER</div>
+        <div class="pos-text">It serves every user persona differently without requiring separate views. A CISO asks "What's our compliance posture?" A SOC analyst asks "Show me active threats." A DevOps engineer asks "Generate a Terraform fix for this finding." Same endpoint, different intents, different retrievals.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SERVICE INTERACTION MAP -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:rgba(22,163,74,0.1)">🔗</div>
+      <h2>How Copilot interacts with every other service</h2>
+    </div>
+    <div class="svc-map">
+      <div class="svc-row">
+        <div class="svc-box">
+          <div class="svc-dir reads">READS VIA HTTP</div>
+          <div class="svc-name">Graph Service (port 8001)</div>
+          <div class="svc-desc">Fetches asset inventory, graph neighbors, attack paths, and executes read-only Cypher queries for IAM traversal. The deepest retrieval source — used by THREAT and POSTURE intents.</div>
+        </div>
+        <div class="svc-box">
+          <div class="svc-dir reads">READS VIA HTTP</div>
+          <div class="svc-name">Alert Service (port 8004)</div>
+          <div class="svc-desc">Fetches findings by severity/status/provider, finding stats, and incident context. Used by FINDING, POSTURE, and THREAT intents. Elasticsearch full-text search under the hood.</div>
+        </div>
+      </div>
+      <div class="svc-row">
+        <div class="svc-box">
+          <div class="svc-dir reads">READS VIA HTTP</div>
+          <div class="svc-name">Policy Service (port 8003)</div>
+          <div class="svc-desc">Fetches compliance summary per framework, per-control pass/fail, and control evidence artifacts. The primary source for COMPLIANCE intent queries and report generation.</div>
+        </div>
+        <div class="svc-box">
+          <div class="svc-dir reads">READS VIA HTTP</div>
+          <div class="svc-name">Auth Service (port 8002)</div>
+          <div class="svc-desc">Validates every incoming JWT. Organization ID extracted from token drives RLS context for all downstream DB queries. No copilot query ever runs without auth validation.</div>
+        </div>
+      </div>
+      <div class="svc-row">
+        <div class="svc-box">
+          <div class="svc-dir both">READS + WRITES</div>
+          <div class="svc-name">PostgreSQL (copilot schema)</div>
+          <div class="svc-desc">Writes every query + response to <span style="font-family:var(--font-mono);font-size:10px">copilot_queries</span> (append-only audit log). Reads query history for the <span style="font-family:var(--font-mono);font-size:10px">GET /history</span> endpoint. RLS enforced on both.</div>
+        </div>
+        <div class="svc-box">
+          <div class="svc-dir writes">PRODUCES</div>
+          <div class="svc-name">Kafka (copilot.query_logged)</div>
+          <div class="svc-desc">Emits a structured event after every query for audit purposes and downstream analytics. Topic consumed by alert service for audit.events correlation. Planned consumer: finding.created for context updates.</div>
+        </div>
+      </div>
+      <div class="svc-row">
+        <div class="svc-box" style="flex: 2;">
+          <div class="svc-dir reads">CALLS EXTERNAL API</div>
+          <div class="svc-name">Anthropic Claude API (claude-sonnet-4-6) + multi-provider fallback</div>
+          <div class="svc-desc">The LLM provider factory selects the active provider via the <span style="font-family:var(--font-mono);font-size:10px">COPILOT_LLM_PROVIDER</span> env var. Primary: Anthropic (claude-sonnet-4-6). Fallbacks: Google Gemini Flash Lite, OpenRouter (gemma-4-31b-it), local Ollama (qwen2.5). OpenAI is declared but raises NotImplementedError. The factory pattern means swapping providers requires zero code changes.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUERY WALKTHROUGHS -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:rgba(124,58,237,0.1)">🔬</div>
+      <h2>Query execution walkthroughs — how each intent resolves</h2>
+    </div>
+    <div class="query-cards">
+      <div class="query-card">
+        <div class="query-q">Which production workloads have critical CVEs and are internet-facing?</div>
+        <div class="query-steps">
+          <div class="query-step"><span class="query-step-num">1</span> Intent → THREAT</div>
+          <div class="query-step"><span class="query-step-num">2</span> Graph Service: fetch assets where <span class="query-step-code">is_internet_exposed=true AND environment=prod</span></div>
+          <div class="query-step"><span class="query-step-num">3</span> Alert Service: fetch findings where <span class="query-step-code">severity=CRITICAL AND status=open</span>, correlate by resource_id</div>
+          <div class="query-step"><span class="query-step-num">4</span> AIOps Priority Score used to rank results — highest EPSS + KEV workloads surfaced first</div>
+          <div class="query-step"><span class="query-step-num">5</span> Claude synthesizes: "I found 3 production workloads matching your query. payments-api (CVE-2024-1234, EPSS: 0.94) is most likely to be exploited."</div>
+        </div>
+      </div>
+      <div class="query-card">
+        <div class="query-q">Show me all IAM roles that can access our payments RDS database</div>
+        <div class="query-steps">
+          <div class="query-step"><span class="query-step-num">1</span> Intent → THREAT</div>
+          <div class="query-step"><span class="query-step-num">2</span> Graph Service Cypher: <span class="query-step-code">MATCH (r:Asset)-[:HAS_ACCESS_TO]->(db:Asset {name:'payments'}) WHERE db.resource_type='RDSInstance' RETURN r</span></div>
+          <div class="query-step"><span class="query-step-num">3</span> Graph traversal also looks for cross-account <span class="query-step-code">[:ASSUMES]</span> edges to catch lateral movement paths</div>
+          <div class="query-step"><span class="query-step-num">4</span> Claude returns a table of role names, associated accounts, access type, and whether any role has excessive permissions</div>
+        </div>
+      </div>
+      <div class="query-card">
+        <div class="query-q">Generate a SOC 2 Type II evidence report for our logging controls</div>
+        <div class="query-steps">
+          <div class="query-step"><span class="query-step-num">1</span> Intent → COMPLIANCE</div>
+          <div class="query-step"><span class="query-step-num">2</span> Policy Service: fetch <span class="query-step-code">GET /policy/compliance/soc2</span> — per-control pass/fail</div>
+          <div class="query-step"><span class="query-step-num">3</span> Policy Service: fetch <span class="query-step-code">GET /policy/compliance/soc2/evidence</span> — CloudTrail enabled, VPC Flow Logs, audit log retention configs</div>
+          <div class="query-step"><span class="query-step-num">4</span> Claude formats into structured evidence report: control ID, description, status, evidence artifacts, remediation for failures</div>
+          <div class="query-step"><span class="query-step-num">5</span> UI offers "Open as PDF report" button — saves response as downloadable audit artifact</div>
+        </div>
+      </div>
+      <div class="query-card">
+        <div class="query-q">What changed in our AWS environment in the last 24 hours?</div>
+        <div class="query-steps">
+          <div class="query-step"><span class="query-step-num">1</span> Intent → DRIFT</div>
+          <div class="query-step"><span class="query-step-num">2</span> Audit log: fetch user + system actions in the last 24h for this org</div>
+          <div class="query-step"><span class="query-step-num">3</span> Graph Service: <span class="query-step-code">GET /internal/assets/{id}/history</span> for recently changed assets — diff_from_previous JSONB field</div>
+          <div class="query-step"><span class="query-step-num">4</span> CSPM snapshots: compare today's posture_score vs yesterday's baseline</div>
+          <div class="query-step"><span class="query-step-num">5</span> Claude produces a change summary: new resources, deleted resources, config changes, new findings created, posture score delta</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRIORITY SCORE INTEGRATION -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:rgba(220,38,38,0.1)">📊</div>
+      <h2>Copilot × AIOps Priority Score — how findings are ranked in answers</h2>
+    </div>
+    <div class="card">
+      <div class="card-body" style="margin-bottom:12px">
+        When the copilot returns findings in a THREAT or FINDING intent response, it sorts them by the AIOps-computed Priority Score (0–100) written by the aiops service. This means copilot answers are already risk-prioritized — the finding most likely to be exploited appears first, not just the most recent or highest CVSS.
+      </div>
+      <div class="score-factors">
+        <div class="score-row">
+          <span class="score-factor">CVSS base score</span>
+          <div class="score-bar-wrap"><div class="score-bar" style="width:40%;background:#1a73e8"></div></div>
+          <span class="score-max">+40 pts</span>
+        </div>
+        <div class="score-row">
+          <span class="score-factor">EPSS exploit probability (api.first.org)</span>
+          <div class="score-bar-wrap"><div class="score-bar" style="width:20%;background:#7c3aed"></div></div>
+          <span class="score-max">+20 pts</span>
+        </div>
+        <div class="score-row">
+          <span class="score-factor">CISA KEV (active exploitation confirmed)</span>
+          <div class="score-bar-wrap"><div class="score-bar" style="width:25%;background:#dc2626"></div></div>
+          <span class="score-max">+25 pts</span>
+        </div>
+        <div class="score-row">
+          <span class="score-factor">Internet-exposed asset</span>
+          <div class="score-bar-wrap"><div class="score-bar" style="width:30%;background:#ea580c"></div></div>
+          <span class="score-max">×1.3</span>
+        </div>
+        <div class="score-row">
+          <span class="score-factor">Asset contains sensitive data</span>
+          <div class="score-bar-wrap"><div class="score-bar" style="width:20%;background:#d97706"></div></div>
+          <span class="score-max">×1.2</span>
+        </div>
+        <div class="score-row">
+          <span class="score-factor">Production environment</span>
+          <div class="score-bar-wrap"><div class="score-bar" style="width:50%;background:#15803d"></div></div>
+          <span class="score-max">×1.5</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPLIANCE COVERAGE -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:rgba(22,163,74,0.1)">📜</div>
+      <h2>Compliance frameworks Copilot can report on</h2>
+    </div>
+    <div class="compliance-grid">
+      <div class="compliance-card">
+        <div class="compliance-name">CIS Benchmarks</div>
+        <div class="compliance-desc">CIS AWS v1.5, CIS Azure v2.0, CIS GCP v1.3. Per-control pass/fail with evidence artifacts and remediation steps.</div>
+      </div>
+      <div class="compliance-card">
+        <div class="compliance-name">SOC 2 Type I / II</div>
+        <div class="compliance-desc">CC-series trust service criteria. Evidence report generation for logging, access, encryption, and availability controls.</div>
+      </div>
+      <div class="compliance-card">
+        <div class="compliance-name">PCI-DSS</div>
+        <div class="compliance-desc">Cardholder data environment scoping, network segmentation controls, encryption at rest/transit. CDE map via DSPM data stores.</div>
+      </div>
+      <div class="compliance-card">
+        <div class="compliance-name">HIPAA</div>
+        <div class="compliance-desc">PHI access controls, audit logging, encryption requirements. Maps to DSPM-discovered data stores containing health data.</div>
+      </div>
+      <div class="compliance-card">
+        <div class="compliance-name">GDPR Article 30</div>
+        <div class="compliance-desc">Processing activity register generated from DSPM-discovered data stores. Data residency and transfer controls.</div>
+      </div>
+      <div class="compliance-card">
+        <div class="compliance-name">ISO 27001 + NIST CSF</div>
+        <div class="compliance-desc">Control mapping across all security modules. Gap analysis and risk register exports. Annex A control coverage.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DB SCHEMA -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:rgba(26,115,232,0.1)">🗃️</div>
+      <h2>Database schema — copilot_queries table</h2>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table class="db-table">
+        <thead>
+          <tr>
+            <th>Column</th>
+            <th>Type</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="db-col">id</span> <span class="pk">PK</span></td>
+            <td><span class="db-type">UUID</span></td>
+            <td class="db-note">gen_random_uuid()</td>
+          </tr>
+          <tr>
+            <td><span class="db-col">organization_id</span> <span class="fk">FK</span></td>
+            <td><span class="db-type">UUID</span></td>
+            <td class="db-note">RLS enforced — tenant isolation. References organizations(id)</td>
+          </tr>
+          <tr>
+            <td><span class="db-col">user_id</span> <span class="fk">FK</span></td>
+            <td><span class="db-type">UUID</span></td>
+            <td class="db-note">The user who sent the query. References users(id)</td>
+          </tr>
+          <tr>
+            <td><span class="db-col">query</span></td>
+            <td><span class="db-type">TEXT</span></td>
+            <td class="db-note">The original natural language question</td>
+          </tr>
+          <tr>
+            <td><span class="db-col">intent</span></td>
+            <td><span class="db-type">TEXT</span></td>
+            <td class="db-note">Classified intent: POSTURE | FINDING | COMPLIANCE | REMEDIATION | THREAT | DRIFT | GENERAL ⚠ GENERAL missing from DB CHECK constraint — will fail</td>
+          </tr>
+          <tr>
+            <td><span class="db-col">response</span></td>
+            <td><span class="db-type">TEXT</span></td>
+            <td class="db-note">Full LLM response text</td>
+          </tr>
+          <tr>
+            <td><span class="db-col">citations</span></td>
+            <td><span class="db-type">JSONB</span></td>
+            <td class="db-note">Structured citations: finding IDs, asset IDs, rule IDs. Currently always [] — parser not yet implemented</td>
+          </tr>
+          <tr>
+            <td><span class="db-col">model_used</span></td>
+            <td><span class="db-type">TEXT</span></td>
+            <td class="db-note">The LLM model string used (e.g. claude-sonnet-4-6)</td>
+          </tr>
+          <tr>
+            <td><span class="db-col">latency_ms</span></td>
+            <td><span class="db-type">INT</span></td>
+            <td class="db-note">Total end-to-end query latency in milliseconds</td>
+          </tr>
+          <tr>
+            <td><span class="db-col">created_at</span></td>
+            <td><span class="db-type">TIMESTAMPTZ</span></td>
+            <td class="db-note">Append-only. No updates, no deletes ever issued against this table.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ENVIRONMENT VARIABLES -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:rgba(107,114,128,0.1)">⚙️</div>
+      <h2>Configuration — environment variables</h2>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table class="env-table">
+        <thead>
+          <tr>
+            <th style="width:40%">Variable</th>
+            <th style="width:24%">Default</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="env-key">COPILOT_LLM_PROVIDER</td>
+            <td class="env-default">anthropic</td>
+            <td class="env-note">Active LLM provider. Options: anthropic, gemini, openrouter, ollama, openai (openai raises NotImplementedError)</td>
+          </tr>
+          <tr>
+            <td class="env-key">ANTHROPIC_API_KEY</td>
+            <td class="env-default">—</td>
+            <td class="env-note">Required when provider = anthropic. Stored in HashiCorp Vault, not env directly in production.</td>
+          </tr>
+          <tr>
+            <td class="env-key">GOOGLE_API_KEY</td>
+            <td class="env-default">—</td>
+            <td class="env-note">Required when provider = gemini. Uses gemini-2.0-flash-lite model.</td>
+          </tr>
+          <tr>
+            <td class="env-key">OPENROUTER_API_KEY</td>
+            <td class="env-default">—</td>
+            <td class="env-note">Required when provider = openrouter. Uses google/gemma-4-31b-it.</td>
+          </tr>
+          <tr>
+            <td class="env-key">OLLAMA_BASE_URL</td>
+            <td class="env-default">http://localhost:11434</td>
+            <td class="env-note">Ollama server URL for local/on-premises deployment. Uses qwen2.5 model.</td>
+          </tr>
+          <tr>
+            <td class="env-key">GRAPH_SERVICE_URL</td>
+            <td class="env-default">http://graph:8001</td>
+            <td class="env-note">Internal URL for asset graph retrieval calls</td>
+          </tr>
+          <tr>
+            <td class="env-key">ALERT_SERVICE_URL</td>
+            <td class="env-default">http://alert:8004</td>
+            <td class="env-note">Internal URL for findings retrieval calls</td>
+          </tr>
+          <tr>
+            <td class="env-key">POLICY_SERVICE_URL</td>
+            <td class="env-default">http://policy:8003</td>
+            <td class="env-note">Internal URL for compliance posture retrieval calls</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- IMPLEMENTATION ROADMAP -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:rgba(220,38,38,0.1)">🗺️</div>
+      <h2>Implementation status — what's done vs what's next</h2>
+    </div>
+    <div class="card" style="padding: 0 16px;">
+      <div class="roadmap">
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#15803d"></div>
+            <div class="roadmap-line"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">RAG pipeline skeleton <span class="roadmap-status status-done">done</span></div>
+            <div class="roadmap-desc">6-step pipeline wired: intent classification → retrieval → prompt construction → LLM call → response. All 7 intents classified. Multi-provider factory complete.</div>
+          </div>
+        </div>
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#15803d"></div>
+            <div class="roadmap-line"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">Multi-provider LLM factory <span class="roadmap-status status-done">done</span></div>
+            <div class="roadmap-desc">Anthropic (primary), Gemini, OpenRouter, Ollama all implemented. Provider selected by env var at startup. Adding a new provider requires one new class file.</div>
+          </div>
+        </div>
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#15803d"></div>
+            <div class="roadmap-line"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">Multi-source retrieval (graph + findings + compliance + audit) <span class="roadmap-status status-done">done</span></div>
+            <div class="roadmap-desc">All 4 retrieval sources implemented and called in parallel. Intent routing determines which sources activate. RLS enforced on all DB reads.</div>
+          </div>
+        </div>
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#15803d"></div>
+            <div class="roadmap-line"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">Query history endpoint + audit table <span class="roadmap-status status-done">done</span></div>
+            <div class="roadmap-desc">copilot_queries table with RLS. GET /v1/copilot/history returns paginated history. Append-only — no deletes, no updates.</div>
+          </div>
+        </div>
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#b45309"></div>
+            <div class="roadmap-line"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">Streaming response (token-by-token) <span class="roadmap-status status-partial">partial</span></div>
+            <div class="roadmap-desc">Anthropic streaming is implemented in the provider. The API endpoint supports streaming mode via request flag. Audit logging during streaming (write to DB while tokens arrive) is not yet implemented.</div>
+          </div>
+        </div>
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#dc2626"></div>
+            <div class="roadmap-line"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">Fix GENERAL intent DB constraint <span class="roadmap-status status-blocker">blocker</span></div>
+            <div class="roadmap-desc">The copilot_queries.intent CHECK constraint does not include 'GENERAL'. Any query classified as GENERAL will fail to insert into the audit log. Must add GENERAL to the constraint before launch.</div>
+          </div>
+        </div>
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#dc2626"></div>
+            <div class="roadmap-line"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">Implement _format_asset_snapshots() <span class="roadmap-status status-blocker">blocker</span></div>
+            <div class="roadmap-desc">Missing from prompt_builder.py. DRIFT intent queries call this function and will throw AttributeError at runtime. The CSPM snapshot retrieval path exists but the formatter is not implemented.</div>
+          </div>
+        </div>
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#6b7280"></div>
+            <div class="roadmap-line"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">Citation parser <span class="roadmap-status status-todo">todo</span></div>
+            <div class="roadmap-desc">Parse LLM response to extract structured source references (finding IDs, asset IDs, rule IDs). Currently always returns []. Required for UI "cited sources" feature and for audit completeness.</div>
+          </div>
+        </div>
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#6b7280"></div>
+            <div class="roadmap-line"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">Vector store integration (step 2 of RAG) <span class="roadmap-status status-todo">todo</span></div>
+            <div class="roadmap-desc">Query embedding + semantic similarity retrieval is commented out. Needs a vector store (pgvector, Pinecone, or Weaviate) and an embedding model. This will significantly improve retrieval quality for vague or ambiguous queries.</div>
+          </div>
+        </div>
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#6b7280"></div>
+            <div class="roadmap-line"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">Kafka consumer — finding.created <span class="roadmap-status status-todo">todo</span></div>
+            <div class="roadmap-desc">Subscribe to finding.created to proactively update retrieval context caches. Allows copilot to surface "you have a new critical finding" context without the user asking. Marked as TODO in the Kafka topic registry.</div>
+          </div>
+        </div>
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#6b7280"></div>
+            <div class="roadmap-line"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">Auto-remediation PR workflow <span class="roadmap-status status-todo">todo</span></div>
+            <div class="roadmap-desc">GitHub / GitLab integration to open PRs with LLM-generated Terraform fixes. Requires OAuth token per org stored in Vault. Tracking: PR opened → merged → finding resolved.</div>
+          </div>
+        </div>
+        <div class="roadmap-item">
+          <div class="roadmap-left">
+            <div class="roadmap-dot" style="background:#6b7280"></div>
+          </div>
+          <div class="roadmap-content">
+            <div class="roadmap-label">Test suite <span class="roadmap-status status-todo">todo</span></div>
+            <div class="roadmap-desc">Test directories are empty. Needs: unit tests for intent classifier, prompt builder, each retriever, provider factory. Integration tests with mocked LLM, real DB + Kafka. Target: 80%+ line coverage before shipping.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OBSERVABILITY -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:rgba(26,115,232,0.1)">📡</div>
+      <h2>Observability requirements</h2>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        Like every CloudVisor service, the copilot must emit structured JSON logs to stdout with <span style="font-family:var(--font-mono);font-size:10px">correlation_id</span>, <span style="font-family:var(--font-mono);font-size:10px">organization_id</span>, <span style="font-family:var(--font-mono);font-size:10px">service_name</span>, and <span style="font-family:var(--font-mono);font-size:10px">level</span> on every log line. Prometheus metrics must be exposed at <span style="font-family:var(--font-mono);font-size:10px">/metrics</span>. OpenTelemetry traces must wrap all inbound HTTP requests and outbound Kafka publishes.
+      </div>
+      <div class="pill-row" style="margin-top:10px">
+        <span class="pill blue">copilot_queries_total (counter)</span>
+        <span class="pill blue">copilot_query_latency_ms (histogram)</span>
+        <span class="pill blue">copilot_intent_distribution (counter by intent)</span>
+        <span class="pill blue">copilot_llm_provider (label)</span>
+        <span class="pill blue">copilot_retrieval_latency_ms (by source)</span>
+        <span class="pill blue">copilot_errors_total (by error type)</span>
+      </div>
+    </div>
+  </div>
+
+</div>
