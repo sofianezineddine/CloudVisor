@@ -356,6 +356,111 @@ class OpenRouterClient(BaseLLMClient):
         logger.info("OpenRouter streaming response completed")
 
 
+class NvidiaClient(BaseLLMClient):
+    """NVIDIA API client (OpenAI-compatible)."""
+
+    def __init__(self, settings: CopilotSettings):
+        super().__init__(settings)
+        import httpx
+        self.client = httpx.AsyncClient(
+            base_url=settings.nvidia_base_url,
+            timeout=300.0,  # 5 minutes timeout for large models
+        )
+        self.api_key = settings.nvidia_api_key
+        self.model_name = settings.nvidia_model
+
+    async def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        stream: bool = False,
+    ) -> str | AsyncGenerator[str, None]:
+        """Generate a response from NVIDIA API."""
+        try:
+            if stream:
+                return self._generate_stream(system_prompt, user_prompt)
+            else:
+                return await self._generate_complete(system_prompt, user_prompt)
+        except Exception as e:
+            logger.error(f"NVIDIA API call failed: {e}")
+            raise
+
+    async def _generate_complete(self, system_prompt: str, user_prompt: str) -> str:
+        """Generate a complete response from NVIDIA API."""
+        logger.info(f"Calling NVIDIA API (model: {self.model_name}, non-streaming)")
+
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": self.settings.nvidia_max_tokens,
+            "temperature": self.settings.nvidia_temperature,
+            "stream": False,
+        }
+
+        response = await self.client.post(
+            "/chat/completions",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        response.raise_for_status()
+
+        data = response.json()
+        answer = data["choices"][0]["message"]["content"]
+        logger.info(f"NVIDIA API response received: {len(answer)} chars")
+        return answer
+
+    async def _generate_stream(
+        self, system_prompt: str, user_prompt: str
+    ) -> AsyncGenerator[str, None]:
+        """Generate a streaming response from NVIDIA API."""
+        logger.info(f"Calling NVIDIA API (model: {self.model_name}, streaming)")
+
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": self.settings.nvidia_max_tokens,
+            "temperature": self.settings.nvidia_temperature,
+            "stream": True,
+        }
+
+        async with self.client.stream(
+            "POST",
+            "/chat/completions",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line.startswith("data: "):
+                    data_str = line[6:]
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        import json
+                        data = json.loads(data_str)
+                        delta = data["choices"][0]["delta"]
+                        if "content" in delta:
+                            content = delta["content"]
+                            if content:
+                                yield content
+                    except json.JSONDecodeError:
+                        continue
+
+        logger.info("NVIDIA API streaming response completed")
+
+
 def get_llm_client(settings: CopilotSettings) -> BaseLLMClient:
     """
     Factory function to get the appropriate LLM client based on settings.
@@ -368,7 +473,10 @@ def get_llm_client(settings: CopilotSettings) -> BaseLLMClient:
     """
     provider = settings.llm_provider.lower()
 
-    if provider == "ollama":
+    if provider == "nvidia":
+        logger.info("Using NVIDIA API LLM client")
+        return NvidiaClient(settings)
+    elif provider == "ollama":
         logger.info("Using Ollama LLM client")
         return OllamaClient(settings)
     elif provider == "google" or provider == "gemini":

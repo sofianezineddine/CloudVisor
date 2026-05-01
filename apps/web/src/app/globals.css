@@ -160,13 +160,13 @@
     --subheader-border:     #2d3a4a;
     --subheader-text:       #d5dbdb;
     --bg-base:              #0d1117;
-    --bg-surface:           #161b22;
+    --bg-surface:           #131920;
     --bg-elevated:          #1c2433;
     --bg-overlay:           #1c2433;
     /* Bar 3 + sidebar dark mode */
-    --bar3-bg:              #1a2332;
+    --bar3-bg:              #131920;
     --bar3-border:          rgba(255,255,255,0.10);
-    --sidebar-bg:           #161b22;
+    --sidebar-bg:           #131920;
     --sidebar-border:       rgba(255,255,255,0.10);
     --sidebar-hover:        #1c2433;
     --sidebar-active-bg:    #1c2433;

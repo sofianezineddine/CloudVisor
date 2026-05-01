@@ -105,9 +105,9 @@ export function ScopeSelector() {
           className="absolute right-0 top-full z-50 mt-1 rounded-lg overflow-hidden"
           style={{
             width: '300px',
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-default)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            backgroundColor: '#1a2332',
+            border: '1px solid rgba(255,255,255,0.15)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
           }}
         >
           {/* Header */}

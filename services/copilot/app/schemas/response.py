@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 class IntentType(str, Enum):
     """Query intent classification."""
 
+    GREETING = "GREETING"
     POSTURE = "POSTURE"
     FINDING = "FINDING"
     COMPLIANCE = "COMPLIANCE"
@@ -62,6 +63,10 @@ class CopilotQueryResponse(BaseModel):
 
     data_sources_used: list[str] = Field(
         default_factory=list, description="List of data sources queried"
+    )
+
+    session_id: str | None = Field(
+        default=None, description="Session ID this query was saved to"
     )
 
 

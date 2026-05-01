@@ -42,7 +42,7 @@ function NavBtn({ icon: Icon, label, href, onClick }: {
   icon: React.ElementType; label: string; href?: string; onClick?: () => void;
 }) {
   const cls = "flex h-8 w-8 items-center justify-center transition-colors flex-shrink-0";
-  const s = { color: 'rgba(255,255,255,0.8)' };
+  const s = { color: '#ffffff' };
   const hIn = (e: React.MouseEvent) => (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.1)';
   const hOut = (e: React.MouseEvent) => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
   if (href) return <Link href={href} className={cls} style={s} title={label} onMouseEnter={hIn} onMouseLeave={hOut}><Icon className="h-4 w-4" /></Link>;
@@ -524,13 +524,13 @@ export function Header({
       {/* BAR 1 — dark #232f3e — logo, search, icons, account              */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       <div
-        className="sticky top-0 z-50 flex w-full items-center gap-1"
-        style={{ height: `${BAR1_H}px`, backgroundColor: '#232f3e' }}
+        className="sticky top-0 z-50 flex w-full items-center gap-1 px-3 py-2"
+        style={{ height: `${BAR1_H}px`, backgroundColor: '#131920', borderBottom: '1px solid rgba(255,255,255,0.2)' }}
       >
         {/* Logo: "Cloud" white + "Visor" orange, no icon */}
         <Link
           href="/console"
-          className="flex items-center h-full px-3 flex-shrink-0 transition-colors"
+          className="flex items-center h-full px-2 flex-shrink-0 transition-colors rounded"
           onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)')}
           onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
         >
@@ -543,10 +543,20 @@ export function Header({
         {/* Grid / waffle icon */}
         <button
           onClick={() => setShowMegaMenu(v => !v)}
-          className="flex h-full w-9 items-center justify-center flex-shrink-0 transition-colors"
-          style={{ color: 'rgba(255,255,255,0.8)' }}
-          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)')}
-          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+          className="flex h-8 w-8 items-center justify-center flex-shrink-0 transition-colors rounded"
+          style={{ 
+            color: '#ffffff', 
+            backgroundColor: showMegaMenu ? 'rgba(255,255,255,0.1)' : 'transparent',
+            border: '1px solid transparent'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)';
+            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.backgroundColor = showMegaMenu ? 'rgba(255,255,255,0.1)' : 'transparent';
+            e.currentTarget.style.borderColor = 'transparent';
+          }}
           title="Services"
         >
           <Grid3x3 className="h-4 w-4" />
@@ -556,27 +566,31 @@ export function Header({
         <div className="flex flex-1 items-center px-2 gap-2">
           <div
             ref={searchRef}
-            className="relative flex items-center w-full max-w-[440px]"
+            className="relative flex items-center w-full max-w-[500px]"
             style={{
-              backgroundColor: searchFocused ? 'rgba(255,255,255,0.15)' : '#31465f',
-              border: searchFocused ? '1px solid rgba(255,255,255,0.5)' : '1px solid transparent',
-              borderRadius: '4px',
-              height: '28px',
-              transition: 'all 0.1s',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              border: searchFocused ? '1px solid #0972d3' : '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '20px',
+              height: '32px',
+              transition: 'all 0.15s',
             }}
           >
-            <Search className="absolute left-2 h-3.5 w-3.5" style={{ color: 'rgba(255,255,255,0.5)' }} />
+            <Search className="absolute left-3 h-4 w-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
             <input
               type="text"
               placeholder="Search"
               value={searchQuery}
               onChange={handleSearchChange}
-              className="w-full bg-transparent pl-7 pr-14 text-sm focus:outline-none"
-              style={{ color: 'rgba(255,255,255,0.9)', height: '28px' }}
+              className="w-full bg-transparent pl-10 pr-20 text-sm focus:outline-none placeholder:text-gray-500"
+              style={{ color: '#ffffff', height: '100%' }}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
             />
-            <span className="absolute right-2 text-xs hidden sm:block" style={{ color: 'rgba(255,255,255,0.35)' }}>[Alt+S]</span>
+            <span className="absolute right-3 text-xs hidden sm:block px-1.5 py-0.5 rounded" style={{ 
+              color: 'rgba(255,255,255,0.5)',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)'
+            }}>[Alt+S]</span>
             
             {/* Search results dropdown */}
             {showSearchResults && filteredServices.length > 0 && (
@@ -641,7 +655,6 @@ export function Header({
         {/* Right icons */}
         <div className="flex items-center flex-shrink-0 pr-1">
           <LiveDot />
-          <NavBtn icon={Terminal} label="CloudShell" />
           <NavBtn icon={Bell} label="Notifications" />
           <NavBtn icon={HelpCircle} label="Help" />
 
@@ -650,7 +663,7 @@ export function Header({
             <button
               onClick={() => setShowSettings(v => !v)}
               className="flex h-8 w-8 items-center justify-center transition-colors"
-              style={{ color: showSettings ? '#ff9900' : 'rgba(255,255,255,0.8)' }}
+              style={{ color: showSettings ? '#ff9900' : '#ffffff' }}
               onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)')}
               onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
               title="Settings"
@@ -681,11 +694,11 @@ export function Header({
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 top-full z-50 w-64" style={{ backgroundColor: '#ffffff', border: '1px solid #d5dbdb', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
-                <div className="px-4 py-3 border-b" style={{ borderColor: '#eaeded', backgroundColor: '#f8f8f8' }}>
-                  <div className="text-xs" style={{ color: '#687078' }}>{orgName}</div>
-                  <div className="text-sm font-semibold mt-0.5" style={{ color: '#0f1b2d' }}>{userName}</div>
-                  {user?.email && <div className="text-xs mt-0.5" style={{ color: '#687078' }}>{user.email}</div>}
+              <div className="absolute right-0 top-full z-50 w-64" style={{ backgroundColor: '#1a2332', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
+                <div className="px-4 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: 'rgba(0,0,0,0.2)' }}>
+                  <div className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>{orgName}</div>
+                  <div className="text-sm font-semibold mt-0.5" style={{ color: '#ffffff' }}>{userName}</div>
+                  {user?.email && <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.6)' }}>{user.email}</div>}
                 </div>
                 <div className="py-1">
                   {[
@@ -695,21 +708,21 @@ export function Header({
                     { label: 'API keys', href: '/settings/api-keys', icon: KeyRound },
                   ].map(item => (
                     <Link key={item.href} href={item.href} onClick={() => setShowUserMenu(false)}
-                      className="flex items-center gap-2.5 px-4 py-2 text-sm transition-colors" style={{ color: '#0972d3' }}
-                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f2f3f3')}
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm transition-colors" style={{ color: '#4db8ff' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)')}
                       onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
-                      <item.icon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: '#687078' }} />
+                      <item.icon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }} />
                       {item.label}
                     </Link>
                   ))}
                 </div>
-                <div className="border-t py-1" style={{ borderColor: '#eaeded' }}>
-                  <button onClick={handleLogout} className="flex w-full items-center gap-2.5 px-4 py-2 text-sm transition-colors" style={{ color: '#0972d3' }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f2f3f3')}
+                <div className="border-t py-1" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+                  <button onClick={handleLogout} className="flex w-full items-center gap-2.5 px-4 py-2 text-sm transition-colors" style={{ color: '#4db8ff' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)')}
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
-                    <LogOut className="h-3.5 w-3.5 flex-shrink-0" style={{ color: '#687078' }} />
+                    <LogOut className="h-3.5 w-3.5 flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }} />
                     Sign out
                   </button>
                 </div>
@@ -723,13 +736,13 @@ export function Header({
       {/* BAR 2 — dark #31465f — pinned favorites (dynamic)               */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       <div
-        className="sticky z-40 flex w-full items-center justify-between gap-1 px-3"
-        style={{ top: `${BAR1_H}px`, height: `${BAR2_H}px`, backgroundColor: '#31465f', borderBottom: '1px solid rgba(255,255,255,0.1)' }}
+        className="sticky z-40 flex w-full items-center justify-between gap-1 px-3 py-2"
+        style={{ top: `${BAR1_H}px`, height: `${BAR2_H}px`, backgroundColor: '#131920', borderBottom: '1px solid rgba(255,255,255,0.2)' }}
       >
         {/* Pinned service links */}
         <div className="flex items-center gap-0.5 overflow-x-auto flex-1" style={{ scrollbarWidth: 'none' }}>
           {pinnedFavorites.length === 0 && (
-            <span className="text-xs px-2" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            <span className="text-xs px-2" style={{ color: '#ffffff' }}>
               No pinned services —
             </span>
           )}
@@ -741,12 +754,12 @@ export function Header({
                 href={item.href}
                 className="flex items-center px-2 h-[22px] text-xs rounded transition-colors whitespace-nowrap"
                 style={{
-                  color: isActive ? '#ffffff' : 'rgba(255,255,255,0.7)',
+                  color: '#ffffff',
                   backgroundColor: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
                   fontWeight: isActive ? 600 : 400,
                 }}
-                onMouseEnter={e => { if (!isActive) { (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'); (e.currentTarget.style.color = '#ffffff'); } }}
-                onMouseLeave={e => { if (!isActive) { (e.currentTarget.style.backgroundColor = 'transparent'); (e.currentTarget.style.color = 'rgba(255,255,255,0.7)'); } }}
+                onMouseEnter={e => { if (!isActive) { (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'); } }}
+                onMouseLeave={e => { if (!isActive) { (e.currentTarget.style.backgroundColor = 'transparent'); } }}
               >
                 {item.name}
               </Link>

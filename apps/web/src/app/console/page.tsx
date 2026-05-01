@@ -69,7 +69,7 @@ function Widget({
         height: FIXED_WIDGET_HEIGHT + 'px',
         backgroundColor: 'var(--bg-surface)',
         border: isDragOver ? '2px dashed #0972d3' : '1px solid var(--border-default)',
-        borderRadius: '0px',
+        borderRadius: '8px',
         transition: 'border-color 0.1s',
       }}
       onDragOver={e => { e.preventDefault(); onDragOver?.(e); }}

@@ -12,91 +12,185 @@ class PromptBuilder:
     """Builds system and user prompts from retrieved context."""
 
     # ─────────────────────────────────────────────────────────────────────────
-    # System prompt: data block FIRST, then short instructions.
-    # llama3.2:3b reads top-down — put the facts before the rules.
+    # Core identity — injected into every prompt
     # ─────────────────────────────────────────────────────────────────────────
-    SYSTEM_PROMPT_TEMPLATE = """You are CloudVisor Q. Customer data:
+    IDENTITY = """You are CloudVisor Q — an advanced AI security intelligence system powered by Llama 3.1 405B. You are the autonomous security analyst embedded in the CloudVisor CNAPP platform with complete read access to this organization's live cloud infrastructure.
 
-=== DATA ===
+## Core Identity & Mission
+You are NOT a generic chatbot. You are a specialized cloud security expert that:
+- Thinks deeply about security implications and attack vectors
+- Proactively identifies risks without being asked
+- Provides actionable, specific recommendations
+- Reasons through complex security scenarios
+- Connects disparate findings to reveal broader security patterns
+
+## Critical Operating Principles
+
+### 1. AUTONOMOUS INTELLIGENCE
+- Analyze data proactively — don't wait to be asked specific questions
+- Connect findings across resources to identify attack paths and blast radius
+- Prioritize by actual business risk, not just severity scores
+- Think like an attacker: what would they target first?
+
+### 2. DATA-DRIVEN PRECISION
+- Every statement must be grounded in the actual data provided
+- Use exact resource IDs, ARNs, names, and counts from the context
+- Never fabricate or hallucinate resource details
+- If data is missing, state it clearly and explain what you'd need
+
+### 3. PROACTIVE COMMUNICATION
+- When greeted: Immediately provide a security-focused executive summary with real numbers
+- Lead with the most critical risks and their business impact
+- Suggest next actions without being prompted
+- Highlight trends, patterns, and anomalies in the data
+
+### 4. EXPERT REMEDIATION
+- Provide complete, production-ready fixes (Terraform, CLI commands, IAM policies)
+- Include verification steps and rollback procedures
+- Explain WHY the fix works and what it prevents
+- Consider blast radius and dependencies before recommending changes
+
+### 5. INTELLIGENT PRIORITIZATION
+- CRITICAL findings on internet-exposed resources = highest priority
+- HIGH findings with active exploitation = immediate attention
+- Compliance failures in regulated frameworks = document and escalate
+- Group related findings to show systemic issues
+
+## Your Capabilities
+
+**POSTURE ANALYSIS**: Assess overall security posture, identify trends, compare against benchmarks, predict risk trajectory
+
+**FINDING INTELLIGENCE**: Surface, correlate, and prioritize findings by actual risk (not just severity), explain attack scenarios, provide context
+
+**COMPLIANCE REPORTING**: Map findings to frameworks (CIS, SOC 2, PCI-DSS, HIPAA, GDPR, ISO 27001, NIST), generate audit-ready evidence, identify gaps
+
+**REMEDIATION ENGINEERING**: Generate infrastructure-as-code fixes, provide CLI commands, create IAM policies, suggest architectural improvements
+
+**THREAT HUNTING**: Identify internet-exposed workloads, over-privileged identities, lateral movement paths, vulnerable attack surface
+
+**DRIFT DETECTION**: Track configuration changes, identify unauthorized modifications, correlate changes with security events
+
+**ATTACK PATH ANALYSIS**: Map how an attacker could move through the environment, identify critical choke points, suggest defensive controls
+
+## Data Sources Available
+- **Asset Graph**: All cloud resources, relationships, network topology, IAM permissions, internet exposure
+- **Security Findings**: Misconfigurations, vulnerabilities, policy violations with severity, status, and history
+- **Compliance Posture**: Framework-specific control pass/fail status with evidence and remediation guidance
+- **Audit Logs**: User actions, system changes, configuration modifications with timestamps
+- **Posture Snapshots**: Historical risk scores, finding trends, compliance drift over time
+- **Resource Metadata**: Tags, ownership, environment classification, business context
+
+## Response Format Guidelines
+
+### For Greetings (hello, hi, hey):
+```
+I'm CloudVisor Q, your autonomous cloud security intelligence system.
+
+**Current Security Posture**
+- Posture Score: [actual score]/100
+- Total Resources: [actual count] across [actual providers]
+- Active Findings: [actual count] ([breakdown by severity])
+- Compliance: [actual pass rate]% across [frameworks]
+
+**Top Security Risks** (prioritized by business impact):
+1. [Most critical finding with context and affected resources]
+2. [Second priority with blast radius analysis]
+3. [Third priority with remediation complexity]
+
+**Recommended Actions**:
+- [Specific, actionable next step]
+- [Second priority action]
+
+What would you like to investigate first?
+```
+
+### For Security Questions:
+- Start with executive summary (2-3 sentences)
+- Provide detailed analysis with actual data
+- Include risk assessment and business impact
+- End with specific, prioritized recommendations
+
+### For Remediation Requests:
+- Explain the vulnerability and its exploitation scenario
+- Provide complete, tested code/commands
+- Include verification and rollback steps
+- Warn about potential side effects
+
+## Forbidden Behaviors
+❌ Never say "How can I assist you with CloudVisor Q?" — you ARE CloudVisor Q
+❌ Never ask for more details when you have the data
+❌ Never use placeholder text like [show X] or [insert Y]
+❌ Never provide generic security advice — always use the actual environment data
+❌ Never ignore critical findings to focus on low-priority issues
+❌ Never recommend changes without explaining the security benefit
+
+## Reasoning Approach
+When analyzing security data:
+1. **Assess**: What is the actual state vs. desired state?
+2. **Contextualize**: What is the business impact and attack scenario?
+3. **Prioritize**: What poses the greatest risk right now?
+4. **Recommend**: What specific actions will reduce risk most effectively?
+5. **Validate**: Can I support every claim with data from the context?
+
+Remember: You are an autonomous security expert. Think deeply, reason clearly, and provide actionable intelligence."""
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # System prompt templates
+    # ─────────────────────────────────────────────────────────────────────────
+    SYSTEM_PROMPT_TEMPLATE = """{identity}
+
+## Retrieved Data for This Query
 {context_blocks}
-=== END ===
 {ui_context_block}
-Use the data above to answer. Be direct and specific."""
+Answer using only the data above. Be specific — cite actual resource names, IDs, counts, and scores. Never ask the user for more details if the data is already here."""
 
-    REMEDIATION_PROMPT_TEMPLATE = """You are CloudVisor Q generating a security remediation.
+    REMEDIATION_PROMPT_TEMPLATE = """{identity}
+
+You are in REMEDIATION mode. Generate a complete, ready-to-apply security fix.
 
 === FINDING DATA ===
 {context_blocks}
-=== END ===
+=== END DATA ===
 {ui_context_block}
-Generate:
-### What is wrong
-### Why it matters
-### Fix — Terraform
-### Fix — AWS CLI
-### Verification
-Use real resource names/IDs/ARNs from the data above. Code is for human review only."""
+Structure your response as:
+## What is wrong
+## Why it matters (business/security impact)
+## Fix — Terraform HCL
+## Fix — AWS CLI / Azure CLI / gcloud
+## Verification steps
 
-    GENERAL_PROMPT = """You are CloudVisor Q, a cloud security assistant for the CloudVisor CNAPP platform.
+Use the exact resource names, IDs, and ARNs from the data above. All code is for human review before applying."""
 
+    GENERAL_PROMPT = """{identity}
+
+## Your Organization's Current Data
 {env_summary}
-
-You help with: security posture, findings, compliance, remediation, threat investigation, and change analysis.
-Answer helpfully. If the user asks about their data, use the environment summary above."""
+{ui_context_block}
+The data above is REAL and CURRENT. Use it directly in your response.
+If the user greeted you, introduce yourself as CloudVisor Q and immediately summarize the ACTUAL numbers above (posture score, finding counts, resource counts, top risks). Do not use placeholder text. Do not ask for more details."""
 
     def build_prompts(self, query: str, context: dict[str, Any]) -> tuple[str, str]:
-        """Build system and user prompts from query and context."""
-        intent = context.get("intent", "POSTURE")
+        """Build system and user prompts — no intent branching, LLM reasons from full context."""
         ui_block = self._format_ui_context(context)
         history_block = self._format_conversation_history(context)
-
-        if intent == "GENERAL":
-            # For GENERAL, inject a rich environment summary so the model
-            # can answer "what do you know about me" type questions
-            env_summary = self._format_full_environment_summary(context)
-
-            # If org has no data, use a clear onboarding message
-            if not context.get("cloud_accounts"):
-                system = (
-                    "You are CloudVisor Q, a cloud security assistant.\n\n"
-                    "This organization has no cloud accounts connected yet. "
-                    "Respond helpfully and guide the user to connect a cloud account via Settings → Cloud Accounts."
-                )
-                user = f"{history_block}\n{query}" if history_block else query
-                logger.info("Built GENERAL prompt: empty org")
-                return system, user
-
-            system = self.GENERAL_PROMPT.format(env_summary=env_summary)
-            if ui_block:
-                system += f"\n\n{ui_block}"
-            user = f"{history_block}\n{query}" if history_block else query
-            logger.info(f"Built GENERAL prompt: system={len(system)} chars")
-            return system, user
-
         context_blocks = self._format_context_blocks(context)
 
-        if intent == "REMEDIATION":
-            system_prompt = self.REMEDIATION_PROMPT_TEMPLATE.format(
-                ui_context_block=ui_block,
-                context_blocks=context_blocks,
-            )
-        else:
-            system_prompt = self.SYSTEM_PROMPT_TEMPLATE.format(
-                ui_context_block=ui_block,
-                context_blocks=context_blocks,
-            )
+        system_prompt = f"""{self.IDENTITY}
 
-        # User prompt: pre-format the answer structure so the model fills in real values
-        data_hint = self._build_data_hint(context, query)
+## Your Organization's Live Security Data
+{context_blocks}
+{f"{ui_block}" if ui_block else ""}
+The data above is REAL and CURRENT. Answer the user's question using it directly.
+Be specific — use actual resource names, IDs, counts, and scores from the data.
+Never ask the user for more details if the data is already here.
+Never output placeholder text like [show X] or [insert Y]."""
+
         if history_block:
-            user_prompt = f"{history_block}\n\nQuestion: {query}\n\n{data_hint}"
+            user_prompt = f"{history_block}\n\nUser: {query}"
         else:
-            user_prompt = f"Question: {query}\n\n{data_hint}"
+            user_prompt = query
 
-        logger.info(
-            f"Built prompts for intent={intent}: "
-            f"system={len(system_prompt)} chars, user={len(user_prompt)} chars"
-        )
+        logger.info(f"Prompts built: system={len(system_prompt)} chars, user={len(user_prompt)} chars")
         return system_prompt, user_prompt
 
     def _build_data_hint(self, context: dict[str, Any], query: str) -> str:
@@ -143,30 +237,16 @@ Answer helpfully. If the user asks about their data, use the environment summary
 
         return "\n".join(hints) if hints else "Answer directly from the data shown above."
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Context block assembly — query-aware, 6000-char budget.
-    # qwen2.5:0.5b handles 6k chars in ~90s on CPU.
-    # Each section has its own sub-limit to ensure all sections get space.
-    # ─────────────────────────────────────────────────────────────────────────
     def _format_context_blocks(self, context: dict[str, Any]) -> str:
-        MAX_CHARS = 6000
-        SECTION_LIMITS = {
-            "findings": 2000,    # ~25 findings at 80 chars each
-            "assets": 2000,      # ~25 assets at 80 chars each
-            "compliance": 400,   # summary only
-            "posture": 300,      # 5 rows
-            "resource_posture": 600,  # top 10
-            "scans": 300,
-            "accounts": 200,
-        }
-        intent = context.get("intent", "POSTURE")
+        """Format all available context into blocks for the LLM — no intent filtering."""
+        MAX_CHARS = 8000
         blocks: list[str] = []
         used = 0
 
-        def add(label: str, text: str, limit: int = 0) -> bool:
+        def add(label: str, text: str, limit: int = 0) -> None:
             nonlocal used
             if used >= MAX_CHARS:
-                return False
+                return
             if limit and len(text) > limit:
                 text = text[:limit] + "\n...(truncated)"
             block = f"[{label}]\n{text}"
@@ -175,82 +255,55 @@ Answer helpfully. If the user asks about their data, use the environment summary
                 block = block[:remaining] + "\n...(more data available)"
             blocks.append(block)
             used += len(block)
-            return True
 
-        # ── Always: cloud accounts ───────────────────────────────────────────
+        # Always first: accounts and posture
         if context.get("cloud_accounts"):
-            add("CLOUD ACCOUNTS", self._format_cloud_accounts(context["cloud_accounts"]), SECTION_LIMITS["accounts"])
+            add("CLOUD ACCOUNTS", self._format_cloud_accounts(context["cloud_accounts"]), 300)
+        if context.get("posture_snapshots"):
+            add("POSTURE TREND", self._format_posture_snapshots(context["posture_snapshots"]), 400)
 
-        # ── Intent-prioritized sections ──────────────────────────────────────
-        if intent in ("POSTURE", "FINDING", "REMEDIATION"):
-            if context.get("findings"):
-                add("SECURITY FINDINGS", self._format_findings(context["findings"]), SECTION_LIMITS["findings"])
-            if context.get("finding"):
-                add("FINDING DETAIL", self._format_finding(context["finding"]))
-            if context.get("assets"):
-                add("ASSET INVENTORY", self._format_assets(context["assets"]), SECTION_LIMITS["assets"])
-            if context.get("asset"):
-                add("ASSET DETAIL", self._format_asset(context["asset"]))
-            if context.get("preloaded_asset"):
-                add("ASSET DETAIL", self._format_asset(context["preloaded_asset"]))
-            if context.get("posture_snapshots"):
-                add("POSTURE TREND", self._format_posture_snapshots(context["posture_snapshots"]), SECTION_LIMITS["posture"])
-            if context.get("resource_posture"):
-                add("RESOURCE POSTURE", self._format_resource_posture(context["resource_posture"]), SECTION_LIMITS["resource_posture"])
-            if context.get("compliance_results"):
-                add("COMPLIANCE", self._format_compliance_results(context["compliance_results"]), SECTION_LIMITS["compliance"])
-            if context.get("recent_scans"):
-                add("RECENT SCANS", self._format_scans(context["recent_scans"]), SECTION_LIMITS["scans"])
-
-        elif intent == "COMPLIANCE":
-            if context.get("compliance_results"):
-                add("COMPLIANCE RESULTS", self._format_compliance_results(context["compliance_results"]), SECTION_LIMITS["compliance"])
-            if context.get("compliance"):
-                add("COMPLIANCE POSTURE", self._format_compliance(context["compliance"]), 400)
-            if context.get("frameworks"):
-                add("FRAMEWORKS", self._format_frameworks(context["frameworks"]), 300)
-            if context.get("findings"):
-                add("SECURITY FINDINGS", self._format_findings(context["findings"]), SECTION_LIMITS["findings"])
-            if context.get("rules"):
-                add("SECURITY RULES", self._format_rules(context["rules"]), 500)
-
-        elif intent == "THREAT":
-            if context.get("cdr_events"):
-                add("CDR EVENTS", self._format_cdr_events(context["cdr_events"]), 800)
-            if context.get("changes"):
-                add("AUDIT LOG", self._format_changes(context["changes"]), 800)
-            if context.get("incidents"):
-                add("INCIDENTS", self._format_incidents(context["incidents"]), 400)
-            if context.get("assets"):
-                add("ASSET INVENTORY", self._format_assets(context["assets"]), SECTION_LIMITS["assets"])
-            if context.get("resource_posture"):
-                add("RESOURCE POSTURE", self._format_resource_posture(context["resource_posture"]), SECTION_LIMITS["resource_posture"])
-
-        elif intent == "DRIFT":
-            if context.get("changes"):
-                add("AUDIT LOG", self._format_changes(context["changes"]), 1000)
-            if context.get("asset_snapshots"):
-                tw = context.get("time_window_hours", 24)
-                add(f"ASSET CHANGES last {tw}h", self._format_asset_snapshots(context["asset_snapshots"], tw), 1000)
-            if context.get("recent_scans"):
-                add("RECENT SCANS", self._format_scans(context["recent_scans"]), SECTION_LIMITS["scans"])
-
-        else:
-            # Default: everything in priority order with limits
-            for key, label, fmt, lim in [
-                ("findings", "SECURITY FINDINGS", lambda: self._format_findings(context["findings"]), SECTION_LIMITS["findings"]),
-                ("assets", "ASSET INVENTORY", lambda: self._format_assets(context["assets"]), SECTION_LIMITS["assets"]),
-                ("posture_snapshots", "POSTURE TREND", lambda: self._format_posture_snapshots(context["posture_snapshots"]), SECTION_LIMITS["posture"]),
-                ("compliance_results", "COMPLIANCE", lambda: self._format_compliance_results(context["compliance_results"]), SECTION_LIMITS["compliance"]),
-                ("resource_posture", "RESOURCE POSTURE", lambda: self._format_resource_posture(context["resource_posture"]), SECTION_LIMITS["resource_posture"]),
-                ("recent_scans", "RECENT SCANS", lambda: self._format_scans(context["recent_scans"]), SECTION_LIMITS["scans"]),
-            ]:
-                if context.get(key):
-                    add(label, fmt(), lim)
-
-        # ── Always append finding/asset history if present ───────────────────
+        # Findings — most important for security context
+        if context.get("findings"):
+            add("SECURITY FINDINGS", self._format_findings(context["findings"]), 2500)
+        if context.get("finding"):
+            add("FINDING DETAIL", self._format_finding(context["finding"]))
         if context.get("finding_history"):
             add("FINDING HISTORY", self._format_finding_history(context["finding_history"]))
+
+        # Assets
+        if context.get("assets"):
+            add("ASSET INVENTORY", self._format_assets(context["assets"]), 2000)
+        if context.get("asset"):
+            add("ASSET DETAIL", self._format_asset(context["asset"]))
+        if context.get("preloaded_asset"):
+            add("ASSET DETAIL", self._format_asset(context["preloaded_asset"]))
+        if context.get("resource_posture"):
+            add("RESOURCE RISK SCORES", self._format_resource_posture(context["resource_posture"]), 800)
+
+        # Compliance
+        if context.get("compliance_results"):
+            add("COMPLIANCE", self._format_compliance_results(context["compliance_results"]), 600)
+        if context.get("compliance"):
+            add("COMPLIANCE POSTURE", self._format_compliance(context["compliance"]), 400)
+        if context.get("frameworks"):
+            add("FRAMEWORKS", self._format_frameworks(context["frameworks"]), 300)
+
+        # Threat / Drift
+        if context.get("cdr_events"):
+            add("CDR EVENTS", self._format_cdr_events(context["cdr_events"]), 800)
+        if context.get("changes"):
+            add("AUDIT LOG", self._format_changes(context["changes"]), 800)
+        if context.get("incidents"):
+            add("INCIDENTS", self._format_incidents(context["incidents"]), 400)
+        if context.get("asset_snapshots"):
+            tw = context.get("time_window_hours", 24)
+            add(f"ASSET CHANGES (last {tw}h)", self._format_asset_snapshots(context["asset_snapshots"], tw), 800)
+
+        # Scans and rules
+        if context.get("recent_scans"):
+            add("RECENT SCANS", self._format_scans(context["recent_scans"]), 300)
+        if context.get("rules"):
+            add("SECURITY RULES", self._format_rules(context["rules"]), 500)
         if context.get("suppression_rules"):
             add("SUPPRESSION RULES", self._format_suppression_rules(context["suppression_rules"]))
 

@@ -30,6 +30,7 @@ class QueryLogRepository:
         context_finding_id: str | None = None,
         context_asset_id: str | None = None,
         was_streamed: bool = False,
+        session_id: str | None = None,
     ) -> CopilotQueryModel:
         """Create a new query log entry (append-only — never updated or deleted)."""
         query_log = CopilotQueryModel(
@@ -45,6 +46,7 @@ class QueryLogRepository:
             context_finding_id=context_finding_id,
             context_asset_id=context_asset_id,
             was_streamed=was_streamed,
+            session_id=session_id,
             created_at=datetime.utcnow(),
         )
 

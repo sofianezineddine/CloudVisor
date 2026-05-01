@@ -93,7 +93,7 @@ async def query_copilot(
     if extracted_user_id and _UUID_RE.match(extracted_user_id):
         user_id = extracted_user_id
     else:
-        user_id = "user_placeholder"  # dev mode only
+        user_id = "550e8400-e29b-41d4-a716-446655440001"  # dev mode consistent UUID
 
     # ── Rate limiting ───────────────────────────────────────────────────────
     from ..services.rate_limiter import RateLimiter
@@ -137,7 +137,7 @@ async def query_copilot(
                                 organization_id=x_org_id,
                                 user_id=user_id,
                                 query_text=query_request.query,
-                                intent=None,  # intent not available in streaming path
+                                intent="GENERAL",  # No longer using intent classification
                                 response_text="".join(full_response),
                                 citations=None,
                                 data_sources=None,
@@ -160,16 +160,34 @@ async def query_copilot(
         try:
             provider = settings.llm_provider.lower()
             model_used = _resolve_model_name(settings, provider)
-            # For direct answers, mark model as "direct"
             if result.processing_ms and result.processing_ms < 1000:
                 model_used = "direct"
 
             query_log_repo = QueryLogRepository(db)
-            session_id = query_request.session_id if hasattr(query_request, 'session_id') else None
-            
+
+            # ── Auto-create or reuse session ────────────────────────────────
+            session_id = query_request.session_id if query_request.session_id else None
+
+            if not session_id:
+                # Auto-create a new session for this conversation
+                from ..repositories.chat_session_repo import ChatSessionRepository
+                session_repo = ChatSessionRepository(db)
+                # Use first words of query as title
+                title_words = query_request.query.strip().split()[:6]
+                title = " ".join(title_words)
+                if len(query_request.query.strip().split()) > 6:
+                    title += "..."
+                new_session = await session_repo.create(
+                    organization_id=x_org_id,
+                    user_id=user_id,
+                    title=title,
+                )
+                session_id = new_session.id
+                logger.info(f"Auto-created session: {session_id}")
+
             await query_log_repo.create(
                 organization_id=x_org_id,
-                user_id=user_id if _UUID_RE.match(user_id) else x_org_id,  # fallback to org_id for dev mode
+                user_id=user_id,
                 query_text=query_request.query,
                 intent=result.intent,
                 response_text=result.answer,
@@ -182,12 +200,15 @@ async def query_copilot(
                 was_streamed=False,
                 session_id=session_id,
             )
-            
-            # Update session message count if session_id provided
-            if session_id:
-                from ..repositories.chat_session_repo import ChatSessionRepository
-                session_repo = ChatSessionRepository(db)
-                await session_repo.increment_message_count(session_id, x_org_id)
+
+            # Update session message count
+            from ..repositories.chat_session_repo import ChatSessionRepository
+            session_repo = ChatSessionRepository(db)
+            await session_repo.increment_message_count(session_id, x_org_id)
+
+            # Return session_id in response so frontend can track it
+            result.session_id = session_id
+
         except Exception as audit_err:
             logger.warning(f"Failed to write audit log (non-critical): {audit_err}")
 
@@ -200,7 +221,7 @@ async def query_copilot(
                     query_id=result.query_id,
                     organization_id=x_org_id,
                     user_id=user_id,
-                    intent=str(result.intent),
+                    intent="GENERAL",  # No longer using intent classification
                     processing_ms=result.processing_ms,
                     data_sources_used=result.data_sources_used,
                 )

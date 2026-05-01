@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { X, Trash2, Plus } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { useCloudVisorQStore } from '@/stores/cloudvisor-q';
 import { useCopilotSessions } from '@/hooks/use-copilot-sessions';
 
@@ -18,18 +18,8 @@ export function CloudVisorQHistory({ onSelectSession, onClose }: CloudVisorQHist
     sessions,
     loading,
     error,
-    createSession,
     deleteSession,
   } = useCopilotSessions();
-
-  const handleCreateSession = async () => {
-    const title = `Chat ${new Date().toLocaleDateString()}`;
-    const session = await createSession(title);
-    if (session) {
-      setCurrentSessionId(session.id);
-      onSelectSession?.(session.id);
-    }
-  };
 
   const handleSelectSession = (sessionId: string) => {
     setCurrentSessionId(sessionId);
@@ -93,27 +83,7 @@ export function CloudVisorQHistory({ onSelectSession, onClose }: CloudVisorQHist
 
       {/* New Session Button */}
       <div className="px-3 py-2 border-b flex-shrink-0" style={{ borderColor: 'var(--border-default)' }}>
-        <button
-          onClick={handleCreateSession}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded border transition-colors text-sm font-medium"
-          style={{
-            backgroundColor: 'var(--accent)',
-            color: '#000',
-            borderColor: 'var(--accent)',
-            opacity: loading ? 0.6 : 1,
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-          onMouseEnter={(e) => {
-            if (!loading) e.currentTarget.style.opacity = '0.9';
-          }}
-          onMouseLeave={(e) => {
-            if (!loading) e.currentTarget.style.opacity = '1';
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          New Chat
-        </button>
+        {/* Removed New Chat button as per requirements */}
       </div>
 
       {/* Sessions List */}

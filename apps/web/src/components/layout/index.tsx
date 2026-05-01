@@ -56,25 +56,25 @@ function ScopeBadgeIfNeeded() {
 function BottomBar() {
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-between px-3"
-      style={{ height: BOTTOM_BAR_H + 'px', backgroundColor: '#31465f', borderTop: '1px solid rgba(255,255,255,0.1)' }}
+      className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-between px-3 py-1"
+      style={{ height: BOTTOM_BAR_H + 'px', backgroundColor: '#131920', borderTop: '1px solid rgba(255,255,255,0.2)' }}
     >
       <div className="flex items-center gap-4">
         {['Feedback', 'Console Mobile App'].map(label => (
-          <button key={label} className="flex items-center gap-1 text-xs transition-colors" style={{ color: 'rgba(255,255,255,0.75)' }}
-            onMouseEnter={e => { (e.currentTarget.style.color = '#ffffff'); (e.currentTarget.style.textDecoration = 'underline'); }}
-            onMouseLeave={e => { (e.currentTarget.style.color = 'rgba(255,255,255,0.75)'); (e.currentTarget.style.textDecoration = 'none'); }}
+          <button key={label} className="flex items-center gap-1 text-xs transition-colors" style={{ color: '#ffffff' }}
+            onMouseEnter={e => { (e.currentTarget.style.textDecoration = 'underline'); }}
+            onMouseLeave={e => { (e.currentTarget.style.textDecoration = 'none'); }}
           >
             {label}
           </button>
         ))}
       </div>
-      <div className="flex items-center gap-3 text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
+      <div className="flex items-center gap-3 text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>
         <span className="hidden lg:block">© 2026 CloudVisor, Inc. or its affiliates.</span>
         {['Privacy', 'Terms', 'Cookie preferences'].map(item => (
-          <button key={item} className="transition-colors" style={{ color: 'rgba(255,255,255,0.75)' }}
-            onMouseEnter={e => { (e.currentTarget.style.color = '#ffffff'); (e.currentTarget.style.textDecoration = 'underline'); }}
-            onMouseLeave={e => { (e.currentTarget.style.color = 'rgba(255,255,255,0.75)'); (e.currentTarget.style.textDecoration = 'none'); }}
+          <button key={item} className="transition-colors" style={{ color: '#ffffff' }}
+            onMouseEnter={e => { (e.currentTarget.style.textDecoration = 'underline'); }}
+            onMouseLeave={e => { (e.currentTarget.style.textDecoration = 'none'); }}
           >{item}</button>
         ))}
       </div>
@@ -228,7 +228,7 @@ export function AppLayout({
                   style={{
                     position: 'sticky',
                     top: `${STICKY_HEADER_H + BAR3_H}px`,
-                    height: `calc(100vh - ${STICKY_HEADER_H}px - ${BAR3_H}px - ${BOTTOM_BAR_H}px)`,
+                    height: `calc(100vh - ${STICKY_HEADER_H + BAR3_H}px - ${BOTTOM_BAR_H}px)`,
                     overflowY: 'auto',
                     zIndex: 20,
                   }}
@@ -238,7 +238,7 @@ export function AppLayout({
                   <div className="md:hidden fixed left-0 right-0 z-20 overflow-y-auto"
                     style={{
                       top: `${STICKY_HEADER_H + BAR3_H}px`,
-                      height: `calc(100vh - ${STICKY_HEADER_H}px - ${BAR3_H}px - ${BOTTOM_BAR_H}px)`,
+                      height: `calc(100vh - ${STICKY_HEADER_H + BAR3_H}px - ${BOTTOM_BAR_H}px)`,
                     }}
                   >
                     <Sidebar
@@ -248,7 +248,7 @@ export function AppLayout({
                     />
                   </div>
                   {/* Desktop: inline sticky 220px */}
-                  <div className="hidden md:block" style={{ width: '220px' }}>
+                  <div className="hidden md:block" style={{ width: '220px', height: '100%' }}>
                     <Sidebar
                       onClose={() => { setSidebarOpen(false); _sidebarOpen = false; }}
                       cspmActiveTab={cspmActiveTab}

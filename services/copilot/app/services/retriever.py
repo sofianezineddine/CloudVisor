@@ -6,7 +6,6 @@ import httpx
 from elasticsearch import AsyncElasticsearch
 
 from ..core.config import CopilotSettings
-from ..schemas.response import IntentType
 
 logger = logging.getLogger(__name__)
 
@@ -33,84 +32,98 @@ class ContextRetriever:
 
     async def retrieve(
         self,
-        intent: IntentType,
+        intent: str,
         query: str,
         context_finding_id: str | None = None,
         context_asset_id: str | None = None,
     ) -> dict[str, Any]:
         """
-        Retrieve context from relevant data sources based on intent.
-        Every query always gets the base org snapshot (accounts, posture).
-        Intent-specific sources are added on top.
-        All base fetches run concurrently via asyncio.gather.
+        Fetch comprehensive context from all available sources.
+        No intent-based filtering - give the LLM full situational awareness.
         """
         import asyncio
 
-        logger.info(f"Retrieving context for intent: {intent}")
+        logger.info(f"Fetching comprehensive context for autonomous LLM reasoning")
 
         context: dict[str, Any] = {
-            "intent": intent,
             "sources_used": [],
         }
 
-        # ── Always fetch base context concurrently ──────────────────────────
-        async def _safe_fetch_accounts():
+        async def _safe(name: str, coro):
             try:
-                return await self._fetch_cloud_accounts()
+                result = await coro
+                if result:
+                    context[name] = result
+                    context["sources_used"].append(name)
             except Exception as e:
-                logger.warning(f"Failed to fetch cloud accounts: {e}")
-                return []
+                logger.warning(f"Failed to fetch {name}: {e}")
 
-        async def _safe_fetch_posture():
+        async def _fetch_assets():
             try:
-                return await self._fetch_posture_snapshots()
+                assets = await self._fetch_assets_from_graph(query)
+                if assets:
+                    context["assets"] = assets
+                    context["sources_used"].append("assets")
+                    return
             except Exception as e:
-                logger.warning(f"Failed to fetch posture snapshots: {e}")
-                return []
+                logger.warning(f"Graph asset fetch failed: {e}")
+            try:
+                assets = await self._fetch_assets_from_db()
+                if assets:
+                    context["assets"] = assets
+                    context["sources_used"].append("assets")
+            except Exception as e:
+                logger.warning(f"DB asset fallback failed: {e}")
 
-        accounts, posture = await asyncio.gather(
-            _safe_fetch_accounts(),
-            _safe_fetch_posture(),
-        )
+        async def _fetch_findings():
+            try:
+                findings = await self._fetch_findings_from_es(query)
+                if not findings:
+                    findings = await self._fetch_findings_direct()
+                if findings:
+                    context["findings"] = findings
+                    context["sources_used"].append("findings")
+            except Exception as e:
+                logger.warning(f"Findings fetch failed: {e}")
 
-        if accounts:
-            context["cloud_accounts"] = accounts
-            context["sources_used"].append("cloud_accounts")
-        if posture:
-            context["posture_snapshots"] = posture
-            context["sources_used"].append("posture_snapshots")
+        # Fetch all core data sources concurrently
+        tasks = [
+            _safe("cloud_accounts", self._fetch_cloud_accounts()),
+            _safe("posture_snapshots", self._fetch_posture_snapshots()),
+            _fetch_findings(),
+            _fetch_assets(),
+            _safe("resource_posture", self._fetch_resource_posture()),
+            _safe("compliance_results", self._fetch_compliance_results()),
+            _safe("recent_scans", self._fetch_recent_scans()),
+            _safe("users", self._fetch_users()),
+        ]
 
-        # ── Intent-specific retrieval ───────────────────────────────────────
-        if intent == "GENERAL":
-            logger.info("GENERAL intent: base context only")
+        # Run all tasks concurrently
+        await asyncio.gather(*tasks)
 
-        elif intent == "POSTURE":
-            context.update(await self._retrieve_posture_context(query))
+        # Specific finding/asset if provided from UI context
+        if context_finding_id:
+            try:
+                finding = await self._fetch_finding_by_id(context_finding_id)
+                if finding:
+                    context["finding"] = finding
+                    context["sources_used"].append("finding_detail")
+                    history = await self._fetch_finding_history(context_finding_id)
+                    if history:
+                        context["finding_history"] = history
+            except Exception as e:
+                logger.warning(f"Failed to fetch finding {context_finding_id}: {e}")
 
-        elif intent == "FINDING":
-            context.update(await self._retrieve_finding_context(query, context_finding_id))
-
-        elif intent == "COMPLIANCE":
-            context.update(await self._retrieve_compliance_context(query))
-
-        elif intent == "REMEDIATION":
-            context.update(await self._retrieve_remediation_context(query, context_finding_id))
-
-        elif intent == "THREAT":
-            context.update(await self._retrieve_threat_context(query))
-
-        elif intent == "DRIFT":
-            context.update(await self._retrieve_drift_context(query))
-
-        # ── Pre-loaded asset/finding from UI context ────────────────────────
         if context_asset_id:
-            asset_data = await self._fetch_asset_by_id(context_asset_id)
-            if asset_data:
-                context["preloaded_asset"] = asset_data
-                if "asset_graph" not in context["sources_used"]:
-                    context["sources_used"].append("asset_graph")
+            try:
+                asset = await self._fetch_asset_by_id(context_asset_id)
+                if asset:
+                    context["preloaded_asset"] = asset
+                    context["sources_used"].append("asset_detail")
+            except Exception as e:
+                logger.warning(f"Failed to fetch asset {context_asset_id}: {e}")
 
-        logger.info(f"Retrieved context from sources: {context['sources_used']}")
+        logger.info(f"Comprehensive context retrieved from: {context['sources_used']}")
         return context
 
     async def _retrieve_posture_context(self, query: str) -> dict[str, Any]:

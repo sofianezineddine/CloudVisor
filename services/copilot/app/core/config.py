@@ -50,6 +50,13 @@ class CopilotSettings(BaseSettings):
     openrouter_site_url: str = Field(default="")  # Optional: your site URL for rankings
     openrouter_app_name: str = Field(default="CloudVisor Q")  # Optional: your app name
 
+    # NVIDIA API configuration
+    nvidia_api_key: str = Field(default="")
+    nvidia_base_url: str = Field(default="https://integrate.api.nvidia.com/v1")
+    nvidia_model: str = Field(default="meta/llama-3.1-70b-instruct")
+    nvidia_max_tokens: int = Field(default=2048)
+    nvidia_temperature: float = Field(default=0.1)
+
     # General LLM settings
     max_tokens: int = Field(default=512)
     temperature: float = Field(default=0.1)

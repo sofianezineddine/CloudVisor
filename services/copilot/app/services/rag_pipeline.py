@@ -1,4 +1,4 @@
-"""Main RAG pipeline orchestration - the 6-step flow."""
+"""Main RAG pipeline orchestration - autonomous LLM-driven flow."""
 
 import logging
 import time
@@ -7,12 +7,10 @@ from typing import AsyncGenerator
 
 from ..core.config import CopilotSettings
 from ..schemas.request import CopilotQueryRequest
-from ..schemas.response import CopilotQueryResponse, Citation, SuggestedAction, IntentType
-from .intent_classifier import IntentClassifier
+from ..schemas.response import CopilotQueryResponse, Citation, SuggestedAction
 from .retriever import ContextRetriever
 from .prompt_builder import PromptBuilder
 from .llm_client import get_llm_client
-from .direct_answer import DirectAnswerEngine
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +29,10 @@ class RAGPipeline:
         self.organization_id = organization_id
         self.user_id = user_id
 
-        self.intent_classifier = IntentClassifier()
+        # No intent classifier - let the LLM be autonomous
         self.retriever = ContextRetriever(settings, organization_id, session_factory)
         self.prompt_builder = PromptBuilder()
         self.llm_client = get_llm_client(settings)
-        self.direct_engine = DirectAnswerEngine()
 
     async def execute(
         self, request: CopilotQueryRequest
@@ -45,12 +42,9 @@ class RAGPipeline:
         logger.info(f"Starting RAG pipeline for query_id={query_id}")
 
         try:
-            # Step 1: Intent Classification
-            intent = self._classify_intent(request.query)
-
-            # Step 3: Multi-Source Context Retrieval
-            context = await self._retrieve_context(
-                intent,
+            # Step 1: Fetch comprehensive context (no intent classification)
+            # Let the LLM decide what's relevant from all available data
+            context = await self._retrieve_comprehensive_context(
                 request.query,
                 request.context.finding_id if request.context else None,
                 request.context.asset_id if request.context else None,
@@ -64,36 +58,17 @@ class RAGPipeline:
                     m.model_dump() for m in request.conversation_history
                 ]
 
-            # ── Step 3.5: Direct Answer Engine ──────────────────────────
-            # For factual queries (counts, lists, status), answer directly
-            # from the retrieved data — no LLM, no hallucination.
-            if not request.stream and self.direct_engine.can_answer(request.query, context):
-                logger.info(f"Direct answer engine handling query: {request.query[:80]}")
-                answer = self.direct_engine.answer(request.query, context)
-                processing_ms = int((time.time() - start_time) * 1000)
-                logger.info(f"Direct answer generated in {processing_ms}ms")
-                return CopilotQueryResponse(
-                    query_id=query_id,
-                    answer=answer,
-                    intent=intent,
-                    citations=[],
-                    suggested_actions=self._generate_suggested_actions(intent, context),
-                    data_freshness=datetime.utcnow(),
-                    processing_ms=processing_ms,
-                    data_sources_used=context.get("sources_used", []),
-                )
-
-            # Step 4: Prompt Construction (for complex/analytical queries)
+            # Step 2: Build prompt with retrieved context
             system_prompt, user_prompt = self._build_prompts(request.query, context)
 
-            # Step 5: LLM Call
+            # Step 3: LLM Call
             if request.stream:
                 return self._execute_streaming(
-                    query_id, intent, system_prompt, user_prompt, context, start_time
+                    query_id, system_prompt, user_prompt, context, start_time
                 )
             else:
                 return await self._execute_complete(
-                    query_id, intent, system_prompt, user_prompt, context, start_time
+                    query_id, system_prompt, user_prompt, context, start_time
                 )
 
         except Exception as e:
@@ -103,7 +78,6 @@ class RAGPipeline:
     async def _execute_complete(
         self,
         query_id: str,
-        intent: IntentType,
         system_prompt: str,
         user_prompt: str,
         context: dict,
@@ -112,12 +86,14 @@ class RAGPipeline:
         answer = await self.llm_client.generate(system_prompt, user_prompt, stream=False)
         processing_ms = int((time.time() - start_time) * 1000)
         citations = self._parse_citations(answer)
-        suggested_actions = self._generate_suggested_actions(intent, context)
+        
+        # Let the LLM determine what actions are relevant based on the query and context
+        suggested_actions = self._generate_dynamic_actions(context)
 
         response = CopilotQueryResponse(
             query_id=query_id,
             answer=answer,
-            intent=intent,
+            intent="GENERAL",  # No longer using intent classification
             citations=citations,
             suggested_actions=suggested_actions,
             data_freshness=datetime.utcnow(),
@@ -130,7 +106,6 @@ class RAGPipeline:
     async def _execute_streaming(
         self,
         query_id: str,
-        intent: IntentType,
         system_prompt: str,
         user_prompt: str,
         context: dict,
@@ -140,26 +115,31 @@ class RAGPipeline:
         async for token in stream:
             yield token
 
-    def _classify_intent(self, query: str) -> IntentType:
-        logger.info("Step 1: Classifying intent")
-        intent = self.intent_classifier.classify(query)
-        logger.info(f"Intent classified as: {intent}")
-        return intent
-
-    async def _retrieve_context(
+    async def _retrieve_comprehensive_context(
         self,
-        intent: IntentType,
         query: str,
         finding_id: str | None,
         asset_id: str | None,
     ) -> dict:
-        logger.info("Step 3: Retrieving context")
-        context = await self.retriever.retrieve(intent, query, finding_id, asset_id)
+        """
+        Retrieve comprehensive context from all available sources.
+        Let the LLM decide what's relevant instead of pre-filtering by intent.
+        """
+        logger.info("Retrieving comprehensive context from all sources")
+        
+        # Always fetch core data that gives the LLM full situational awareness
+        context = await self.retriever.retrieve(
+            "COMPREHENSIVE",  # Special mode to fetch everything
+            query,
+            finding_id,
+            asset_id
+        )
+        
         logger.info(f"Context retrieved from {len(context.get('sources_used', []))} sources")
         return context
 
     def _build_prompts(self, query: str, context: dict) -> tuple[str, str]:
-        logger.info("Step 4: Building prompts")
+        logger.info("Building prompts")
         system_prompt, user_prompt = self.prompt_builder.build_prompts(query, context)
         logger.info(f"Prompts built: system={len(system_prompt)} chars")
         return system_prompt, user_prompt
@@ -167,31 +147,52 @@ class RAGPipeline:
     def _parse_citations(self, answer: str) -> list[Citation]:
         return []
 
-    def _generate_suggested_actions(
-        self, intent: IntentType, context: dict
-    ) -> list[SuggestedAction]:
+    def _generate_dynamic_actions(self, context: dict) -> list[SuggestedAction]:
+        """
+        Generate suggested actions based on available data, not intent.
+        Provide the most relevant actions based on what data we have.
+        """
         actions = []
 
-        if intent == "POSTURE":
-            actions.append(SuggestedAction(label="View all findings", action="navigate", target="/findings"))
-            if context.get("assets"):
-                actions.append(SuggestedAction(label="View assets", action="navigate", target="/assets"))
+        # Always offer dashboard as a starting point
+        actions.append(SuggestedAction(
+            label="View Dashboard",
+            action="navigate",
+            target="/dashboard"
+        ))
 
-        elif intent == "FINDING":
-            if "finding" in context:
-                finding_id = context["finding"].get("id")
-                actions.append(SuggestedAction(label="Generate fix", action="remediation", finding_id=finding_id))
-            actions.append(SuggestedAction(label="View all findings", action="navigate", target="/findings"))
+        # If we have findings, offer to view them
+        if context.get("findings") or context.get("findings_summary"):
+            actions.append(SuggestedAction(
+                label="View All Findings",
+                action="navigate",
+                target="/findings"
+            ))
 
-        elif intent == "COMPLIANCE":
-            actions.append(SuggestedAction(label="View compliance", action="navigate", target="/compliance"))
-            actions.append(SuggestedAction(label="Export report", action="export", target="/compliance/export"))
+        # If we have a specific finding, offer remediation
+        if context.get("finding"):
+            finding_id = context["finding"].get("id")
+            actions.append(SuggestedAction(
+                label="Generate Fix",
+                action="remediation",
+                finding_id=finding_id
+            ))
 
-        elif intent == "THREAT":
-            actions.append(SuggestedAction(label="Investigate in CDR", action="investigate", target="/cdr/events"))
+        # If we have assets, offer to view them
+        if context.get("assets"):
+            actions.append(SuggestedAction(
+                label="View Assets",
+                action="navigate",
+                target="/assets"
+            ))
 
-        elif intent == "DRIFT":
-            actions.append(SuggestedAction(label="View assets", action="navigate", target="/assets"))
+        # If we have compliance data, offer compliance view
+        if context.get("compliance") or context.get("compliance_results"):
+            actions.append(SuggestedAction(
+                label="View Compliance",
+                action="navigate",
+                target="/compliance"
+            ))
 
         return actions
 
