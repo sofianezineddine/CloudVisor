@@ -13,8 +13,22 @@ import botocore.exceptions
 from botocore.config import Config
 
 from .base import CloudClientBase
+from app.services.retry import RetryConfig, retry_async, RateLimitException, TemporaryException
+from app.services.circuit_breaker import CircuitBreakerRegistry, CircuitBreakerOpenException
 
 logger = logging.getLogger(__name__)
+
+# Global circuit breaker registry
+_circuit_breaker_registry = CircuitBreakerRegistry()
+
+# Retry configuration for AWS API calls
+_retry_config = RetryConfig(
+    max_retries=5,
+    initial_delay_seconds=1.0,
+    max_delay_seconds=60.0,
+    exponential_base=2.0,
+    jitter=True,
+)
 
 
 class AWSClient(CloudClientBase):
@@ -114,6 +128,77 @@ class AWSClient(CloudClientBase):
     def get_account_id(self) -> str:
         return self._account_id or ""
 
+    async def _call_with_retry_and_circuit_breaker(
+        self,
+        service_name: str,
+        func: Any,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """
+        Call an AWS API function with retry logic and circuit breaker protection.
+
+        Args:
+            service_name: Name of the AWS service (for circuit breaker identification)
+            func: Async function to call
+            *args: Positional arguments
+            **kwargs: Keyword arguments
+
+        Returns:
+            Result of the function call
+
+        Raises:
+            CircuitBreakerOpenException: If circuit breaker is open
+            RateLimitException: If rate limited (429)
+            TemporaryException: If temporary error (5xx, timeout)
+            Exception: Any other exception from the function
+        """
+        # Get or create circuit breaker for this service
+        breaker = await _circuit_breaker_registry.get_or_create(
+            name=f"aws-{service_name}",
+            failure_threshold=0.5,  # 50% error rate
+            failure_window_seconds=300,  # 5 minutes
+            recovery_timeout_seconds=60,  # 1 minute before trying again
+            min_requests_for_threshold=10,  # Need at least 10 requests
+        )
+
+        # Execute through circuit breaker with retry logic
+        async def call_with_retry():
+            try:
+                return await func(*args, **kwargs)
+            except botocore.exceptions.ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code", "Unknown")
+                status_code = e.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0)
+
+                # Handle rate limiting (429)
+                if status_code == 429 or error_code == "ThrottlingException":
+                    retry_after = e.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}).get("retry-after")
+                    retry_after_seconds = float(retry_after) if retry_after else None
+                    raise RateLimitException(retry_after_seconds)
+
+                # Handle temporary errors (5xx, timeouts)
+                if status_code >= 500 or error_code in ("RequestTimeout", "ConnectionError"):
+                    raise TemporaryException(f"AWS API error: {error_code} ({status_code})")
+
+                # Handle auth errors (don't retry)
+                if status_code in (401, 403) or error_code in ("UnauthorizedOperation", "AccessDenied"):
+                    logger.error(f"AWS auth error: {error_code} - credentials may be invalid")
+                    raise
+
+                # Other client errors - don't retry
+                raise
+
+            except (TimeoutError, ConnectionError, asyncio.TimeoutError) as e:
+                raise TemporaryException(f"Connection error: {type(e).__name__}")
+
+        # Apply retry decorator
+        @retry_async(config=_retry_config, retryable_exceptions=(RateLimitException, TemporaryException))
+        async def call_with_retry_decorated():
+            return await call_with_retry()
+
+        # Execute through circuit breaker
+        return await breaker.call(call_with_retry_decorated)
+
     async def list_resources(self, region: str | None = None) -> list[dict[str, Any]]:
         """List all resources across all supported types and regions."""
         resources = []
@@ -203,53 +288,85 @@ class AWSClient(CloudClientBase):
     async def _discover_ec2(self, region: str) -> list[dict[str, Any]]:
         """Discover EC2 instances, VPCs, Subnets, Security Groups."""
         resources = []
-        async with self._session.create_client(
-            "ec2", region_name=region, **self._get_client_config()
-        ) as ec2:
-            paginator = ec2.get_paginator("describe_instances")
-            async for page in paginator.paginate():
-                for reservation in page.get("Reservations", []):
-                    for instance in reservation.get("Instances", []):
-                        resources.append(self._normalize_ec2_instance(instance, region))
+        try:
+            async with self._session.create_client(
+                "ec2", region_name=region, **self._get_client_config()
+            ) as ec2:
+                # Discover EC2 instances
+                try:
+                    paginator = ec2.get_paginator("describe_instances")
+                    async for page in paginator.paginate():
+                        for reservation in page.get("Reservations", []):
+                            for instance in reservation.get("Instances", []):
+                                resources.append(self._normalize_ec2_instance(instance, region))
+                except Exception as e:
+                    logger.warning(f"EC2 instances discovery failed in {region}: {e}")
 
-            paginator = ec2.get_paginator("describe_vpcs")
-            async for page in paginator.paginate():
-                for vpc in page.get("Vpcs", []):
-                    resources.append(self._normalize_vpc(vpc, region))
+                # Discover VPCs
+                try:
+                    paginator = ec2.get_paginator("describe_vpcs")
+                    async for page in paginator.paginate():
+                        for vpc in page.get("Vpcs", []):
+                            resources.append(self._normalize_vpc(vpc, region))
+                except Exception as e:
+                    logger.warning(f"EC2 VPCs discovery failed in {region}: {e}")
 
-            paginator = ec2.get_paginator("describe_subnets")
-            async for page in paginator.paginate():
-                for subnet in page.get("Subnets", []):
-                    resources.append(self._normalize_subnet(subnet, region))
+                # Discover Subnets
+                try:
+                    paginator = ec2.get_paginator("describe_subnets")
+                    async for page in paginator.paginate():
+                        for subnet in page.get("Subnets", []):
+                            resources.append(self._normalize_subnet(subnet, region))
+                except Exception as e:
+                    logger.warning(f"EC2 subnets discovery failed in {region}: {e}")
 
-            paginator = ec2.get_paginator("describe_security_groups")
-            async for page in paginator.paginate():
-                for sg in page.get("SecurityGroups", []):
-                    resources.append(self._normalize_security_group(sg, region))
+                # Discover Security Groups
+                try:
+                    paginator = ec2.get_paginator("describe_security_groups")
+                    async for page in paginator.paginate():
+                        for sg in page.get("SecurityGroups", []):
+                            resources.append(self._normalize_security_group(sg, region))
+                except Exception as e:
+                    logger.warning(f"EC2 security groups discovery failed in {region}: {e}")
 
-            # Elastic IPs — not pageable, use direct call
-            try:
-                eip_resp = await ec2.describe_addresses()
-                for eip in eip_resp.get("Addresses", []):
-                    resources.append(self._normalize_eip(eip, region))
-            except Exception as _e:
-                logger.debug(f"EIP discovery: {_e}")
+                # Discover Elastic IPs
+                try:
+                    eip_resp = await self._call_with_retry_and_circuit_breaker(
+                        "ec2",
+                        ec2.describe_addresses
+                    )
+                    for eip in eip_resp.get("Addresses", []):
+                        resources.append(self._normalize_eip(eip, region))
+                except Exception as e:
+                    logger.debug(f"EC2 EIP discovery failed in {region}: {e}")
+
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"EC2 circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"EC2 discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
 
         return resources
 
     async def _discover_s3(self, region: str) -> list[dict[str, Any]]:
         """Discover S3 buckets."""
         resources = []
-        async with self._session.create_client(
-            "s3", region_name=region, **self._get_client_config()
-        ) as s3:
-            try:
-                response = await s3.list_buckets()
+        try:
+            async with self._session.create_client(
+                "s3", region_name=region, **self._get_client_config()
+            ) as s3:
+                response = await self._call_with_retry_and_circuit_breaker(
+                    "s3",
+                    s3.list_buckets
+                )
                 for bucket in response.get("Buckets", []):
                     try:
-                        tags_response = await s3.get_bucket_tagging(Bucket=bucket["Name"])
+                        tags_response = await self._call_with_retry_and_circuit_breaker(
+                            "s3",
+                            s3.get_bucket_tagging,
+                            Bucket=bucket["Name"]
+                        )
                         tags = {t["Key"]: t["Value"] for t in tags_response.get("Tags", [])}
-                    except:
+                    except Exception:
                         tags = {}
                     resources.append(
                         {
@@ -261,169 +378,229 @@ class AWSClient(CloudClientBase):
                             "raw": bucket,
                         }
                     )
-            except Exception as _e:
-                logger.debug(f"Sub-discovery error: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"S3 circuit breaker open: {e}")
+        except Exception as e:
+            logger.error(f"S3 discovery failed: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_iam(self, region: str) -> list[dict[str, Any]]:
         """Discover IAM users, roles, and policies."""
         resources = []
-        async with self._session.create_client(
-            "iam", region_name="us-east-1", **self._get_client_config()
-        ) as iam:
-            paginator = iam.get_paginator("list_users")
-            async for page in paginator.paginate():
-                for user in page.get("Users", []):
-                    resources.append(
-                        {
-                            "type": "IAMUser",
-                            "id": user["Arn"],
-                            "name": user["UserName"],
-                            "region": "global",
-                            "tags": {t["Key"]: t["Value"] for t in user.get("Tags", [])},
-                            "raw": user,
-                        }
-                    )
+        try:
+            async with self._session.create_client(
+                "iam", region_name="us-east-1", **self._get_client_config()
+            ) as iam:
+                # List users
+                try:
+                    paginator = iam.get_paginator("list_users")
+                    async for page in paginator.paginate():
+                        for user in page.get("Users", []):
+                            resources.append(
+                                {
+                                    "type": "IAMUser",
+                                    "id": user["Arn"],
+                                    "name": user["UserName"],
+                                    "region": "global",
+                                    "tags": {t["Key"]: t["Value"] for t in user.get("Tags", [])},
+                                    "raw": user,
+                                }
+                            )
+                except Exception as e:
+                    logger.warning(f"IAM users discovery failed: {e}")
 
-            paginator = iam.get_paginator("list_roles")
-            async for page in paginator.paginate():
-                for role in page.get("Roles", []):
-                    resources.append(
-                        {
-                            "type": "IAMRole",
-                            "id": role["Arn"],
-                            "name": role["RoleName"],
-                            "region": "global",
-                            "tags": {t["Key"]: t["Value"] for t in role.get("Tags", [])},
-                            "raw": role,
-                        }
-                    )
+                # List roles
+                try:
+                    paginator = iam.get_paginator("list_roles")
+                    async for page in paginator.paginate():
+                        for role in page.get("Roles", []):
+                            resources.append(
+                                {
+                                    "type": "IAMRole",
+                                    "id": role["Arn"],
+                                    "name": role["RoleName"],
+                                    "region": "global",
+                                    "tags": {t["Key"]: t["Value"] for t in role.get("Tags", [])},
+                                    "raw": role,
+                                }
+                            )
+                except Exception as e:
+                    logger.warning(f"IAM roles discovery failed: {e}")
 
-            # Scope="Local" returns only customer-managed policies (not AWS-managed)
-            paginator = iam.get_paginator("list_policies")
-            async for page in paginator.paginate(Scope="Local"):
-                for policy in page.get("Policies", []):
-                    resources.append(
-                        {
-                            "type": "IAMPolicy",
-                            "id": policy["Arn"],
-                            "name": policy["PolicyName"],
-                            "region": "global",
-                            "tags": {},
-                            "raw": policy,
-                        }
-                    )
+                # List policies (customer-managed only)
+                try:
+                    paginator = iam.get_paginator("list_policies")
+                    async for page in paginator.paginate():
+                        for policy in page.get("Policies", []):
+                            resources.append(
+                                {
+                                    "type": "IAMPolicy",
+                                    "id": policy["Arn"],
+                                    "name": policy["PolicyName"],
+                                    "region": "global",
+                                    "tags": {},
+                                    "raw": policy,
+                                }
+                            )
+                except Exception as e:
+                    logger.warning(f"IAM policies discovery failed: {e}")
+
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"IAM circuit breaker open: {e}")
+        except Exception as e:
+            logger.error(f"IAM discovery failed: {type(e).__name__}: {str(e)[:200]}")
+
         return resources
 
     async def _discover_rds(self, region: str) -> list[dict[str, Any]]:
         """Discover RDS instances."""
         resources = []
-        async with self._session.create_client(
-            "rds", region_name=region, **self._get_client_config()
-        ) as rds:
-            paginator = rds.get_paginator("describe_db_instances")
-            async for page in paginator.paginate():
-                for db in page.get("DBInstances", []):
-                    resources.append(
-                        {
-                            "type": "RDSInstance",
-                            "id": db["DBInstanceArn"],
-                            "name": db["DBInstanceIdentifier"],
-                            "region": region,
-                            "tags": {t["Key"]: t["Value"] for t in db.get("TagList", [])},
-                            "raw": db,
-                        }
-                    )
+        try:
+            async with self._session.create_client(
+                "rds", region_name=region, **self._get_client_config()
+            ) as rds:
+                paginator = rds.get_paginator("describe_db_instances")
+                async for page in paginator.paginate():
+                    for db in page.get("DBInstances", []):
+                        resources.append(
+                            {
+                                "type": "RDSInstance",
+                                "id": db["DBInstanceArn"],
+                                "name": db["DBInstanceIdentifier"],
+                                "region": region,
+                                "tags": {t["Key"]: t["Value"] for t in db.get("TagList", [])},
+                                "raw": db,
+                            }
+                        )
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"RDS circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"RDS discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_lambda(self, region: str) -> list[dict[str, Any]]:
         """Discover Lambda functions."""
         resources = []
-        async with self._session.create_client(
-            "lambda", region_name=region, **self._get_client_config()
-        ) as lambda_client:
-            paginator = lambda_client.get_paginator("list_functions")
-            async for page in paginator.paginate():
-                for function in page.get("Functions", []):
-                    resources.append(
-                        {
-                            "type": "LambdaFunction",
-                            "id": function["FunctionArn"],
-                            "name": function["FunctionName"],
-                            "region": region,
-                            "tags": function.get("Tags", {}),
-                            "raw": function,
-                        }
-                    )
+        try:
+            async with self._session.create_client(
+                "lambda", region_name=region, **self._get_client_config()
+            ) as lambda_client:
+                paginator = lambda_client.get_paginator("list_functions")
+                async for page in paginator.paginate():
+                    for function in page.get("Functions", []):
+                        resources.append(
+                            {
+                                "type": "LambdaFunction",
+                                "id": function["FunctionArn"],
+                                "name": function["FunctionName"],
+                                "region": region,
+                                "tags": function.get("Tags", {}),
+                                "raw": function,
+                            }
+                        )
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"Lambda circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"Lambda discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_eks(self, region: str) -> list[dict[str, Any]]:
         """Discover EKS clusters."""
         resources = []
-        async with self._session.create_client(
-            "eks", region_name=region, **self._get_client_config()
-        ) as eks:
-            try:
-                response = await eks.list_clusters()
+        try:
+            async with self._session.create_client(
+                "eks", region_name=region, **self._get_client_config()
+            ) as eks:
+                response = await self._call_with_retry_and_circuit_breaker(
+                    "eks",
+                    eks.list_clusters
+                )
                 for cluster_name in response.get("clusters", []):
-                    cluster = await eks.describe_cluster(name=cluster_name)
-                    cluster_data = cluster.get("cluster", {})
-                    resources.append(
-                        {
-                            "type": "EKSCluster",
-                            "id": cluster_data["arn"],
-                            "name": cluster_name,
-                            "region": region,
-                            "tags": cluster_data.get("tags", {}),
-                            "raw": cluster_data,
-                        }
-                    )
-            except Exception as _e:
-                logger.debug(f"Sub-discovery error: {_e}")
+                    try:
+                        cluster = await self._call_with_retry_and_circuit_breaker(
+                            "eks",
+                            eks.describe_cluster,
+                            name=cluster_name
+                        )
+                        cluster_data = cluster.get("cluster", {})
+                        resources.append(
+                            {
+                                "type": "EKSCluster",
+                                "id": cluster_data["arn"],
+                                "name": cluster_name,
+                                "region": region,
+                                "tags": cluster_data.get("tags", {}),
+                                "raw": cluster_data,
+                            }
+                        )
+                    except Exception as e:
+                        logger.debug(f"EKS cluster describe error: {e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"EKS circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"EKS discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_kms(self, region: str) -> list[dict[str, Any]]:
         """Discover KMS keys."""
         resources = []
-        async with self._session.create_client(
-            "kms", region_name=region, **self._get_client_config()
-        ) as kms:
-            paginator = kms.get_paginator("list_keys")
-            async for page in paginator.paginate():
-                for key in page.get("Keys", []):
-                    try:
-                        key_info = await kms.describe_key(KeyId=key["KeyId"])
-                        resources.append(
-                            {
-                                "type": "KMSKey",
-                                "id": key["KeyArn"],
-                                "name": key["KeyId"],
-                                "region": region,
-                                "tags": {
-                                    t["TagKey"]: t["TagValue"]
-                                    for t in key_info.get("KeyMetadata", {}).get("Tags", [])
-                                },
-                                "raw": key_info.get("KeyMetadata", {}),
-                            }
-                        )
-                    except Exception as _e:
-                        logger.debug(f"KMS key describe error: {_e}")
+        try:
+            async with self._session.create_client(
+                "kms", region_name=region, **self._get_client_config()
+            ) as kms:
+                paginator = kms.get_paginator("list_keys")
+                async for page in paginator.paginate():
+                    for key in page.get("Keys", []):
+                        try:
+                            key_info = await self._call_with_retry_and_circuit_breaker(
+                                "kms",
+                                kms.describe_key,
+                                KeyId=key["KeyId"]
+                            )
+                            resources.append(
+                                {
+                                    "type": "KMSKey",
+                                    "id": key["KeyArn"],
+                                    "name": key["KeyId"],
+                                    "region": region,
+                                    "tags": {
+                                        t["TagKey"]: t["TagValue"]
+                                        for t in key_info.get("KeyMetadata", {}).get("Tags", [])
+                                    },
+                                    "raw": key_info.get("KeyMetadata", {}),
+                                }
+                            )
+                        except Exception as e:
+                            logger.debug(f"KMS key describe error: {e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"KMS circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"KMS discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_sns(self, region: str) -> list[dict[str, Any]]:
         """Discover SNS topics."""
         resources = []
-        async with self._session.create_client(
-            "sns", region_name=region, **self._get_client_config()
-        ) as sns:
-            try:
+        try:
+            async with self._session.create_client(
+                "sns", region_name=region, **self._get_client_config()
+            ) as sns:
                 paginator = sns.get_paginator("list_topics")
                 async for page in paginator.paginate():
                     for topic in page.get("Topics", []):
                         topic_arn = topic["TopicArn"]
                         name = topic_arn.split(":")[-1]
                         try:
-                            attrs_resp = await sns.get_topic_attributes(TopicArn=topic_arn)
+                            attrs_resp = await self._call_with_retry_and_circuit_breaker(
+                                "sns",
+                                sns.get_topic_attributes,
+                                TopicArn=topic_arn
+                            )
                             attrs = attrs_resp.get("Attributes", {})
                         except Exception:
                             attrs = {}
@@ -437,24 +614,32 @@ class AWSClient(CloudClientBase):
                                 "raw": {"TopicArn": topic_arn, **attrs},
                             }
                         )
-            except Exception as _e:
-                logger.debug(f"SNS discovery error in {region}: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"SNS circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"SNS discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_sqs(self, region: str) -> list[dict[str, Any]]:
         """Discover SQS queues."""
         resources = []
-        async with self._session.create_client(
-            "sqs", region_name=region, **self._get_client_config()
-        ) as sqs:
-            try:
-                response = await sqs.list_queues()
+        try:
+            async with self._session.create_client(
+                "sqs", region_name=region, **self._get_client_config()
+            ) as sqs:
+                response = await self._call_with_retry_and_circuit_breaker(
+                    "sqs",
+                    sqs.list_queues
+                )
                 for queue_url in response.get("QueueUrls", []):
                     name = queue_url.split("/")[-1]
                     try:
-                        attrs_resp = await sqs.get_queue_attributes(
+                        attrs_resp = await self._call_with_retry_and_circuit_breaker(
+                            "sqs",
+                            sqs.get_queue_attributes,
                             QueueUrl=queue_url,
-                            AttributeNames=["All"],
+                            AttributeNames=["All"]
                         )
                         attrs = attrs_resp.get("Attributes", {})
                         queue_arn = attrs.get("QueueArn", queue_url)
@@ -471,22 +656,29 @@ class AWSClient(CloudClientBase):
                             "raw": {"QueueUrl": queue_url, **attrs},
                         }
                     )
-            except Exception as _e:
-                logger.debug(f"SQS discovery error in {region}: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"SQS circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"SQS discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_dynamodb(self, region: str) -> list[dict[str, Any]]:
         """Discover DynamoDB tables."""
         resources = []
-        async with self._session.create_client(
-            "dynamodb", region_name=region, **self._get_client_config()
-        ) as dynamodb:
-            try:
+        try:
+            async with self._session.create_client(
+                "dynamodb", region_name=region, **self._get_client_config()
+            ) as dynamodb:
                 paginator = dynamodb.get_paginator("list_tables")
                 async for page in paginator.paginate():
                     for table_name in page.get("TableNames", []):
                         try:
-                            desc_resp = await dynamodb.describe_table(TableName=table_name)
+                            desc_resp = await self._call_with_retry_and_circuit_breaker(
+                                "dynamodb",
+                                dynamodb.describe_table,
+                                TableName=table_name
+                            )
                             table = desc_resp.get("Table", {})
                             table_arn = table.get("TableArn", f"arn:aws:dynamodb:{region}:{self._account_id}:table/{table_name}")
                         except Exception:
@@ -502,17 +694,20 @@ class AWSClient(CloudClientBase):
                                 "raw": table,
                             }
                         )
-            except Exception as _e:
-                logger.debug(f"DynamoDB discovery error in {region}: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"DynamoDB circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"DynamoDB discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_secretsmanager(self, region: str) -> list[dict[str, Any]]:
         """Discover Secrets Manager secrets."""
         resources = []
-        async with self._session.create_client(
-            "secretsmanager", region_name=region, **self._get_client_config()
-        ) as sm:
-            try:
+        try:
+            async with self._session.create_client(
+                "secretsmanager", region_name=region, **self._get_client_config()
+            ) as sm:
                 paginator = sm.get_paginator("list_secrets")
                 async for page in paginator.paginate():
                     for secret in page.get("SecretList", []):
@@ -526,8 +721,11 @@ class AWSClient(CloudClientBase):
                                 "raw": secret,
                             }
                         )
-            except Exception as _e:
-                logger.debug(f"Secrets Manager discovery error in {region}: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"Secrets Manager circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"Secrets Manager discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     def _get_client_config(self) -> dict[str, Any]:
@@ -617,10 +815,10 @@ class AWSClient(CloudClientBase):
     async def _discover_cloudfront(self, region: str) -> list[dict[str, Any]]:
         """Discover CloudFront distributions."""
         resources = []
-        async with self._session.create_client(
-            "cloudfront", region_name="us-east-1", **self._get_client_config()
-        ) as cloudfront:
-            try:
+        try:
+            async with self._session.create_client(
+                "cloudfront", region_name="us-east-1", **self._get_client_config()
+            ) as cloudfront:
                 paginator = cloudfront.get_paginator("list_distributions")
                 async for page in paginator.paginate():
                     for dist in page.get("DistributionList", {}).get("Items", []):
@@ -634,22 +832,29 @@ class AWSClient(CloudClientBase):
                                 "raw": dist,
                             }
                         )
-            except Exception as _e:
-                logger.debug(f"Sub-discovery error: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"CloudFront circuit breaker open: {e}")
+        except Exception as e:
+            logger.error(f"CloudFront discovery failed: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_ecs(self, region: str) -> list[dict[str, Any]]:
         """Discover ECS clusters and task definitions."""
         resources = []
-        async with self._session.create_client(
-            "ecs", region_name=region, **self._get_client_config()
-        ) as ecs:
-            try:
+        try:
+            async with self._session.create_client(
+                "ecs", region_name=region, **self._get_client_config()
+            ) as ecs:
                 paginator = ecs.get_paginator("list_clusters")
                 async for page in paginator.paginate():
                     for cluster_arn in page.get("clusterArns", []):
                         try:
-                            cluster = await ecs.describe_clusters(clusters=[cluster_arn])
+                            cluster = await self._call_with_retry_and_circuit_breaker(
+                                "ecs",
+                                ecs.describe_clusters,
+                                clusters=[cluster_arn]
+                            )
                             cluster_data = cluster.get("clusters", [{}])[0]
                             resources.append(
                                 {
@@ -661,19 +866,22 @@ class AWSClient(CloudClientBase):
                                     "raw": cluster_data,
                                 }
                             )
-                        except:
-                            continue
-            except Exception as _e:
-                logger.debug(f"Sub-discovery error: {_e}")
+                        except Exception as e:
+                            logger.debug(f"ECS cluster describe error: {e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"ECS circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"ECS discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_elasticache(self, region: str) -> list[dict[str, Any]]:
         """Discover ElastiCache clusters."""
         resources = []
-        async with self._session.create_client(
-            "elasticache", region_name=region, **self._get_client_config()
-        ) as elasticache:
-            try:
+        try:
+            async with self._session.create_client(
+                "elasticache", region_name=region, **self._get_client_config()
+            ) as elasticache:
                 paginator = elasticache.get_paginator("describe_cache_clusters")
                 async for page in paginator.paginate():
                     for cluster in page.get("CacheClusters", []):
@@ -687,17 +895,20 @@ class AWSClient(CloudClientBase):
                                 "raw": cluster,
                             }
                         )
-            except Exception as _e:
-                logger.debug(f"Sub-discovery error: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"ElastiCache circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"ElastiCache discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_config(self, region: str) -> list[dict[str, Any]]:
         """Discover Config rules."""
         resources = []
-        async with self._session.create_client(
-            "config", region_name=region, **self._get_client_config()
-        ) as config_client:
-            try:
+        try:
+            async with self._session.create_client(
+                "config", region_name=region, **self._get_client_config()
+            ) as config_client:
                 paginator = config_client.get_paginator("describe_config_rules")
                 async for page in paginator.paginate():
                     for rule in page.get("ConfigRules", []):
@@ -711,18 +922,20 @@ class AWSClient(CloudClientBase):
                                 "raw": rule,
                             }
                         )
-            except Exception as _e:
-                logger.debug(f"Sub-discovery error: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"Config circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"Config discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
-
 
     async def _discover_route53(self, region: str) -> list[dict[str, Any]]:
         """Discover Route53 hosted zones (global service)."""
         resources = []
-        async with self._session.create_client(
-            "route53", region_name="us-east-1", **self._get_client_config()
-        ) as r53:
-            try:
+        try:
+            async with self._session.create_client(
+                "route53", region_name="us-east-1", **self._get_client_config()
+            ) as r53:
                 paginator = r53.get_paginator("list_hosted_zones")
                 async for page in paginator.paginate():
                     for zone in page.get("HostedZones", []):
@@ -734,17 +947,20 @@ class AWSClient(CloudClientBase):
                             "tags": {},
                             "raw": zone,
                         })
-            except Exception as _e:
-                logger.debug(f"Route53 discovery error: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"Route53 circuit breaker open: {e}")
+        except Exception as e:
+            logger.error(f"Route53 discovery failed: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_elbv2(self, region: str) -> list[dict[str, Any]]:
         """Discover ALB and NLB load balancers."""
         resources = []
-        async with self._session.create_client(
-            "elbv2", region_name=region, **self._get_client_config()
-        ) as elbv2:
-            try:
+        try:
+            async with self._session.create_client(
+                "elbv2", region_name=region, **self._get_client_config()
+            ) as elbv2:
                 paginator = elbv2.get_paginator("describe_load_balancers")
                 async for page in paginator.paginate():
                     for lb in page.get("LoadBalancers", []):
@@ -758,17 +974,20 @@ class AWSClient(CloudClientBase):
                             "is_public": is_public,
                             "raw": lb,
                         })
-            except Exception as _e:
-                logger.debug(f"ELBv2 discovery error in {region}: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"ELBv2 circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"ELBv2 discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_elb(self, region: str) -> list[dict[str, Any]]:
         """Discover Classic Load Balancers."""
         resources = []
-        async with self._session.create_client(
-            "elb", region_name=region, **self._get_client_config()
-        ) as elb:
-            try:
+        try:
+            async with self._session.create_client(
+                "elb", region_name=region, **self._get_client_config()
+            ) as elb:
                 paginator = elb.get_paginator("describe_load_balancers")
                 async for page in paginator.paginate():
                     for lb in page.get("LoadBalancerDescriptions", []):
@@ -782,68 +1001,81 @@ class AWSClient(CloudClientBase):
                             "is_public": is_public,
                             "raw": lb,
                         })
-            except Exception as _e:
-                logger.debug(f"ELB (classic) discovery error in {region}: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"ELB circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"ELB discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_apigateway(self, region: str) -> list[dict[str, Any]]:
         """Discover API Gateway REST APIs and HTTP APIs."""
         resources = []
-        # REST APIs (v1)
-        async with self._session.create_client(
-            "apigateway", region_name=region, **self._get_client_config()
-        ) as apigw:
-            try:
-                paginator = apigw.get_paginator("get_rest_apis")
-                async for page in paginator.paginate():
-                    for api in page.get("items", []):
+        try:
+            # REST APIs (v1)
+            async with self._session.create_client(
+                "apigateway", region_name=region, **self._get_client_config()
+            ) as apigw:
+                try:
+                    paginator = apigw.get_paginator("get_rest_apis")
+                    async for page in paginator.paginate():
+                        for api in page.get("items", []):
+                            resources.append({
+                                "type": "APIGateway",
+                                "id": f"arn:aws:apigateway:{region}::/restapis/{api['id']}",
+                                "name": api["name"],
+                                "region": region,
+                                "tags": api.get("tags", {}),
+                                "is_public": True,
+                                "raw": api,
+                            })
+                except Exception as e:
+                    logger.warning(f"API Gateway v1 discovery failed in {region}: {e}")
+
+            # HTTP APIs (v2)
+            async with self._session.create_client(
+                "apigatewayv2", region_name=region, **self._get_client_config()
+            ) as apigwv2:
+                try:
+                    response = await self._call_with_retry_and_circuit_breaker(
+                        "apigateway",
+                        apigwv2.get_apis
+                    )
+                    for api in response.get("Items", []):
                         resources.append({
-                            "type": "APIGateway",
-                            "id": f"arn:aws:apigateway:{region}::/restapis/{api['id']}",
-                            "name": api["name"],
+                            "type": "APIGatewayV2",
+                            "id": f"arn:aws:apigateway:{region}::/apis/{api['ApiId']}",
+                            "name": api["Name"],
                             "region": region,
-                            "tags": api.get("tags", {}),
+                            "tags": api.get("Tags", {}),
                             "is_public": True,
                             "raw": api,
                         })
-            except Exception as _e:
-                logger.debug(f"API Gateway v1 discovery error in {region}: {_e}")
-
-        # HTTP APIs (v2)
-        async with self._session.create_client(
-            "apigatewayv2", region_name=region, **self._get_client_config()
-        ) as apigwv2:
-            try:
-                response = await apigwv2.get_apis()
-                for api in response.get("Items", []):
-                    resources.append({
-                        "type": "APIGatewayV2",
-                        "id": f"arn:aws:apigateway:{region}::/apis/{api['ApiId']}",
-                        "name": api["Name"],
-                        "region": region,
-                        "tags": api.get("Tags", {}),
-                        "is_public": True,
-                        "raw": api,
-                    })
-            except Exception as _e:
-                logger.debug(f"API Gateway v2 discovery error in {region}: {_e}")
+                except Exception as e:
+                    logger.warning(f"API Gateway v2 discovery failed in {region}: {e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"API Gateway circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"API Gateway discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
 
         return resources
 
     async def _discover_ecr(self, region: str) -> list[dict[str, Any]]:
         """Discover ECR repositories."""
         resources = []
-        async with self._session.create_client(
-            "ecr", region_name=region, **self._get_client_config()
-        ) as ecr:
-            try:
+        try:
+            async with self._session.create_client(
+                "ecr", region_name=region, **self._get_client_config()
+            ) as ecr:
+                # get_paginator is synchronous in aiobotocore — do NOT await it
                 paginator = ecr.get_paginator("describe_repositories")
                 async for page in paginator.paginate():
                     for repo in page.get("repositories", []):
-                        # Check if repo is public (image scan on push, public access)
                         is_public = False
                         try:
-                            policy_resp = await ecr.get_repository_policy(
+                            policy_resp = await self._call_with_retry_and_circuit_breaker(
+                                "ecr",
+                                ecr.get_repository_policy,
                                 repositoryName=repo["repositoryName"]
                             )
                             import json as _json
@@ -863,17 +1095,21 @@ class AWSClient(CloudClientBase):
                             "is_public": is_public,
                             "raw": repo,
                         })
-            except Exception as _e:
-                logger.debug(f"ECR discovery error in {region}: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"ECR circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"ECR discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_efs(self, region: str) -> list[dict[str, Any]]:
         """Discover EFS file systems."""
         resources = []
-        async with self._session.create_client(
-            "efs", region_name=region, **self._get_client_config()
-        ) as efs:
-            try:
+        try:
+            async with self._session.create_client(
+                "efs", region_name=region, **self._get_client_config()
+            ) as efs:
+                # get_paginator is synchronous in aiobotocore — do NOT await it
                 paginator = efs.get_paginator("describe_file_systems")
                 async for page in paginator.paginate():
                     for fs in page.get("FileSystems", []):
@@ -888,18 +1124,25 @@ class AWSClient(CloudClientBase):
                             "tags": {t["Key"]: t["Value"] for t in fs.get("Tags", [])},
                             "raw": fs,
                         })
-            except Exception as _e:
-                logger.debug(f"EFS discovery error in {region}: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"EFS circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"EFS discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
     async def _discover_cloudtrail(self, region: str) -> list[dict[str, Any]]:
         """Discover CloudTrail trails."""
         resources = []
-        async with self._session.create_client(
-            "cloudtrail", region_name=region, **self._get_client_config()
-        ) as ct:
-            try:
-                response = await ct.describe_trails(includeShadowTrails=False)
+        try:
+            async with self._session.create_client(
+                "cloudtrail", region_name=region, **self._get_client_config()
+            ) as ct:
+                response = await self._call_with_retry_and_circuit_breaker(
+                    "cloudtrail",
+                    ct.describe_trails,
+                    includeShadowTrails=False
+                )
                 for trail in response.get("trailList", []):
                     resources.append({
                         "type": "CloudTrailTrail",
@@ -909,28 +1152,10 @@ class AWSClient(CloudClientBase):
                         "tags": {},
                         "raw": trail,
                     })
-            except Exception as _e:
-                logger.debug(f"CloudTrail discovery error in {region}: {_e}")
+        except CircuitBreakerOpenException as e:
+            logger.warning(f"CloudTrail circuit breaker open in {region}: {e}")
+        except Exception as e:
+            logger.error(f"CloudTrail discovery failed in {region}: {type(e).__name__}: {str(e)[:200]}")
+        
         return resources
 
-    async def _discover_config(self, region: str) -> list[dict[str, Any]]:
-        """Discover AWS Config rules."""
-        resources = []
-        async with self._session.create_client(
-            "config", region_name=region, **self._get_client_config()
-        ) as config_client:
-            try:
-                paginator = config_client.get_paginator("describe_config_rules")
-                async for page in paginator.paginate():
-                    for rule in page.get("ConfigRules", []):
-                        resources.append({
-                            "type": "ConfigRule",
-                            "id": rule["ConfigRuleArn"],
-                            "name": rule["ConfigRuleName"],
-                            "region": region,
-                            "tags": {},
-                            "raw": rule,
-                        })
-            except Exception as _e:
-                logger.debug(f"Config rules discovery error in {region}: {_e}")
-        return resources

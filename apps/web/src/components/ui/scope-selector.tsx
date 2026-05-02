@@ -172,8 +172,15 @@ export function ScopeSelector() {
                         onMouseLeave={e => { if (!isAccountSelected(acc.account_id)) (e.currentTarget.style.backgroundColor = 'transparent'); }}
                       >
                         <div className="flex-1 text-left min-w-0">
-                          <div className="truncate text-sm" style={{ color: 'var(--text-primary)' }}>
+                          <div className="truncate text-sm flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
                             {acc.name || acc.account_id}
+                            {acc.status === 'error' || acc.status === 'auth_failed' ? (
+                              <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--critical)' }} title={acc.status} />
+                            ) : acc.status === 'partial_sync' ? (
+                              <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--warning)' }} title="partial sync" />
+                            ) : acc.status === 'active' ? (
+                              <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--success)' }} title="active" />
+                            ) : null}
                           </div>
                           <div className="font-mono text-xs truncate" style={{ color: 'var(--text-tertiary)' }}>
                             {acc.account_id}

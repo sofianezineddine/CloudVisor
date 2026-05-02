@@ -1,0 +1,21 @@
+{
+  "type": "record",
+  "name": "ResourceUpdated",
+  "namespace": "cloudvisor.connector",
+  "doc": "Emitted when an existing cloud resource state has changed.",
+  "fields": [
+    {"name": "event_type",        "type": "string",  "default": "resource.updated"},
+    {"name": "organization_id",   "type": "string"},
+    {"name": "account_id",        "type": "string"},
+    {"name": "provider",          "type": "string"},
+    {"name": "region",            "type": "string"},
+    {"name": "resource_type",     "type": "string"},
+    {"name": "cloud_resource_id", "type": "string"},
+    {"name": "name",              "type": "string"},
+    {"name": "tags",              "type": {"type": "map", "values": "string"}, "default": {}},
+    {"name": "is_public",         "type": "boolean", "default": false},
+    {"name": "environment",       "type": "string",  "default": "unknown"},
+    {"name": "timestamp",         "type": "string",  "doc": "ISO-8601 UTC timestamp"},
+    {"name": "correlation_id",    "type": "string"}
+  ]
+}

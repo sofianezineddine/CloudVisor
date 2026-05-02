@@ -5,9 +5,10 @@ import { AppLayout } from '@/components/layout';
 import { ProtectedRoute } from '@/components/protected-route';
 import ProviderBadge from '@/components/ui/provider-badge';
 import { Button } from '@/components/ui/button';
-import { Shield, RefreshCw, CheckCircle2, XCircle, Clock, Plus, Trash2, AlertTriangle, Loader2, X } from 'lucide-react';
+import { Shield, RefreshCw, CheckCircle2, XCircle, Clock, Plus, Trash2, AlertTriangle, Loader2, X, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { connectorAPI, CloudAccount, CreateAccountRequest } from '@/lib/api/connector';
+import { useCloudAccounts, useConnectAccount, useDeleteAccount, useTriggerAccountSync } from '@/hooks/use-connector';
 
 const PROVIDER_LABELS: Record<string, string> = {
   aws: 'AWS',
@@ -57,77 +58,56 @@ const PROVIDER_CREDENTIAL_FIELDS: Record<string, { key: string; label: string; t
 };
 
 export default function SettingsPage() {
-  const [accounts, setAccounts] = React.useState<CloudAccount[]>([]);
-  const [loading, setLoading] = React.useState(true);
-
   // Set browser tab title
   React.useEffect(() => {
     document.title = 'Cloud Accounts - Settings - CloudVisor';
   }, []);
-  const [error, setError] = React.useState<string | null>(null);
-  const [syncing, setSyncing] = React.useState<Record<string, boolean>>({});
+
+  // ── Data via React Query hooks ─────────────────────────────────────────────
+  const { data: accounts = [], isLoading: loading, error: accountsError, refetch } = useCloudAccounts();
+  const connectAccount = useConnectAccount();
+  const deleteAccount = useDeleteAccount();
+  const triggerSync = useTriggerAccountSync();
+
+  const error = accountsError instanceof Error ? accountsError.message : accountsError ? 'Failed to load accounts' : null;
+
+  // ── Local UI state ─────────────────────────────────────────────────────────
   const [showConnectModal, setShowConnectModal] = React.useState(false);
   const [selectedProvider, setSelectedProvider] = React.useState<string | null>(null);
   const [formData, setFormData] = React.useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
 
-  const fetchAccounts = React.useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await connectorAPI.listAccounts();
-      setAccounts(response.accounts || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load accounts');
-      console.error('Failed to fetch accounts:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    fetchAccounts();
-  }, [fetchAccounts]);
+  const showSuccess = (msg: string) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(null), 4000);
+  };
 
   const handleSync = async (accountId: string) => {
     try {
-      setSyncing(prev => ({ ...prev, [accountId]: true }));
-      await connectorAPI.triggerSync(accountId);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await fetchAccounts();
+      await triggerSync.mutateAsync({ accountId });
+      showSuccess('Sync triggered — resources will update shortly.');
     } catch (err) {
       console.error('Sync failed:', err);
-      alert('Failed to trigger sync. Check console for details.');
-    } finally {
-      setSyncing(prev => ({ ...prev, [accountId]: false }));
     }
   };
 
   const handleDelete = async (accountId: string, accountName: string) => {
-    if (!confirm(`Are you sure you want to delete "${accountName}"?`)) return;
+    if (!confirm(`Are you sure you want to delete "${accountName}"? This will stop all syncing and remove all discovered resources.`)) return;
     try {
-      await connectorAPI.deleteAccount(accountId);
-      await fetchAccounts();
+      await deleteAccount.mutateAsync(accountId);
+      showSuccess(`Account "${accountName}" removed.`);
     } catch (err) {
       console.error('Delete failed:', err);
-      alert('Failed to delete account.');
     }
   };
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProvider) return;
-
-    setSubmitting(true);
     setSubmitError(null);
 
     try {
-      // Resolve the canonical account_id for each provider:
-      //   AWS   → AWS Account ID  (formData.account_id)
-      //   Azure → Subscription ID (formData.subscription_id)
-      //   GCP   → Project ID      (formData.project_id)
-      //   OCI   → Tenancy OCID    (formData.tenancy_ocid)
       const providerAccountIdMap: Record<string, string> = {
         aws: formData.account_id || '',
         azure: formData.subscription_id || '',
@@ -138,30 +118,18 @@ export default function SettingsPage() {
 
       if (!resolvedAccountId.trim()) {
         const fieldLabels: Record<string, string> = {
-          aws: 'AWS Account ID',
-          azure: 'Subscription ID',
-          gcp: 'Project ID',
-          oci: 'Tenancy OCID',
+          aws: 'AWS Account ID', azure: 'Subscription ID', gcp: 'Project ID', oci: 'Tenancy OCID',
         };
         setSubmitError(`${fieldLabels[selectedProvider] || 'Account ID'} is required.`);
-        setSubmitting(false);
         return;
       }
 
-      // Fields that go directly into the top-level request body (not inside credentials{})
       const topLevelFields = new Set(['name', 'account_id', 'subscription_id', 'project_id', 'tenancy_ocid', 'region', 'polling_interval']);
-
       const credentials: Record<string, any> = {};
       for (const [key, value] of Object.entries(formData)) {
-        if (topLevelFields.has(key)) continue;
-        if (!value) continue;
-
+        if (topLevelFields.has(key) || !value) continue;
         if (key === 'service_account_json') {
-          try {
-            credentials[key] = JSON.parse(value);
-          } catch {
-            credentials[key] = value; // send as-is if not valid JSON
-          }
+          try { credentials[key] = JSON.parse(value); } catch { credentials[key] = value; }
         } else {
           credentials[key] = value;
         }
@@ -173,40 +141,32 @@ export default function SettingsPage() {
         account_id: resolvedAccountId,
         region: formData.region?.trim() || 'global',
         credentials,
-        polling_interval_minutes: parseInt(formData.polling_interval || '15', 10),
+        polling_interval_minutes: parseInt(formData.polling_interval || '1', 10),
       };
 
-      await connectorAPI.createAccount(data);
+      await connectAccount.mutateAsync(data);
       setShowConnectModal(false);
       setSelectedProvider(null);
       setFormData({});
-      await fetchAccounts();
+      showSuccess(`${PROVIDER_LABELS[selectedProvider]} account connected! Initial sync started.`);
     } catch (err) {
       let errorMessage = 'Failed to create account';
       if (err instanceof Error) {
-        // If the error message contains JSON, try to parse it for a better message
         const match = err.message.match(/\{.*\}/);
         if (match) {
           try {
             const parsed = JSON.parse(match[0]);
             if (parsed.detail) {
-              if (Array.isArray(parsed.detail)) {
-                errorMessage = parsed.detail.map((e: any) => e.msg || e.message).join(', ');
-              } else if (typeof parsed.detail === 'string') {
-                errorMessage = parsed.detail;
-              }
+              errorMessage = Array.isArray(parsed.detail)
+                ? parsed.detail.map((e: any) => e.msg || e.message).join(', ')
+                : typeof parsed.detail === 'string' ? parsed.detail : errorMessage;
             }
-          } catch {
-            errorMessage = err.message;
-          }
+          } catch { errorMessage = err.message; }
         } else {
           errorMessage = err.message;
         }
       }
       setSubmitError(errorMessage);
-      console.error('Create account failed:', err);
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -214,7 +174,7 @@ export default function SettingsPage() {
     if (account.status === 'error' || account.status === 'auth_failed') {
       return <XCircle className="h-5 w-5" style={{ color: 'var(--critical)' }} />;
     }
-    if (account.consecutive_errors > 0) {
+    if (account.status === 'partial_sync' || account.consecutive_errors > 0) {
       return <AlertTriangle className="h-5 w-5" style={{ color: 'var(--warning)' }} />;
     }
     return <CheckCircle2 className="h-5 w-5" style={{ color: 'var(--success)' }} />;
@@ -241,6 +201,8 @@ export default function SettingsPage() {
     setSubmitError(null);
   };
 
+  const submitting = connectAccount.isPending;
+
   return (
     <ProtectedRoute>
       <AppLayout breadcrumbs={[{ text: 'Home', href: '/console' }, { text: 'Settings' }, { text: 'Cloud accounts' }]}>
@@ -260,6 +222,13 @@ export default function SettingsPage() {
         {error && (
           <div className="mb-4 rounded-lg border p-4 text-sm" style={{ borderColor: 'var(--critical)', backgroundColor: 'var(--critical-dim)', color: 'var(--critical)' }}>
             {error}
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border p-4 text-sm" style={{ borderColor: 'var(--success)', backgroundColor: 'var(--success-bg, #f0fdf4)', color: 'var(--success)' }}>
+            <CheckCircle className="h-4 w-4 flex-shrink-0" />
+            {successMsg}
           </div>
         )}
 
@@ -299,6 +268,8 @@ export default function SettingsPage() {
                               ? { backgroundColor: 'var(--success-dim)', color: 'var(--success)' }
                               : account.status === 'error' || account.status === 'auth_failed'
                               ? { backgroundColor: 'var(--critical-dim)', color: 'var(--critical)' }
+                              : account.status === 'partial_sync'
+                              ? { backgroundColor: 'var(--warning-dim)', color: 'var(--warning)' }
                               : { backgroundColor: 'var(--warning-dim)', color: 'var(--warning)' }
                           }
                         >
@@ -345,9 +316,9 @@ export default function SettingsPage() {
                       size="sm"
                       className="gap-1.5 text-xs"
                       onClick={() => handleSync(account.id)}
-                      disabled={syncing[account.id]}
+                      disabled={triggerSync.isPending && triggerSync.variables?.accountId === account.id}
                     >
-                      {syncing[account.id] ? (
+                      {triggerSync.isPending && triggerSync.variables?.accountId === account.id ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
                       ) : (
                         <RefreshCw className="h-3 w-3" />
@@ -360,6 +331,7 @@ export default function SettingsPage() {
                       className="h-8 w-8 p-0"
                       style={{ color: 'var(--text-tertiary)' }}
                       onClick={() => handleDelete(account.id, account.name)}
+                      disabled={deleteAccount.isPending}
                       onMouseEnter={e => {
                         (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--critical-dim)';
                         (e.currentTarget as HTMLElement).style.color = 'var(--critical)';
@@ -369,7 +341,11 @@ export default function SettingsPage() {
                         (e.currentTarget as HTMLElement).style.color = 'var(--text-tertiary)';
                       }}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      {deleteAccount.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
                     </Button>
                   </div>
                 </div>

@@ -2,12 +2,48 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import generate_latest
 import logging
+import os
 
 from cloudvisor_utils.config import get_settings
 
 from app.core.dependencies import init_dependencies, shutdown_dependencies
 from app.api.routes import accounts_router, onboarding_router, resources_router
 from app.core.config import get_connector_settings
+
+# ── Structured JSON logging (spec §2.1) ──────────────────────────────────────
+def _configure_logging(log_level: str = "INFO") -> None:
+    """Configure structured JSON logging to stdout."""
+    try:
+        import structlog
+        structlog.configure(
+            processors=[
+                structlog.contextvars.merge_contextvars,
+                structlog.stdlib.add_log_level,
+                structlog.stdlib.add_logger_name,
+                structlog.processors.TimeStamper(fmt="iso"),
+                structlog.processors.StackInfoRenderer(),
+                structlog.processors.format_exc_info,
+                structlog.processors.JSONRenderer(),
+            ],
+            wrapper_class=structlog.make_filtering_bound_logger(
+                getattr(logging, log_level.upper(), logging.INFO)
+            ),
+            context_class=dict,
+            logger_factory=structlog.PrintLoggerFactory(),
+            cache_logger_on_first_use=True,
+        )
+        # Also configure stdlib logging to route through structlog
+        logging.basicConfig(
+            format="%(message)s",
+            level=getattr(logging, log_level.upper(), logging.INFO),
+        )
+    except ImportError:
+        # structlog not installed — fall back to plain logging
+        logging.basicConfig(
+            level=getattr(logging, log_level.upper(), logging.INFO),
+            format='{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
+        )
+
 
 logger = logging.getLogger("connector")
 
@@ -16,7 +52,8 @@ def create_app() -> FastAPI:
     settings = get_settings()
     connector_settings = get_connector_settings()
 
-    logging.basicConfig(level=logging.INFO)
+    log_level = getattr(settings.app, "log_level", "INFO") if hasattr(settings, "app") else os.getenv("APP_LOG_LEVEL", "INFO")
+    _configure_logging(log_level)
     logger.info("Starting CloudVisor Connector service")
 
     app = FastAPI(
@@ -45,6 +82,25 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup_event() -> None:
         logger.info("Initializing dependencies")
+
+        # ── OpenTelemetry tracing (spec §2.1) ─────────────────────────────────
+        otel_enabled = getattr(getattr(settings, "otel", None), "enabled", False) or \
+                       os.getenv("OTEL_ENABLED", "false").lower() == "true"
+        if otel_enabled:
+            try:
+                from cloudvisor_utils.tracing import setup_tracing, instrument_fastapi
+                otlp_endpoint = getattr(getattr(settings, "otel", None), "otlp_endpoint", None) or \
+                                os.getenv("OTEL_OTLP_ENDPOINT", "http://localhost:4317")
+                setup_tracing(
+                    service_name="cloudvisor-connector",
+                    otlp_endpoint=otlp_endpoint,
+                    enabled=True,
+                )
+                instrument_fastapi(app)
+                logger.info(f"OpenTelemetry tracing enabled → {otlp_endpoint}")
+            except Exception as e:
+                logger.warning(f"OpenTelemetry setup failed (non-fatal): {e}")
+
         await init_dependencies(settings)
         # Import after init to get initialized values
         from app.core.dependencies import _session_factory, _redis_client

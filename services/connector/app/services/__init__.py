@@ -10,8 +10,8 @@ from .errors import (
     with_retry,
     exponential_backoff,
 )
-from .retry import RetryConfig, RetryError, retry_async
-from .circuit_breaker import CircuitBreaker, CircuitBreakerError, CircuitState
+from .retry import RetryConfig, RetryableException as RetryError, retry_async
+from .circuit_breaker import CircuitBreaker, CircuitBreakerOpenException as CircuitBreakerError, CircuitState
 from .vault_client import VaultClient
 
 __all__ = [

@@ -1,1 +1,1 @@
-# Integration tests — require running Docker Compose stack
+# Integration tests for connector service

@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "ResourceDeleted",
+  "namespace": "cloudvisor.connector",
+  "doc": "Emitted when a cloud resource no longer exists in the cloud account.",
+  "fields": [
+    {"name": "event_type",        "type": "string",  "default": "resource.deleted"},
+    {"name": "organization_id",   "type": "string"},
+    {"name": "account_id",        "type": "string"},
+    {"name": "provider",          "type": "string"},
+    {"name": "region",            "type": "string"},
+    {"name": "cloud_resource_id", "type": "string"},
+    {"name": "timestamp",         "type": "string",  "doc": "ISO-8601 UTC timestamp"},
+    {"name": "correlation_id",    "type": "string"}
+  ]
+}

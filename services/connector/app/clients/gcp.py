@@ -136,9 +136,15 @@ class GCPClient(CloudClientBase):
             self._discover_databases(),
             self._discover_gke(),
             self._discover_functions(),
+            self._discover_cloud_run(),
             self._discover_pubsub(),
             self._discover_iam(),
+            self._discover_iam_bindings(),
             self._discover_kms(),
+            self._discover_bigquery(),
+            self._discover_dns(),
+            self._discover_artifact_registry(),
+            self._discover_secret_manager(),
         ]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -537,6 +543,204 @@ class GCPClient(CloudClientBase):
                 logger.info(f"GCP: discovered {len(resources)} KMS resources")
         except Exception as e:
             logger.debug(f"GCP KMS discovery: {e}")
+        return resources
+
+    # ─── Cloud Run ────────────────────────────────────────────────────────────
+
+    async def _discover_cloud_run(self) -> list[dict[str, Any]]:
+        resources = []
+        try:
+            from google.cloud import run_v2  # type: ignore[import]
+            client = run_v2.ServicesClient(credentials=self._gcp_credentials)
+            for region in self._all_regions[:15]:
+                try:
+                    parent = f"projects/{self._project_id}/locations/{region}"
+                    for svc in client.list_services(parent=parent):
+                        resources.append({
+                            "type": "CloudRunService",
+                            "id": svc.name,
+                            "name": svc.name.split("/")[-1],
+                            "region": region,
+                            "tags": dict(svc.labels) if svc.labels else {},
+                            "is_public": any(
+                                b.role == "roles/run.invoker" and "allUsers" in b.members
+                                for b in getattr(svc, "iam_bindings", [])
+                            ),
+                            "raw": {
+                                "name": svc.name,
+                                "uri": getattr(svc, "uri", None),
+                                "ingress": str(getattr(svc, "ingress", "")),
+                            },
+                        })
+                except Exception:
+                    continue
+            if resources:
+                logger.info(f"GCP: discovered {len(resources)} Cloud Run services")
+        except ImportError:
+            logger.debug("google-cloud-run not installed — skipping Cloud Run discovery")
+        except Exception as e:
+            logger.debug(f"GCP Cloud Run discovery: {e}")
+        return resources
+
+    # ─── BigQuery ─────────────────────────────────────────────────────────────
+
+    async def _discover_bigquery(self) -> list[dict[str, Any]]:
+        resources = []
+        try:
+            from google.cloud import bigquery  # type: ignore[import]
+            client = bigquery.Client(
+                project=self._project_id,
+                credentials=self._gcp_credentials,
+            )
+            for dataset in client.list_datasets():
+                full_id = f"projects/{self._project_id}/datasets/{dataset.dataset_id}"
+                resources.append({
+                    "type": "BigQueryDataset",
+                    "id": full_id,
+                    "name": dataset.dataset_id,
+                    "region": dataset.location or "US",
+                    "tags": dict(dataset.labels) if dataset.labels else {},
+                    "raw": {
+                        "dataset_id": dataset.dataset_id,
+                        "project": self._project_id,
+                        "location": dataset.location,
+                    },
+                })
+            if resources:
+                logger.info(f"GCP: discovered {len(resources)} BigQuery datasets")
+        except ImportError:
+            logger.debug("google-cloud-bigquery not installed — skipping BigQuery discovery")
+        except Exception as e:
+            logger.debug(f"GCP BigQuery discovery: {e}")
+        return resources
+
+    # ─── Cloud DNS ────────────────────────────────────────────────────────────
+
+    async def _discover_dns(self) -> list[dict[str, Any]]:
+        resources = []
+        try:
+            import googleapiclient.discovery
+            dns = googleapiclient.discovery.build(
+                "dns", "v1",
+                credentials=self._gcp_credentials,
+                cache_discovery=False,
+            )
+            zones = dns.managedZones().list(project=self._project_id).execute()
+            for zone in zones.get("managedZones", []):
+                resources.append({
+                    "type": "CloudDNSZone",
+                    "id": f"projects/{self._project_id}/managedZones/{zone['name']}",
+                    "name": zone["name"],
+                    "region": "global",
+                    "tags": zone.get("labels", {}),
+                    "raw": {
+                        "name": zone["name"],
+                        "dns_name": zone.get("dnsName"),
+                        "visibility": zone.get("visibility"),
+                    },
+                })
+            if resources:
+                logger.info(f"GCP: discovered {len(resources)} Cloud DNS zones")
+        except Exception as e:
+            logger.debug(f"GCP Cloud DNS discovery: {e}")
+        return resources
+
+    # ─── Artifact Registry ────────────────────────────────────────────────────
+
+    async def _discover_artifact_registry(self) -> list[dict[str, Any]]:
+        resources = []
+        try:
+            from google.cloud import artifactregistry_v1  # type: ignore[import]
+            client = artifactregistry_v1.ArtifactRegistryClient(credentials=self._gcp_credentials)
+            for region in self._all_regions[:10]:
+                try:
+                    parent = f"projects/{self._project_id}/locations/{region}"
+                    for repo in client.list_repositories(parent=parent):
+                        resources.append({
+                            "type": "ArtifactRegistryRepository",
+                            "id": repo.name,
+                            "name": repo.name.split("/")[-1],
+                            "region": region,
+                            "tags": dict(repo.labels) if repo.labels else {},
+                            "raw": {
+                                "name": repo.name,
+                                "format": str(repo.format_),
+                                "description": repo.description,
+                            },
+                        })
+                except Exception:
+                    continue
+            if resources:
+                logger.info(f"GCP: discovered {len(resources)} Artifact Registry repositories")
+        except ImportError:
+            logger.debug("google-cloud-artifact-registry not installed — skipping")
+        except Exception as e:
+            logger.debug(f"GCP Artifact Registry discovery: {e}")
+        return resources
+
+    # ─── Secret Manager ───────────────────────────────────────────────────────
+
+    async def _discover_secret_manager(self) -> list[dict[str, Any]]:
+        resources = []
+        try:
+            from google.cloud import secretmanager  # type: ignore[import]
+            client = secretmanager.SecretManagerServiceClient(credentials=self._gcp_credentials)
+            parent = f"projects/{self._project_id}"
+            for secret in client.list_secrets(request={"parent": parent}):
+                resources.append({
+                    "type": "SecretManagerSecret",
+                    "id": secret.name,
+                    "name": secret.name.split("/")[-1],
+                    "region": "global",
+                    "tags": dict(secret.labels) if secret.labels else {},
+                    "raw": {
+                        "name": secret.name,
+                        "replication": str(secret.replication) if secret.replication else None,
+                    },
+                })
+            if resources:
+                logger.info(f"GCP: discovered {len(resources)} Secret Manager secrets")
+        except ImportError:
+            logger.debug("google-cloud-secret-manager not installed — skipping")
+        except Exception as e:
+            logger.debug(f"GCP Secret Manager discovery: {e}")
+        return resources
+
+    # ─── IAM Bindings ─────────────────────────────────────────────────────────
+
+    async def _discover_iam_bindings(self) -> list[dict[str, Any]]:
+        """Discover project-level IAM policy bindings."""
+        resources = []
+        try:
+            import googleapiclient.discovery
+            crm = googleapiclient.discovery.build(
+                "cloudresourcemanager", "v1",
+                credentials=self._gcp_credentials,
+                cache_discovery=False,
+            )
+            policy = crm.projects().getIamPolicy(
+                resource=self._project_id, body={}
+            ).execute()
+            for binding in policy.get("bindings", []):
+                role = binding.get("role", "")
+                members = binding.get("members", [])
+                resources.append({
+                    "type": "IAMBinding",
+                    "id": f"projects/{self._project_id}/iamBindings/{role.replace('/', '_')}",
+                    "name": role,
+                    "region": "global",
+                    "tags": {},
+                    "is_public": "allUsers" in members or "allAuthenticatedUsers" in members,
+                    "raw": {
+                        "role": role,
+                        "members": members,
+                        "project": self._project_id,
+                    },
+                })
+            if resources:
+                logger.info(f"GCP: discovered {len(resources)} IAM bindings")
+        except Exception as e:
+            logger.debug(f"GCP IAM bindings discovery: {e}")
         return resources
 
     # ─── Hashing ──────────────────────────────────────────────────────────────

@@ -128,6 +128,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('cloudvisor-user');
       }
+      // Reset account loader so next login fetches fresh accounts
+      try {
+        const { resetAccountLoader } = await import('@/components/layout/header');
+        resetAccountLoader();
+      } catch {
+        // Non-fatal if import fails
+      }
       setUser(null);
     }
   };

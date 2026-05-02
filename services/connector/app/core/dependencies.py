@@ -21,16 +21,18 @@ _redis_client: redis.Redis | None = None
 _engine: object | None = None
 _session_factory: object | None = None
 _sync_scheduler: object | None = None
+_realtime_manager: object | None = None  # RealtimeConsumerManager
 
 
 async def init_dependencies(settings: CloudvisorSettings) -> None:
     """Initialize shared dependencies at app startup."""
-    global _redis_client, _engine, _session_factory, _sync_scheduler
+    global _redis_client, _engine, _session_factory, _sync_scheduler, _realtime_manager
 
     from .database import create_engine
     from ..models import create_connector_tables
     from ..producers import ResourceEventProducer
     from ..scheduler import SyncScheduler
+    from ..consumers import RealtimeConsumerManager
 
     _engine = create_engine(settings.db)
     _session_factory = create_session(_engine)
@@ -84,6 +86,7 @@ async def init_dependencies(settings: CloudvisorSettings) -> None:
     )
     event_producer = ResourceEventProducer(
         bootstrap_servers=kafka_servers,
+        schema_registry_url=conn_settings.schema_registry_url,
     )
     await event_producer.start()
 
@@ -96,12 +99,34 @@ async def init_dependencies(settings: CloudvisorSettings) -> None:
     )
     await _sync_scheduler.start()
 
+    # Initialize real-time consumer manager
+    _realtime_manager = RealtimeConsumerManager(
+        event_producer=event_producer,
+        settings=conn_settings,
+    )
+    await _realtime_manager.start()
+
+    if conn_settings.realtime_enabled:
+        logger.info(
+            "Real-time consumers ENABLED. "
+            "Consumers will be started per-account when accounts are registered."
+        )
+    else:
+        logger.info(
+            "Real-time consumers DISABLED (REALTIME_ENABLED=false). "
+            "Only scheduled polling is active."
+        )
+
     logger.info("Connector dependencies initialized (tables created, scheduler started)")
 
 
 async def shutdown_dependencies() -> None:
     """Clean up dependencies at app shutdown."""
-    global _redis_client, _engine, _sync_scheduler
+    global _redis_client, _engine, _sync_scheduler, _realtime_manager
+
+    if _realtime_manager:
+        await _realtime_manager.stop()
+        _realtime_manager = None
 
     if _sync_scheduler:
         await _sync_scheduler.stop()
@@ -134,6 +159,11 @@ async def get_redis(request: Request) -> AsyncGenerator[redis.Redis, None]:
     """Dependency for Redis client."""
     client = request.app.state.redis
     yield client
+
+
+def get_realtime_manager() -> object | None:
+    """Return the global RealtimeConsumerManager instance."""
+    return _realtime_manager
 
 
 @lru_cache

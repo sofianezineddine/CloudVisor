@@ -318,7 +318,13 @@ function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
 // ─── Account loader — fetches connected accounts and populates scope store ────
 // ─── Account loader — fetches connected accounts and populates scope store ────
 // Module-level flag — persists across component remounts during navigation
+// Reset to false on logout so the next login fetches fresh accounts
 let _accountsLoaded = false;
+
+/** Call this on logout to force account reload on next login. */
+export function resetAccountLoader() {
+  _accountsLoaded = false;
+}
 
 function useAccountLoader() {
   const setAccountsRef = React.useRef(useScopeStore.getState().setAccounts);
@@ -362,6 +368,7 @@ function useAccountLoader() {
             account_id: a.account_id,
             provider: a.provider,
             name: a.name || a.account_id,
+            status: a.status,
             critical_count: cspm.critical ?? 0,
             resource_count: a.resource_count ?? cspm.resource_count ?? 0,
             posture_score: cspm.posture_score ?? 0,
@@ -373,6 +380,7 @@ function useAccountLoader() {
           account_id: a.account_id,
           provider: a.provider,
           name: a.account_id,
+          status: undefined,
           critical_count: a.critical ?? 0,
           resource_count: a.resource_count ?? 0,
           posture_score: a.posture_score ?? 0,

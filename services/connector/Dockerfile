@@ -31,6 +31,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
+# Copy Avro schemas (needed by avro_serializer.py at runtime)
+COPY packages/kafka-schemas /app/packages/kafka-schemas
+
 # Copy connector service source
 COPY services/connector /app
 

@@ -39,6 +39,7 @@ class CloudAccountModel(Base):
     account_id: Mapped[str] = mapped_column(String(255), nullable=False)
     region: Mapped[str] = mapped_column(String(50), nullable=False, default="global")
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")
+    # Valid statuses: pending | active | error | paused | auth_failed | partial_sync
     sync_status: Mapped[str] = mapped_column(String(20), nullable=False, default="idle")
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_successful_sync_at: Mapped[datetime | None] = mapped_column(

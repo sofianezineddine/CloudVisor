@@ -1,0 +1,20 @@
+{
+  "type": "record",
+  "name": "ConnectorSync",
+  "namespace": "cloudvisor.connector",
+  "doc": "Emitted at the start and end of each connector sync cycle.",
+  "fields": [
+    {"name": "event_type",        "type": "string"},
+    {"name": "organization_id",   "type": "string"},
+    {"name": "account_id",        "type": "string"},
+    {"name": "provider",          "type": "string"},
+    {"name": "status",            "type": "string"},
+    {"name": "correlation_id",    "type": "string"},
+    {"name": "discovered",        "type": "int",    "default": 0},
+    {"name": "updated",           "type": "int",    "default": 0},
+    {"name": "deleted",           "type": "int",    "default": 0},
+    {"name": "errors",            "type": "int",    "default": 0},
+    {"name": "duration_seconds",  "type": "double", "default": 0.0},
+    {"name": "timestamp",         "type": "string", "doc": "ISO-8601 UTC timestamp"}
+  ]
+}

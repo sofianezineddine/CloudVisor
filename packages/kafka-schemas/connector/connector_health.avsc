@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "ConnectorHealth",
+  "namespace": "cloudvisor.connector",
+  "doc": "Emitted when a connector account health status changes.",
+  "fields": [
+    {"name": "event_type",        "type": "string",  "default": "connector.health_changed"},
+    {"name": "organization_id",   "type": "string"},
+    {"name": "account_id",        "type": "string"},
+    {"name": "provider",          "type": "string"},
+    {"name": "previous_status",   "type": "string"},
+    {"name": "new_status",        "type": "string"},
+    {"name": "error_message",     "type": ["null", "string"], "default": null},
+    {"name": "resource_count",    "type": "int",     "default": 0},
+    {"name": "timestamp",         "type": "string",  "doc": "ISO-8601 UTC timestamp"}
+  ]
+}

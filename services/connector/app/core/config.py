@@ -35,6 +35,33 @@ class ConnectorSettings(BaseSettings):
     vault_mount_point: str = Field(default="cloudvisor/credentials")
     event_target_latency_seconds: int = Field(default=60)
 
+    # ── Real-time consumer configuration ──────────────────────────────────────
+    # AWS CloudTrail → SQS
+    # Set CONNECTOR_REALTIME_ENABLED=true to activate all real-time consumers.
+    # Each provider consumer is only started when its required env vars are set.
+    realtime_enabled: bool = Field(default=False)
+
+    # ── Kafka / Schema Registry ────────────────────────────────────────────────
+    # Confluent Schema Registry URL for Avro serialization.
+    # When set and reachable, all Kafka events are serialized as Avro.
+    # When unset or unreachable, falls back to plain JSON (dev-friendly).
+    schema_registry_url: str = Field(default="")
+
+    aws_cloudtrail_sqs_queue_url: str = Field(default="")
+    aws_cloudtrail_region: str = Field(default="us-east-1")
+
+    # Azure: Azure Monitor → Event Hub → Connector
+    azure_event_hub_connection_string: str = Field(default="")
+    azure_event_hub_name: str = Field(default="cloudvisor-activity-logs")
+    azure_event_hub_consumer_group: str = Field(default="$Default")
+
+    # GCP: Cloud Asset Inventory → Pub/Sub → Connector
+    gcp_pubsub_subscription: str = Field(default="")
+
+    # OCI: OCI Events → Streaming → Connector
+    oci_stream_ocid: str = Field(default="")
+    oci_stream_endpoint: str = Field(default="")
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Also read VAULT_* env vars (without CONNECTOR_ prefix)
@@ -44,6 +71,33 @@ class ConnectorSettings(BaseSettings):
             self.vault_url = os.getenv("VAULT_URL", self.vault_url)
         if not self.vault_token:
             self.vault_token = os.getenv("VAULT_TOKEN")
+
+        # Also accept bare env var names (without CONNECTOR_ prefix) for real-time config
+        if not self.realtime_enabled:
+            self.realtime_enabled = os.getenv("REALTIME_ENABLED", "false").lower() == "true"
+        if not self.aws_cloudtrail_sqs_queue_url:
+            self.aws_cloudtrail_sqs_queue_url = os.getenv("CLOUDTRAIL_SQS_QUEUE_URL", "")
+        if not self.azure_event_hub_connection_string:
+            self.azure_event_hub_connection_string = os.getenv(
+                "AZURE_EVENT_HUB_CONNECTION_STRING", ""
+            )
+        if not self.azure_event_hub_name:
+            env_val = os.getenv("AZURE_EVENT_HUB_NAME", "")
+            if env_val:
+                self.azure_event_hub_name = env_val
+        if not self.gcp_pubsub_subscription:
+            self.gcp_pubsub_subscription = os.getenv("GCP_PUBSUB_SUBSCRIPTION", "")
+        if not self.oci_stream_ocid:
+            self.oci_stream_ocid = os.getenv("OCI_STREAM_OCID", "")
+        if not self.oci_stream_endpoint:
+            self.oci_stream_endpoint = os.getenv("OCI_STREAM_ENDPOINT", "")
+
+        # Schema Registry — accept both prefixed and bare env var names
+        if not self.schema_registry_url:
+            self.schema_registry_url = os.getenv(
+                "KAFKA_SCHEMA_REGISTRY_URL",
+                os.getenv("SCHEMA_REGISTRY_URL", ""),
+            )
 
     @field_validator("polling_interval_options", mode="before")
     @classmethod

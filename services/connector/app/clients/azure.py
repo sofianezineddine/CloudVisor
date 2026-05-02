@@ -118,6 +118,7 @@ class AzureClient(CloudClientBase):
             self._discover_messaging(),
             self._discover_identity(),
             self._discover_web(),
+            self._discover_api_management(),
         ]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -391,6 +392,7 @@ class AzureClient(CloudClientBase):
 
     async def _discover_messaging(self) -> list[dict[str, Any]]:
         resources = []
+        # Event Hubs
         try:
             from azure.mgmt.eventhub.aio import EventHubManagementClient
             async with EventHubManagementClient(self._credential, self._subscription_id) as client:
@@ -405,12 +407,34 @@ class AzureClient(CloudClientBase):
                     })
         except Exception as e:
             logger.debug(f"Azure EventHub discovery: {e}")
+
+        # Service Bus
+        try:
+            from azure.mgmt.servicebus.aio import ServiceBusManagementClient  # type: ignore[import]
+            async with ServiceBusManagementClient(self._credential, self._subscription_id) as client:
+                async for ns in client.namespaces.list():
+                    resources.append({
+                        "type": "ServiceBusNamespace",
+                        "id": ns.id,
+                        "name": ns.name,
+                        "region": ns.location,
+                        "tags": ns.tags or {},
+                        "raw": {"id": ns.id, "name": ns.name, "sku": _safe_dict(ns.sku) if ns.sku else {}},
+                    })
+        except ImportError:
+            logger.debug("azure-mgmt-servicebus not installed — skipping Service Bus discovery")
+        except Exception as e:
+            logger.debug(f"Azure ServiceBus discovery: {e}")
+
+        if resources:
+            logger.info(f"Azure: discovered {len(resources)} messaging resources")
         return resources
 
     # ─── Identity ─────────────────────────────────────────────────────────────
 
     async def _discover_identity(self) -> list[dict[str, Any]]:
         resources = []
+        # RBAC Role Assignments
         try:
             from azure.mgmt.authorization.aio import AuthorizationManagementClient
             async with AuthorizationManagementClient(self._credential, self._subscription_id) as client:
@@ -436,6 +460,119 @@ class AzureClient(CloudClientBase):
                 logger.info(f"Azure: discovered {len(resources)} role assignments")
         except Exception as e:
             logger.debug(f"Azure identity discovery: {e}")
+
+        # Azure AD Users
+        try:
+            from msgraph.core import GraphClient  # type: ignore[import]
+            graph_client = GraphClient(credential=self._credential)
+            response = graph_client.get("/users?$top=100&$select=id,displayName,userPrincipalName,accountEnabled,createdDateTime")
+            if response.status_code == 200:
+                users_data = response.json().get("value", [])
+                for user in users_data:
+                    resources.append({
+                        "type": "AzureADUser",
+                        "id": f"/tenants/{self._tenant_id}/users/{user['id']}",
+                        "name": user.get("displayName") or user.get("userPrincipalName", ""),
+                        "region": "global",
+                        "tags": {},
+                        "raw": {
+                            "id": user["id"],
+                            "display_name": user.get("displayName"),
+                            "user_principal_name": user.get("userPrincipalName"),
+                            "account_enabled": user.get("accountEnabled"),
+                        },
+                    })
+        except ImportError:
+            # msgraph-core not installed — use REST directly
+            try:
+                import httpx
+                token = self._credential.get_token("https://graph.microsoft.com/.default")
+                headers = {"Authorization": f"Bearer {token.token}"}
+                async with httpx.AsyncClient() as http:
+                    resp = await http.get(
+                        "https://graph.microsoft.com/v1.0/users?$top=100&$select=id,displayName,userPrincipalName,accountEnabled",
+                        headers=headers,
+                        timeout=30,
+                    )
+                    if resp.status_code == 200:
+                        for user in resp.json().get("value", []):
+                            resources.append({
+                                "type": "AzureADUser",
+                                "id": f"/tenants/{self._tenant_id}/users/{user['id']}",
+                                "name": user.get("displayName") or user.get("userPrincipalName", ""),
+                                "region": "global",
+                                "tags": {},
+                                "raw": {
+                                    "id": user["id"],
+                                    "display_name": user.get("displayName"),
+                                    "user_principal_name": user.get("userPrincipalName"),
+                                    "account_enabled": user.get("accountEnabled"),
+                                },
+                            })
+            except Exception as e:
+                logger.debug(f"Azure AD Users discovery: {e}")
+        except Exception as e:
+            logger.debug(f"Azure AD Users discovery: {e}")
+
+        # Azure AD Service Principals
+        try:
+            import httpx
+            token = self._credential.get_token("https://graph.microsoft.com/.default")
+            headers = {"Authorization": f"Bearer {token.token}"}
+            async with httpx.AsyncClient() as http:
+                resp = await http.get(
+                    "https://graph.microsoft.com/v1.0/servicePrincipals?$top=100&$select=id,displayName,appId,servicePrincipalType,accountEnabled",
+                    headers=headers,
+                    timeout=30,
+                )
+                if resp.status_code == 200:
+                    for sp in resp.json().get("value", []):
+                        resources.append({
+                            "type": "ServicePrincipal",
+                            "id": f"/tenants/{self._tenant_id}/servicePrincipals/{sp['id']}",
+                            "name": sp.get("displayName", ""),
+                            "region": "global",
+                            "tags": {},
+                            "raw": {
+                                "id": sp["id"],
+                                "display_name": sp.get("displayName"),
+                                "app_id": sp.get("appId"),
+                                "service_principal_type": sp.get("servicePrincipalType"),
+                                "account_enabled": sp.get("accountEnabled"),
+                            },
+                        })
+        except Exception as e:
+            logger.debug(f"Azure Service Principals discovery: {e}")
+
+        return resources
+
+    # ─── API Management ───────────────────────────────────────────────────────
+
+    async def _discover_api_management(self) -> list[dict[str, Any]]:
+        resources = []
+        try:
+            from azure.mgmt.apimanagement.aio import ApiManagementClient  # type: ignore[import]
+            async with ApiManagementClient(self._credential, self._subscription_id) as client:
+                async for svc in client.api_management_service.list():
+                    resources.append({
+                        "type": "APIManagement",
+                        "id": svc.id,
+                        "name": svc.name,
+                        "region": svc.location,
+                        "tags": svc.tags or {},
+                        "raw": {
+                            "id": svc.id,
+                            "name": svc.name,
+                            "sku": _safe_dict(svc.sku) if svc.sku else {},
+                            "gateway_url": getattr(svc, "gateway_url", None),
+                        },
+                    })
+            if resources:
+                logger.info(f"Azure: discovered {len(resources)} API Management services")
+        except ImportError:
+            logger.debug("azure-mgmt-apimanagement not installed — skipping API Management discovery")
+        except Exception as e:
+            logger.debug(f"Azure API Management discovery: {e}")
         return resources
 
     # ─── Web / Serverless ─────────────────────────────────────────────────────

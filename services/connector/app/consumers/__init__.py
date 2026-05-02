@@ -6,10 +6,12 @@ from .realtime_consumers import (
     GCPAssetConsumer,
     OCIEventsConsumer,
 )
+from .manager import RealtimeConsumerManager
 
 __all__ = [
     "CloudTrailConsumer",
     "AzureMonitorConsumer",
     "GCPAssetConsumer",
     "OCIEventsConsumer",
+    "RealtimeConsumerManager",
 ]

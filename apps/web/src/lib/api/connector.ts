@@ -22,7 +22,7 @@ export interface CloudAccount {
   name: string;
   account_id: string;
   region: string;
-  status: 'pending' | 'active' | 'error' | 'auth_failed';
+  status: 'pending' | 'active' | 'error' | 'auth_failed' | 'partial_sync';
   sync_status: 'idle' | 'syncing' | 'completed' | 'error';
   last_sync_at: string | null;
   last_successful_sync_at: string | null;

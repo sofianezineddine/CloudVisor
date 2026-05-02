@@ -139,14 +139,38 @@ async def create_account(
             account.credentials_enc = credentials_to_store
             logger.info(f"Credentials stored in DB for account {account.id}")
 
-    account.status = "active"
+    # ── Validate connectivity before marking active (spec requirement) ─────────
+    connectivity_ok = False
+    if credentials_to_store:
+        try:
+            from app.clients import ClientFactory
+            test_client = ClientFactory.create(
+                provider=account_data.provider,
+                credentials=credentials_to_store,
+                account_id=account_data.account_id,
+            )
+            connectivity_ok = await test_client.connect()
+            if not connectivity_ok:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Could not connect to {account_data.provider} account. "
+                           "Please verify your credentials and permissions.",
+                )
+            logger.info(f"Connectivity validated for {account_data.provider} account {account_data.account_id}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Connectivity check failed: {e} — proceeding with pending status")
+            connectivity_ok = False
+
+    account.status = "active" if connectivity_ok else "pending"
 
     db.add(account)
     await db.commit()
     await db.refresh(account)
 
     # Schedule + trigger initial sync
-    from app.core.dependencies import _sync_scheduler
+    from app.core.dependencies import _sync_scheduler, get_realtime_manager
     if _sync_scheduler is not None:
         await _sync_scheduler.schedule_account(
             account_id=account.id,
@@ -155,6 +179,20 @@ async def create_account(
             interval_minutes=account.polling_interval_minutes,
         )
         asyncio.create_task(_sync_scheduler.trigger_sync(account, sync_type="full"))
+
+    # Start real-time consumers for this account
+    realtime_manager = get_realtime_manager()
+    if realtime_manager is not None:
+        started = await realtime_manager.add_account_consumers(
+            account_id=account.id,
+            organization_id=organization_id,
+            provider=account.provider,
+            cloud_account_id=account.account_id,
+            credentials=credentials_to_store,
+            region=account.region,
+        )
+        if started:
+            logger.info(f"Started {started} real-time consumer(s) for account {account.id}")
 
     return CloudAccountResponse(**account.to_dict())
 
@@ -246,8 +284,116 @@ async def delete_account(
     if not account:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
+    # ── 1. Cancel scheduled sync ───────────────────────────────────────────────
+    from app.core.dependencies import _sync_scheduler
+    if _sync_scheduler is not None:
+        try:
+            await _sync_scheduler.cancel_account(account_id)
+        except Exception as e:
+            logger.warning(f"Failed to cancel sync schedule for {account_id}: {e}")
+
+    # ── 2. Stop real-time consumers ────────────────────────────────────────────
+    from app.core.dependencies import get_realtime_manager
+    realtime_manager = get_realtime_manager()
+    if realtime_manager is not None:
+        try:
+            await realtime_manager.remove_account_consumers(account_id)
+        except Exception as e:
+            logger.warning(f"Failed to stop real-time consumers for {account_id}: {e}")
+
+    # ── 3. Clean up AWS IAM role (best-effort) ─────────────────────────────────
+    if account.provider == "aws":
+        credentials: dict[str, Any] = {}
+        # Try Vault first
+        connector_settings = get_connector_settings()
+        if account.vault_secret_path and connector_settings.vault_enabled:
+            try:
+                vault = VaultClient(
+                    vault_url=connector_settings.vault_url,
+                    vault_token=connector_settings.vault_token,
+                    mount_point=connector_settings.vault_mount_point,
+                )
+                if await vault.initialize():
+                    credentials = await vault.get_credentials(account.vault_secret_path) or {}
+            except Exception as e:
+                logger.warning(f"Could not retrieve credentials from Vault for cleanup: {e}")
+        elif account.credentials_enc:
+            credentials = account.credentials_enc or {}
+
+        if credentials.get("access_key") and credentials.get("secret_key"):
+            try:
+                from app.services.aws_role_setup import AWSRoleSetupService
+                deleted = await AWSRoleSetupService.delete_role(
+                    access_key=credentials["access_key"],
+                    secret_key=credentials["secret_key"],
+                )
+                if deleted:
+                    logger.info(f"Cleaned up CloudVisorReadOnly role for account {account_id}")
+            except Exception as e:
+                logger.warning(f"AWS role cleanup failed (non-fatal): {e}")
+
+    # ── 4. Delete credentials from Vault ──────────────────────────────────────
+    if account.vault_secret_path:
+        connector_settings = get_connector_settings()
+        if connector_settings.vault_enabled:
+            try:
+                vault = VaultClient(
+                    vault_url=connector_settings.vault_url,
+                    vault_token=connector_settings.vault_token,
+                    mount_point=connector_settings.vault_mount_point,
+                )
+                if await vault.initialize():
+                    await vault.delete_credentials(account.vault_secret_path)
+                    logger.info(f"Deleted Vault credentials for account {account_id}")
+            except Exception as e:
+                logger.warning(f"Failed to delete Vault credentials for {account_id}: {e}")
+
+    # ── 5. Emit resource.deleted Kafka events for all account resources ────────
+    # Spec: "Remove a cloud account (stops polling, emits deleted events)"
+    try:
+        from app.core.dependencies import _sync_scheduler
+        # Get the event producer from the scheduler
+        producer = getattr(_sync_scheduler, "_producer", None) if _sync_scheduler else None
+        if producer:
+            from sqlalchemy import select as sa_select
+            from app.models import DiscoveredResourceModel
+            stmt_resources = sa_select(
+                DiscoveredResourceModel.cloud_resource_id,
+                DiscoveredResourceModel.region,
+            ).where(
+                DiscoveredResourceModel.account_id == account.account_id,
+                DiscoveredResourceModel.organization_id == organization_id,
+                DiscoveredResourceModel.is_deleted == False,  # noqa: E712
+            )
+            resource_rows = await db.execute(stmt_resources)
+            rows = resource_rows.all()
+            import asyncio as _asyncio
+            import uuid as _uuid
+            correlation_id = str(_uuid.uuid4())
+            emit_tasks = [
+                producer.emit_resource_deleted(
+                    cloud_resource_id=row.cloud_resource_id,
+                    account_id=account.account_id,
+                    organization_id=organization_id,
+                    provider=account.provider,
+                    region=row.region,
+                    correlation_id=correlation_id,
+                )
+                for row in rows
+            ]
+            if emit_tasks:
+                await _asyncio.gather(*emit_tasks, return_exceptions=True)
+                logger.info(
+                    f"Emitted {len(emit_tasks)} resource.deleted events "
+                    f"for account {account_id}"
+                )
+    except Exception as e:
+        logger.warning(f"Failed to emit resource.deleted events for {account_id}: {e}")
+
+    # ── 6. Delete the account record (cascades to discovered resources) ────────
     await db.delete(account)
     await db.commit()
+    logger.info(f"Deleted cloud account {account_id} for org {organization_id}")
 
 
 @router.post("/{account_id}/sync", response_model=SyncTriggerResponse)

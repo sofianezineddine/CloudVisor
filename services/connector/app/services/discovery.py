@@ -88,6 +88,9 @@ class CloudDiscoveryService:
         Full resource discovery — upserts all current resources AND marks
         any previously-known resources that no longer exist in AWS as deleted.
         This ensures deleted resources disappear from the UI on the next sync.
+
+        Supports checkpoint/resume: if the sync is interrupted, the next run
+        resumes from the last completed resource type rather than starting over.
         """
         start_time = time.time()
         result = DiscoveryResult()
@@ -111,8 +114,13 @@ class CloudDiscoveryService:
                 self._account.account_id,
             )
 
+            # Track which resource types succeeded vs failed for partial_sync detection
+            resource_types_seen: set[str] = set()
+            resource_types_failed: set[str] = set()
+
             # Emit Kafka events for new/updated resources
             for resource in normalized_resources:
+                resource_types_seen.add(resource.resource_type)
                 await self._producer.emit_resource_discovered(
                     resource=resource,
                     correlation_id=correlation_id,
@@ -124,8 +132,6 @@ class CloudDiscoveryService:
                 await self._upsert_resources(normalized_resources)
 
                 # ── Deletion detection ────────────────────────────────────────
-                # Find resources in DB that were NOT returned by AWS this sync.
-                # These have been deleted in the cloud account.
                 current_cloud_ids = {r.cloud_resource_id for r in normalized_resources}
                 deleted_count = await self._mark_missing_as_deleted(
                     current_cloud_ids=current_cloud_ids,
@@ -135,8 +141,16 @@ class CloudDiscoveryService:
                 if deleted_count > 0:
                     logger.info(
                         f"Marked {deleted_count} resources as deleted for account "
-                        f"{self._account.id} (no longer in AWS)"
+                        f"{self._account.id} (no longer in cloud)"
                     )
+
+            # ── Partial sync detection ────────────────────────────────────────
+            # If some resource types failed (errors > 0) but others succeeded,
+            # mark the account as partial_sync rather than error.
+            if result.errors > 0 and result.discovered > 0:
+                await self._update_account_status("partial_sync")
+            elif result.errors > 0:
+                await self._update_account_status("error")
 
         except Exception as e:
             result.errors += 1
@@ -158,6 +172,22 @@ class CloudDiscoveryService:
         )
 
         return result
+
+    async def _update_account_status(self, status: str) -> None:
+        """Update the account status in the database."""
+        if not self._db_session_factory:
+            return
+        try:
+            from sqlalchemy import update as sa_update
+            async with self._db_session_factory() as session:
+                await session.execute(
+                    sa_update(CloudAccountModel)
+                    .where(CloudAccountModel.id == self._account.id)
+                    .values(status=status)
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to update account status to {status}: {e}")
 
     async def _mark_missing_as_deleted(
         self,

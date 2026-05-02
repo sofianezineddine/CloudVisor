@@ -94,6 +94,28 @@ services:
     networks:
       - cloudvisor
 
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    container_name: cv-schema-registry
+    restart: unless-stopped
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: cv-schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: cv-kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "8081:8081"
+    depends_on:
+      - kafka
+    networks:
+      - cloudvisor
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/subjects"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   redis:
     image: redis:7.2-alpine
     container_name: cv-redis
@@ -168,26 +190,7 @@ services:
     networks:
       - cloudvisor
 
-  # ─── Ollama (local LLM) ───────────────────────────────────────────────────
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: cv-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - cloudvisor
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "4.0"
-          memory: 8G
-        reservations:
-          cpus: "2.0"
-          memory: 4G
 
   # ─── Auth Service (port 8002) ─────────────────────────────────────────────
 
@@ -237,7 +240,7 @@ services:
       DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
       REDIS_URL: redis://cv-redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
-      KAFKA_SCHEMA_REGISTRY_URL: http://cv-kafka:8081
+      KAFKA_SCHEMA_REGISTRY_URL: http://cv-schema-registry:8081
       APP_ENVIRONMENT: production
       # Vault — use container name and token file written by vault-init
       VAULT_ENABLED: "true"
@@ -253,6 +256,8 @@ services:
         condition: service_started
       kafka:
         condition: service_started
+      schema-registry:
+        condition: service_healthy
       vault:
         condition: service_started
       vault-init:

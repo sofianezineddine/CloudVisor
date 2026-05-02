@@ -19,6 +19,7 @@ export interface ConnectedAccount {
   account_id: string;
   provider: CloudProvider;
   name?: string;
+  status?: 'pending' | 'active' | 'error' | 'auth_failed' | 'partial_sync';
   critical_count?: number;
   resource_count?: number;
   posture_score?: number;

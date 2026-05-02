@@ -450,11 +450,11 @@ class OCIClient(CloudClientBase):
         resources = []
         try:
             import oci
-            client = oci.key_management.KmsVaultClient(cfg)
+            vault_client = oci.key_management.KmsVaultClient(cfg)
             for compartment_id in self._compartments:
                 try:
                     vaults = oci.pagination.list_call_get_all_results(
-                        client.list_vaults, compartment_id, lifecycle_state="ACTIVE"
+                        vault_client.list_vaults, compartment_id, lifecycle_state="ACTIVE"
                     ).data
                     for v in vaults:
                         resources.append({
@@ -465,6 +465,33 @@ class OCIClient(CloudClientBase):
                             "tags": v.freeform_tags or {},
                             "raw": {"id": v.id, "vault_type": v.vault_type},
                         })
+
+                        # Secrets within each vault
+                        try:
+                            secrets_client = oci.vault.VaultsClient(cfg)
+                            secrets = oci.pagination.list_call_get_all_results(
+                                secrets_client.list_secrets,
+                                compartment_id,
+                                vault_id=v.id,
+                                lifecycle_state="ACTIVE",
+                            ).data
+                            for secret in secrets:
+                                resources.append({
+                                    "type": "VaultSecret",
+                                    "id": secret.id,
+                                    "name": secret.secret_name or secret.id,
+                                    "region": cfg["region"],
+                                    "tags": secret.freeform_tags or {},
+                                    "raw": {
+                                        "id": secret.id,
+                                        "secret_name": secret.secret_name,
+                                        "vault_id": v.id,
+                                        "lifecycle_state": secret.lifecycle_state,
+                                    },
+                                })
+                        except Exception as e:
+                            logger.debug(f"OCI vault secrets for {v.id}: {e}")
+
                 except Exception as e:
                     logger.debug(f"Vault compartment {compartment_id}: {e}")
         except Exception as e:
