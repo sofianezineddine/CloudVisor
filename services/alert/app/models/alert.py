@@ -111,6 +111,9 @@ class NotificationChannelModel(Base):
     channel_type: Mapped[str] = mapped_column(String(50), nullable=False)
     config: Mapped[dict] = mapped_column(JSON, nullable=False)
     severity_filter: Mapped[list] = mapped_column(ARRAY(String), default=list)
+    module_filter: Mapped[list] = mapped_column(ARRAY(String), default=list)  # New: filter by module
+    account_filter: Mapped[list] = mapped_column(ARRAY(String), default=list)  # New: filter by account
+    tag_filter: Mapped[dict] = mapped_column(JSON, default=dict)  # New: filter by tags
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

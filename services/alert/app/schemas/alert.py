@@ -59,6 +59,9 @@ class ChannelCreateRequest(BaseModel):
     channel_type: str
     config: dict[str, Any]
     severity_filter: list[str] | None = None
+    module_filter: list[str] | None = None
+    account_filter: list[str] | None = None
+    tag_filter: dict[str, str] | None = None
 
 
 class ChannelResponse(BaseModel):
@@ -66,6 +69,8 @@ class ChannelResponse(BaseModel):
     name: str
     channel_type: str
     severity_filter: list[str]
+    module_filter: list[str]
+    account_filter: list[str]
     is_active: bool
 
 

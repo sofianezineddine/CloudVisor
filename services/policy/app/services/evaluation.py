@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models import RuleModel, RuleDisableModel
+from ..models import RuleModel, RuleDisableModel, EvaluationCacheModel
 from ..opa import OPAService, RegoParser
 
 logger = logging.getLogger(__name__)
@@ -148,13 +148,18 @@ class PolicyEvaluationService:
         category: str | None = None,
         rule_ids: list[str] | None = None,
     ) -> list[RuleModel]:
-        """Get enabled rules, excluding those disabled for this org."""
-        # Get disabled rule_ids for this org
+        """Get enabled rules, excluding those disabled for this org (respects expiry)."""
+        # Get disabled rule_ids for this org — only non-expired ones
         disabled_ids: set[str] = set()
         if organization_id:
+            now = datetime.utcnow()
             disabled_result = await self._db.execute(
                 select(RuleDisableModel.rule_id).where(
-                    RuleDisableModel.organization_id == organization_id
+                    RuleDisableModel.organization_id == organization_id,
+                    # Include rows where expires_at is NULL (never expires)
+                    # OR expires_at is in the future (not yet expired)
+                    (RuleDisableModel.expires_at == None) |  # noqa: E711
+                    (RuleDisableModel.expires_at > now),
                 )
             )
             disabled_ids = {row[0] for row in disabled_result}
@@ -238,16 +243,15 @@ class ComplianceService:
         organization_id: str,
         framework: str,
     ) -> dict[str, Any]:
-        """
-        Calculate compliance posture for a framework.
+        """Calculate compliance posture for a framework.
 
-        Posture is derived from:
-        - Rules mapped to this framework's controls
-        - Whether those rules are enabled (passing) or disabled (failing/not_applicable)
+        A control is:
+        - 'fail'            — rule is enabled AND has open findings in evaluation_cache
+        - 'pass'            — rule is enabled AND has NO open findings
+        - 'not_applicable'  — rule is disabled for this org
         """
         cache_key = f"compliance:{organization_id}:{framework}"
 
-        # Check Redis cache — use json.loads, NOT eval()
         if self._redis:
             cached = await self._redis.get(cache_key)
             if cached:
@@ -259,13 +263,30 @@ class ComplianceService:
         # Get all rules mapped to this framework
         rules = await self._get_framework_rules(framework)
 
-        # Get disabled rules for this org
+        # Get disabled rules for this org (non-expired only)
+        now = datetime.utcnow()
         disabled_result = await self._db.execute(
             select(RuleDisableModel.rule_id).where(
-                RuleDisableModel.organization_id == organization_id
+                RuleDisableModel.organization_id == organization_id,
+                (RuleDisableModel.expires_at == None) |  # noqa: E711
+                (RuleDisableModel.expires_at > now),
             )
         )
         disabled_ids = {row[0] for row in disabled_result}
+
+        # Get rule_ids that have active findings in the evaluation cache
+        # A non-empty cached result means the rule fired violations
+        failing_rule_ids: set[str] = set()
+        try:
+            cache_result = await self._db.execute(
+                select(EvaluationCacheModel.rule_id).where(
+                    EvaluationCacheModel.expires_at > now,
+                ).distinct()
+            )
+            # A cached entry exists only when there were findings (see evaluation.py)
+            failing_rule_ids = {row[0] for row in cache_result}
+        except Exception:
+            pass  # evaluation_cache table may not exist yet — treat as no findings
 
         # Build control status map
         controls = []
@@ -288,15 +309,18 @@ class ComplianceService:
                 seen_controls.add(control_id)
 
                 is_disabled = rule.rule_id in disabled_ids
+                has_findings = rule.rule_id in failing_rule_ids
+
                 if is_disabled:
                     status = "not_applicable"
                     not_applicable += 1
-                elif rule.is_enabled:
-                    status = "pass"
-                    passing += 1
-                else:
+                elif has_findings:
                     status = "fail"
                     failing += 1
+                else:
+                    # Rule is enabled and no cached violations found
+                    status = "pass"
+                    passing += 1
 
                 controls.append({
                     "id": control_id,
@@ -307,11 +331,8 @@ class ComplianceService:
                 })
 
         total = len(controls)
+        # No controls mapped → framework not applicable to this org's resources
         percentage = round((passing / total * 100), 1) if total > 0 else 0.0
-
-        # If no controls found for this framework, return 100% (no rules = no violations)
-        if total == 0:
-            percentage = 100.0
 
         result = {
             "framework": framework,
@@ -324,7 +345,6 @@ class ComplianceService:
             "controls": controls,
         }
 
-        # Cache with json.dumps
         if self._redis:
             await self._redis.setex(cache_key, self._cache_ttl, json.dumps(result))
 

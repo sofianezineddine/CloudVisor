@@ -52,22 +52,33 @@ def _node_to_asset_dict(node: dict) -> dict[str, Any]:
 async def get_graph_stats(
     org_id: str = Query(...),
     neo4j=Depends(get_neo4j),
+    redis=Depends(get_redis),
 ) -> GraphStatsResponse:
     """Get asset counts by type, region, account."""
     if not neo4j:
         return GraphStatsResponse(node_count=0, edge_count=0, by_provider={}, by_type={})
 
-    graph_service = GraphService(neo4j)
+    graph_service = GraphService(neo4j, redis_client=redis)
+
+    # Cache the full stats response
+    cache_key = f"graph:stats:{org_id}:full"
+    cached = await graph_service._cache_get(cache_key)
+    if cached:
+        return GraphStatsResponse(**cached)
+
     stats = await graph_service.get_stats()
     by_provider = await graph_service.get_asset_counts_by_provider(org_id)
     by_type = await graph_service.get_asset_counts_by_type(org_id)
 
-    return GraphStatsResponse(
-        node_count=stats.get("node_count", 0),
-        edge_count=stats.get("edge_count", 0),
-        by_provider=by_provider,
-        by_type=by_type,
-    )
+    response_data = {
+        "node_count": stats.get("node_count", 0),
+        "edge_count": stats.get("edge_count", 0),
+        "by_provider": by_provider,
+        "by_type": by_type,
+    }
+    await graph_service._cache_set(cache_key, response_data)
+
+    return GraphStatsResponse(**response_data)
 
 
 @router.get("/search")
@@ -228,19 +239,25 @@ async def get_related_assets(
     depth: int = Query(1, ge=1, le=3),
     neo4j=Depends(get_neo4j),
 ) -> AssetRelatedResponse:
-    """Get related assets (graph neighbors)."""
+    """Get related assets (graph neighbors, configurable depth)."""
     if not neo4j:
         return AssetRelatedResponse(asset_id=asset_id, relationships=[])
 
-    query = f"""
-    MATCH (a:Asset {{id: $id}})-[r*1..{depth}]-(related:Asset)
-    RETURN related, type(last(relationships(path))) AS rel_type
-    LIMIT 100
-    """ if depth > 1 else """
-    MATCH (a:Asset {id: $id})-[r]-(related:Asset)
-    RETURN related, type(r) AS rel_type
-    LIMIT 50
-    """
+    if depth > 1:
+        # Multi-hop: collect all nodes reachable within `depth` hops.
+        # We use a variable-length path and extract the last relationship type.
+        query = f"""
+        MATCH p = (a:Asset {{id: $id}})-[rels*1..{depth}]-(related:Asset)
+        WHERE related.id <> $id
+        RETURN related, type(last(rels)) AS rel_type
+        LIMIT 100
+        """
+    else:
+        query = """
+        MATCH (a:Asset {id: $id})-[r]-(related:Asset)
+        RETURN related, type(r) AS rel_type
+        LIMIT 50
+        """
 
     result = await neo4j.execute_query(query, {"id": asset_id})
 
@@ -306,6 +323,33 @@ async def get_attack_paths(
     graph_service = GraphService(neo4j)
     paths = await graph_service.find_attack_paths(asset_id, target_id, max_hops)
     return AttackPathResponse(paths=paths, total=len(paths))
+
+
+@router.get("/attack-paths/pii")
+async def get_pii_attack_paths(
+    org_id: str = Query(...),
+    max_hops: int = Query(6, ge=1, le=10),
+    neo4j=Depends(get_neo4j),
+    redis=Depends(get_redis),
+) -> dict:
+    """Spec query 2: internet-exposed → sensitive database paths.
+
+    Finds all paths from internet-accessible assets to databases containing PII/PHI.
+    """
+    if not neo4j:
+        return {"paths": [], "total": 0}
+
+    graph_service = GraphService(neo4j, redis_client=redis)
+
+    # Check cache first
+    cache_key = f"graph:attack_paths:{org_id}:pii:{max_hops}"
+    cached = await graph_service._cache_get(cache_key)
+    if cached is not None:
+        return {"paths": cached, "total": len(cached), "cached": True}
+
+    paths = await graph_service.find_pii_attack_paths(org_id, max_hops)
+    await graph_service._cache_set(cache_key, paths)
+    return {"paths": paths, "total": len(paths)}
 
 
 @router.post("/query", response_model=CypherQueryResponse)

@@ -187,3 +187,30 @@ DEFAULT_FRAMEWORKS = {
         ],
     },
 }
+
+
+class RuleVersionHistoryModel(Base):
+    """Stores previous versions of rules for rollback support — spec §3.4."""
+
+    __tablename__ = "rule_version_history"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    rule_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    organization_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    rego_code: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    remediation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    compliance_mapping: Mapped[list] = mapped_column(JSON, default=list)
+    changed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    changed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("idx_rule_history_rule_id", "rule_id"),
+        Index("idx_rule_history_org", "organization_id"),
+    )

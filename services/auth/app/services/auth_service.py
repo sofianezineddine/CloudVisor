@@ -282,7 +282,11 @@ class AuthService:
     ) -> dict[str, Any]:
         """Refresh access token using refresh token."""
         try:
-            payload = decode_token(refresh_token, self._settings.secret_key)
+            payload = decode_token(
+                refresh_token,
+                self._settings.secret_key,
+                public_key=self._settings.effective_public_key,
+            )
             if payload.get("type") != "refresh":
                 raise ValueError("Invalid token type")
 
@@ -320,6 +324,45 @@ class AuthService:
 
         return True
 
+    async def invalidate_all_sessions(self, user_id: str, except_session_id: str | None = None) -> int:
+        """Invalidate all active sessions for a user — called on password change.
+
+        Spec §3.3: Force-expire all sessions on password change or suspicious activity.
+        Returns the number of sessions invalidated.
+        """
+        from sqlalchemy import update
+
+        stmt = (
+            update(SessionModel)
+            .where(
+                SessionModel.user_id == user_id,
+                SessionModel.is_active == True,  # noqa: E712
+            )
+        )
+        if except_session_id:
+            stmt = stmt.where(SessionModel.id != except_session_id)
+
+        stmt = stmt.values(is_active=False)
+        result = await self._db.execute(stmt)
+        await self._db.commit()
+
+        # Also purge any cached tokens in Redis
+        if self._redis:
+            try:
+                pattern = f"token:{user_id}:*"
+                keys = await self._redis.keys(pattern)
+                if keys:
+                    await self._redis.delete(*keys)
+            except Exception:
+                pass
+
+        count = result.rowcount or 0
+        import logging
+        logging.getLogger("auth").info(
+            f"Invalidated {count} session(s) for user {user_id} after password change"
+        )
+        return count
+
     def _validate_password(self, password: str) -> None:
         """Validate password against configured policy."""
         if len(password) < self._settings.password_min_length:
@@ -351,12 +394,13 @@ class AuthService:
         return result.scalar_one_or_none()
 
     async def _create_tokens(self, user: UserModel, session_id: str) -> dict[str, str]:
-        """Create access and refresh tokens."""
+        """Create access and refresh tokens — RS256 when keys configured, HS256 fallback."""
         access_token = create_access_token(
             data={"sub": user.id, "org_id": user.organization_id, "session_id": session_id},
             secret_key=self._settings.secret_key,
             algorithm=self._settings.algorithm,
             expires_delta=timedelta(minutes=self._settings.access_token_expire_minutes),
+            private_key=self._settings.effective_private_key,
         )
 
         refresh_token = create_refresh_token(
@@ -364,6 +408,7 @@ class AuthService:
             secret_key=self._settings.secret_key,
             algorithm=self._settings.algorithm,
             expires_delta=timedelta(days=self._settings.refresh_token_expire_days),
+            private_key=self._settings.effective_private_key,
         )
 
         return {

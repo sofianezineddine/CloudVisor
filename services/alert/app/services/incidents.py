@@ -52,24 +52,52 @@ class IncidentService:
         organization_id: str,
         new_finding_ids: list[str],
     ) -> list[dict[str, Any]]:
-        """Automatically group findings into incidents."""
+        """
+        Automatically group findings into incidents per spec:
+        1. Same attack path (findings linked by graph traversal)
+        2. Same root cause rule on the same account (bulk misconfiguration)
+        3. Same resource with multiple findings (compromised resource)
+        4. CDR alerts on the same entity within a 1-hour window
+        """
         incidents = []
 
-        by_rule = await self._group_by_rule(organization_id, new_finding_ids)
-
-        for rule_id, findings in by_rule.items():
-            if len(findings) > 1:
+        # Strategy 1: Group by rule + account (bulk misconfiguration)
+        by_rule_account = await self._group_by_rule_and_account(organization_id, new_finding_ids)
+        for key, findings in by_rule_account.items():
+            if len(findings) >= 3:  # At least 3 findings to create incident
+                rule_id, account_id = key.split(":", 1)
                 incident = await self.create_incident(
                     organization_id=organization_id,
-                    title=f"Multiple findings from rule: {rule_id}",
+                    title=f"Bulk misconfiguration: {rule_id} in account {account_id}",
                     finding_ids=[f["id"] for f in findings],
                     severity=max([f["severity"] for f in findings], key=self._severity_rank),
+                    description=f"Multiple resources ({len(findings)}) affected by the same rule",
                 )
                 incidents.append(incident)
 
+        # Strategy 2: Group by resource (compromised resource)
+        by_resource = await self._group_by_resource(organization_id, new_finding_ids)
+        for resource_id, findings in by_resource.items():
+            if len(findings) >= 2:  # At least 2 findings on same resource
+                incident = await self.create_incident(
+                    organization_id=organization_id,
+                    title=f"Multiple findings on resource: {resource_id}",
+                    finding_ids=[f["id"] for f in findings],
+                    severity=max([f["severity"] for f in findings], key=self._severity_rank),
+                    description=f"Resource has {len(findings)} security findings",
+                )
+                incidents.append(incident)
+
+        # Strategy 3: CDR time-window grouping (same entity within 1 hour)
+        cdr_incidents = await self._group_cdr_by_time_window(organization_id, new_finding_ids)
+        incidents.extend(cdr_incidents)
+
         return incidents
 
-    async def _group_by_rule(self, organization_id: str, finding_ids: list[str]) -> dict[str, list]:
+    async def _group_by_rule_and_account(
+        self, organization_id: str, finding_ids: list[str]
+    ) -> dict[str, list]:
+        """Group findings by rule_id + account_id."""
         result = await self._db.execute(
             select(FindingModel).where(
                 FindingModel.id.in_(finding_ids),
@@ -80,11 +108,75 @@ class IncidentService:
 
         grouped = {}
         for f in findings:
-            if f.rule_id not in grouped:
-                grouped[f.rule_id] = []
-            grouped[f.rule_id].append({"id": f.id, "severity": f.severity})
+            key = f"{f.rule_id}:{f.account_id}"
+            if key not in grouped:
+                grouped[key] = []
+            grouped[key].append({
+                "id": f.id,
+                "severity": f.severity,
+                "resource_id": f.resource_id,
+            })
 
         return grouped
+
+    async def _group_by_resource(
+        self, organization_id: str, finding_ids: list[str]
+    ) -> dict[str, list]:
+        """Group findings by resource_id."""
+        result = await self._db.execute(
+            select(FindingModel).where(
+                FindingModel.id.in_(finding_ids),
+                FindingModel.organization_id == organization_id,
+            )
+        )
+        findings = result.scalars().all()
+
+        grouped = {}
+        for f in findings:
+            if f.resource_id not in grouped:
+                grouped[f.resource_id] = []
+            grouped[f.resource_id].append({
+                "id": f.id,
+                "severity": f.severity,
+                "rule_id": f.rule_id,
+            })
+
+        return grouped
+
+    async def _group_cdr_by_time_window(
+        self, organization_id: str, finding_ids: list[str]
+    ) -> list[dict[str, Any]]:
+        """Group CDR alerts on the same entity within 1-hour window."""
+        result = await self._db.execute(
+            select(FindingModel).where(
+                FindingModel.id.in_(finding_ids),
+                FindingModel.organization_id == organization_id,
+                FindingModel.rule_id.like("cdr.%"),  # CDR module findings
+            )
+        )
+        findings = result.scalars().all()
+
+        # Group by resource within 1-hour windows
+        time_windows = {}
+        for f in findings:
+            window_key = f"{f.resource_id}:{f.first_seen_at.strftime('%Y-%m-%d-%H')}"
+            if window_key not in time_windows:
+                time_windows[window_key] = []
+            time_windows[window_key].append(f)
+
+        incidents = []
+        for window_key, window_findings in time_windows.items():
+            if len(window_findings) >= 2:
+                incident = await self.create_incident(
+                    organization_id=organization_id,
+                    title=f"CDR alert cluster: {window_findings[0].resource_id}",
+                    finding_ids=[f.id for f in window_findings],
+                    severity=max([f.severity for f in window_findings], key=self._severity_rank),
+                    description=f"Multiple CDR alerts within 1-hour window",
+                )
+                incidents.append(incident)
+
+        return incidents
 
     def _severity_rank(self, severity: str) -> int:
         ranks = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}

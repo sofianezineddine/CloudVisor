@@ -4,7 +4,7 @@ import hashlib
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select, update
@@ -22,6 +22,10 @@ class FindingService:
         self._db = db
         self._redis = redis_client
         self._producer = kafka_producer  # AIOKafkaProducer instance
+        
+        # Initialize metrics service
+        from .metrics import MetricsService
+        self._metrics = MetricsService(redis_client) if redis_client else None
 
     # ─── Ingestion ────────────────────────────────────────────────────────────
 
@@ -43,6 +47,26 @@ class FindingService:
         if existing:
             return await self._handle_duplicate(existing, finding_data)
 
+        # ── Suppression check BEFORE persisting (per spec) ────────────────────
+        from ..services.suppressions import SuppressionService
+        suppression_service = SuppressionService(self._db)
+        
+        # Prepare finding dict for suppression check
+        temp_finding = {
+            "id": "temp",
+            "organization_id": organization_id,
+            "rule_id": rule_id,
+            "resource_id": resource_id,
+            "account_id": account_id,
+            "region": finding_data.get("region"),
+            "tags": finding_data.get("tags", {}),
+        }
+        
+        if await suppression_service.check_suppression(temp_finding):
+            logger.info(f"Finding suppressed by rule: {rule_id} on {resource_id}")
+            # Create finding in suppressed state
+            return await self._create_suppressed_finding(fingerprint, finding_data)
+
         return await self._create_new_finding(fingerprint, finding_data)
 
     def _compute_fingerprint(
@@ -59,9 +83,14 @@ class FindingService:
         return result.scalar_one_or_none()
 
     async def _create_new_finding(self, fingerprint: str, data: dict[str, Any]) -> dict[str, Any]:
-        """Create a new finding, record history, emit finding.created to Kafka."""
+        """Create a new finding, enrich, record history, emit finding.created to Kafka."""
+        finding_id = str(uuid.uuid4())
+        
+        # ── Enrichment: Query external services per spec ──────────────────────
+        enriched_context = await self._enrich_finding(data)
+        
         finding = FindingModel(
-            id=str(uuid.uuid4()),
+            id=finding_id,
             organization_id=data.get("organization_id", ""),
             rule_id=data.get("rule_id", ""),
             resource_id=data.get("resource_id", ""),
@@ -77,7 +106,7 @@ class FindingService:
             resource_type=data.get("resource_type"),
             tags=data.get("tags", []),
             compliance_mapping=data.get("compliance_mapping", []),
-            context=data.get("context", {}),
+            context=enriched_context,  # Store enriched context
             fingerprint=fingerprint,
             first_seen_at=datetime.utcnow(),
             last_seen_at=datetime.utcnow(),
@@ -113,8 +142,65 @@ class FindingService:
         # ── Publish to Redis for WebSocket clients ────────────────────────────
         await self._publish_ws_event("finding.created", finding.organization_id, finding_dict)
 
+        # ── Update metrics counters ────────────────────────────────────────────
+        if self._metrics:
+            await self._metrics.increment_finding_counter(
+                organization_id=finding.organization_id,
+                severity=finding.severity,
+                status="open",
+                provider=finding.provider,
+                account_id=finding.account_id,
+                region=finding.region,
+            )
+
         logger.info(f"Created finding: {finding.id} [{finding.severity}] {finding.title}")
         return finding_dict
+
+    async def _create_suppressed_finding(self, fingerprint: str, data: dict[str, Any]) -> dict[str, Any]:
+        """Create a finding in suppressed state (matched suppression rule)."""
+        finding = FindingModel(
+            id=str(uuid.uuid4()),
+            organization_id=data.get("organization_id", ""),
+            rule_id=data.get("rule_id", ""),
+            resource_id=data.get("resource_id", ""),
+            resource_name=data.get("resource_name"),
+            severity=data.get("severity", "MEDIUM"),
+            status="suppressed",
+            title=data.get("title", ""),
+            description=data.get("description"),
+            remediation=data.get("remediation"),
+            provider=data.get("provider"),
+            account_id=data.get("account_id"),
+            region=data.get("region"),
+            resource_type=data.get("resource_type"),
+            tags=data.get("tags", []),
+            compliance_mapping=data.get("compliance_mapping", []),
+            context=data.get("context", {}),
+            fingerprint=fingerprint,
+            first_seen_at=datetime.utcnow(),
+            last_seen_at=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+
+        self._db.add(finding)
+        await self._db.commit()
+        await self._db.refresh(finding)
+
+        await self._record_history(finding.id, None, "suppressed", note="Auto-suppressed on ingestion")
+
+        # Emit finding.suppressed event
+        await self._emit_kafka("finding.suppressed", finding.id, {
+            "event_type": "finding.suppressed",
+            "finding_id": finding.id,
+            "organization_id": finding.organization_id,
+            "rule_id": finding.rule_id,
+            "resource_id": finding.resource_id,
+            "severity": finding.severity,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+        return self._finding_to_dict(finding)
 
     async def _handle_duplicate(
         self, finding: FindingModel, data: dict[str, Any]
@@ -197,6 +283,23 @@ class FindingService:
         # ── Publish to Redis for WebSocket clients ────────────────────────────
         await self._publish_ws_event(event_type, finding.organization_id, finding_dict)
 
+        # ── Update metrics counters ────────────────────────────────────────────
+        if self._metrics:
+            await self._metrics.update_status_counter(
+                organization_id=finding.organization_id,
+                old_status=old_status,
+                new_status=new_status,
+            )
+            
+            # Record resolution time for MTTR
+            if new_status == "resolved" and finding.resolved_at:
+                time_to_resolve = (finding.resolved_at - finding.first_seen_at).total_seconds() / 3600
+                await self._metrics.record_resolution(
+                    organization_id=finding.organization_id,
+                    severity=finding.severity,
+                    time_to_resolve_hours=time_to_resolve,
+                )
+
         return finding_dict
 
     def _is_valid_transition(self, old: str, new: str) -> bool:
@@ -265,6 +368,94 @@ class FindingService:
             by_status[f.status] = by_status.get(f.status, 0) + 1
 
         return {"by_severity": by_severity, "by_status": by_status, "total": len(findings)}
+
+    async def get_sla_violations(self, organization_id: str) -> list[dict[str, Any]]:
+        """Get findings that have violated SLA targets."""
+        result = await self._db.execute(
+            select(FindingModel).where(
+                FindingModel.organization_id == organization_id,
+                FindingModel.status.in_(["open", "in_progress"])
+            )
+        )
+        findings = result.scalars().all()
+        
+        violations = []
+        now = datetime.utcnow()
+        
+        for finding in findings:
+            sla_info = self._compute_sla_status(finding, now)
+            if sla_info["acknowledge_violated"] or sla_info["resolve_violated"]:
+                violations.append({
+                    "finding_id": finding.id,
+                    "severity": finding.severity,
+                    "title": finding.title,
+                    "age_hours": sla_info["age_hours"],
+                    "acknowledge_sla_hours": sla_info["acknowledge_sla_hours"],
+                    "resolve_sla_hours": sla_info["resolve_sla_hours"],
+                    "acknowledge_violated": sla_info["acknowledge_violated"],
+                    "resolve_violated": sla_info["resolve_violated"],
+                })
+        
+        return violations
+
+    def _compute_sla_status(self, finding: FindingModel, now: datetime) -> dict[str, Any]:
+        """
+        Compute SLA status per spec:
+        - CRITICAL: ack < 4h, resolve < 24h
+        - HIGH: ack < 24h, resolve < 7 days
+        - MEDIUM: ack < 7 days, resolve < 30 days
+        """
+        age = now - finding.first_seen_at
+        age_hours = age.total_seconds() / 3600
+        
+        # SLA targets by severity
+        sla_targets = {
+            "CRITICAL": {"acknowledge_hours": 4, "resolve_hours": 24},
+            "HIGH": {"acknowledge_hours": 24, "resolve_hours": 7 * 24},
+            "MEDIUM": {"acknowledge_hours": 7 * 24, "resolve_hours": 30 * 24},
+            "LOW": {"acknowledge_hours": None, "resolve_hours": None},
+            "INFO": {"acknowledge_hours": None, "resolve_hours": None},
+        }
+        
+        target = sla_targets.get(finding.severity, sla_targets["MEDIUM"])
+        
+        acknowledge_violated = False
+        resolve_violated = False
+        
+        if target["acknowledge_hours"]:
+            if not finding.acknowledged_at and age_hours > target["acknowledge_hours"]:
+                acknowledge_violated = True
+        
+        if target["resolve_hours"]:
+            if not finding.resolved_at and age_hours > target["resolve_hours"]:
+                resolve_violated = True
+        
+        return {
+            "age_hours": age_hours,
+            "acknowledge_sla_hours": target["acknowledge_hours"],
+            "resolve_sla_hours": target["resolve_hours"],
+            "acknowledge_violated": acknowledge_violated,
+            "resolve_violated": resolve_violated,
+        }
+
+    async def acknowledge_finding(self, finding_id: str, user_id: str) -> dict[str, Any]:
+        """Mark finding as acknowledged (for SLA tracking)."""
+        result = await self._db.execute(
+            select(FindingModel).where(FindingModel.id == finding_id)
+        )
+        finding = result.scalar_one_or_none()
+        
+        if not finding:
+            raise ValueError("Finding not found")
+        
+        if not finding.acknowledged_at:
+            finding.acknowledged_at = datetime.utcnow()
+            finding.updated_at = datetime.utcnow()
+            await self._db.commit()
+            
+            logger.info(f"Finding {finding_id} acknowledged by {user_id}")
+        
+        return self._finding_to_dict(finding)
 
     # ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -344,3 +535,116 @@ class FindingService:
             "last_seen_at": finding.last_seen_at.isoformat(),
             "resolved_at": finding.resolved_at.isoformat() if finding.resolved_at else None,
         }
+
+    async def _enrich_finding(self, finding_data: dict[str, Any]) -> dict[str, Any]:
+        """
+        Enrich finding with context from external services per spec:
+        - Asset Graph: asset metadata (name, tags, environment, risk_score)
+        - Policy Engine: compliance mappings
+        - AIOps: AI risk score and priority
+        """
+        context = {}
+        resource_id = finding_data.get("resource_id")
+        organization_id = finding_data.get("organization_id")
+
+        # ── Query Asset Graph Service ─────────────────────────────────────────
+        try:
+            asset_data = await self._query_asset_graph(resource_id, organization_id)
+            if asset_data:
+                context["asset"] = {
+                    "name": asset_data.get("name"),
+                    "tags": asset_data.get("tags", {}),
+                    "environment": asset_data.get("environment"),
+                    "risk_score": asset_data.get("risk_score"),
+                    "is_internet_exposed": asset_data.get("is_internet_exposed"),
+                }
+        except Exception as e:
+            logger.warning(f"Asset Graph enrichment failed: {e}")
+
+        # ── Query Policy Engine for compliance mappings ───────────────────────
+        try:
+            rule_id = finding_data.get("rule_id")
+            compliance_data = await self._query_policy_engine(rule_id, organization_id)
+            if compliance_data:
+                context["compliance"] = compliance_data
+        except Exception as e:
+            logger.warning(f"Policy Engine enrichment failed: {e}")
+
+        # ── Query AIOps for AI-computed risk and priority ─────────────────────
+        try:
+            aiops_data = await self._query_aiops(finding_data)
+            if aiops_data:
+                context["aiops"] = {
+                    "ai_risk_score": aiops_data.get("risk_score"),
+                    "priority_rank": aiops_data.get("priority_rank"),
+                    "explanation": aiops_data.get("explanation"),
+                }
+        except Exception as e:
+            logger.warning(f"AIOps enrichment failed: {e}")
+
+        context["enriched_at"] = datetime.utcnow().isoformat()
+        return context
+
+    async def _query_asset_graph(self, resource_id: str, org_id: str) -> dict[str, Any] | None:
+        """Query Asset Graph service for resource metadata."""
+        if not resource_id:
+            return None
+        
+        try:
+            import httpx
+            import os
+            graph_url = os.getenv("GRAPH_SERVICE_URL", "http://graph:8001")
+            
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(
+                    f"{graph_url}/internal/assets/{resource_id}",
+                    headers={"X-Org-ID": org_id},
+                )
+                if response.status_code == 200:
+                    return response.json()
+        except Exception as e:
+            logger.debug(f"Asset Graph query failed: {e}")
+        
+        return None
+
+    async def _query_policy_engine(self, rule_id: str, org_id: str) -> dict[str, Any] | None:
+        """Query Policy Engine for compliance mappings."""
+        if not rule_id:
+            return None
+        
+        try:
+            import httpx
+            import os
+            policy_url = os.getenv("POLICY_SERVICE_URL", "http://policy:8003")
+            
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(
+                    f"{policy_url}/internal/rules/{rule_id}/compliance",
+                    headers={"X-Org-ID": org_id},
+                )
+                if response.status_code == 200:
+                    return response.json()
+        except Exception as e:
+            logger.debug(f"Policy Engine query failed: {e}")
+        
+        return None
+
+    async def _query_aiops(self, finding_data: dict[str, Any]) -> dict[str, Any] | None:
+        """Query AIOps service for AI-computed risk score."""
+        try:
+            import httpx
+            import os
+            aiops_url = os.getenv("AIOPS_SERVICE_URL", "http://aiops:8010")
+            
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.post(
+                    f"{aiops_url}/internal/risk/compute",
+                    json=finding_data,
+                    headers={"X-Org-ID": finding_data.get("organization_id", "")},
+                )
+                if response.status_code == 200:
+                    return response.json()
+        except Exception as e:
+            logger.debug(f"AIOps query failed: {e}")
+        
+        return None

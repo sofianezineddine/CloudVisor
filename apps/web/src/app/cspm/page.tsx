@@ -221,7 +221,7 @@ function OverviewTab({
               No scan data for this account
             </div>
             <div className="text-xs max-w-xs" style={{ color: 'var(--text-secondary)' }}>
-              Click "Run Scan" above to discover resources and generate security findings for this account.
+              Click &quot;Run Scan&quot; above to discover resources and generate security findings for this account.
             </div>
           </div>
         </div>
@@ -464,6 +464,12 @@ function MisconfigurationsTab() {
   });
   const total = data?.total ?? 0;
 
+  const severityCounts = React.useMemo(() => {
+    const c: Record<string, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+    (data?.items ?? []).forEach(f => { if (c[f.severity] !== undefined) c[f.severity]++; });
+    return c;
+  }, [data]);
+
   // No scan guard
   if (!scansLoading && !hasScans) {
     return (
@@ -483,12 +489,6 @@ function MisconfigurationsTab() {
       </div>
     );
   }
-
-  const severityCounts = React.useMemo(() => {
-    const c: Record<string, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-    (data?.items ?? []).forEach(f => { if (c[f.severity] !== undefined) c[f.severity]++; });
-    return c;
-  }, [data]);
 
   function clearFilters() {
     setSeverityFilter('');

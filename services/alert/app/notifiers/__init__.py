@@ -1,12 +1,21 @@
 from .base import BaseNotifier
 from .slack import SlackNotifier
 from .webhook import WebhookNotifier
+from .email import EmailNotifier
+from .jira import JiraNotifier
+from .pagerduty import PagerDutyNotifier
+from .teams import TeamsNotifier
 from .rate_limiter import check_rate_limit
 
 NOTIFIER_REGISTRY = {
     "slack": SlackNotifier,
     "webhook": WebhookNotifier,
     "generic_webhook": WebhookNotifier,
+    "email": EmailNotifier,
+    "jira": JiraNotifier,
+    "pagerduty": PagerDutyNotifier,
+    "teams": TeamsNotifier,
+    "microsoft_teams": TeamsNotifier,
 }
 
 
@@ -19,6 +28,10 @@ __all__ = [
     "BaseNotifier",
     "SlackNotifier",
     "WebhookNotifier",
+    "EmailNotifier",
+    "JiraNotifier",
+    "PagerDutyNotifier",
+    "TeamsNotifier",
     "check_rate_limit",
     "get_notifier",
 ]

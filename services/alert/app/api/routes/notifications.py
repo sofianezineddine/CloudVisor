@@ -28,7 +28,14 @@ async def create_channel(
 ) -> ChannelResponse:
     service = ChannelService(db)
     channel = await service.create_channel(
-        organization_id, data.name, data.channel_type, data.config, data.severity_filter
+        organization_id,
+        data.name,
+        data.channel_type,
+        data.config,
+        data.severity_filter,
+        data.module_filter,
+        data.account_filter,
+        data.tag_filter,
     )
     return ChannelResponse(**channel)
 
@@ -45,6 +52,26 @@ async def delete_channel(
 
         raise HTTPException(status_code=404, detail="Channel not found")
     return {"deleted": True}
+
+
+@router.put("/{channel_id}", response_model=ChannelResponse)
+async def update_channel(
+    channel_id: str,
+    data: ChannelCreateRequest,
+    db=Depends(get_db),
+) -> ChannelResponse:
+    """Update notification channel configuration."""
+    service = ChannelService(db)
+    channel = await service.update_channel(
+        channel_id=channel_id,
+        name=data.name,
+        config=data.config,
+        severity_filter=data.severity_filter,
+        module_filter=data.module_filter,
+        account_filter=data.account_filter,
+        tag_filter=data.tag_filter,
+    )
+    return ChannelResponse(**channel)
 
 
 @router.post("/{channel_id}/test")

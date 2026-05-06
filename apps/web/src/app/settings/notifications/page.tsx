@@ -1,118 +1,58 @@
 'use client';
 
 import * as React from 'react';
-import { AppLayout } from '@/components/layout';
-import { ProtectedRoute } from '@/components/protected-route';
 import { Button } from '@/components/ui/button';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Bell, Plus, Trash2, Play, CheckCircle2, XCircle,
-  Loader2, AlertTriangle, X,
+  useNotificationChannels,
+  useCreateChannel,
+  useUpdateChannel,
+  useDeleteChannel,
+  useTestChannel,
+} from '@/hooks/use-notifications';
+import {
+  Bell, Plus, Trash2, Play, CheckCircle2, XCircle, Edit2,
+  Loader2, AlertTriangle, X, Mail, MessageSquare, Webhook,
 } from 'lucide-react';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type ChannelType = 'slack' | 'webhook';
-
-interface NotificationChannel {
-  id: string;
-  name: string;
-  type: ChannelType;
-  config: Record<string, string>;
-  severity_filter: string[];
-  active: boolean;
-  created_at: string;
-}
-
 const SEVERITY_OPTIONS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] as const;
+const MODULE_OPTIONS = ['cspm', 'cwpp', 'cicd', 'ciem', 'kspm', 'dspm', 'cdr'] as const;
 
-const BREADCRUMBS = [
-  { text: 'Home', href: '/console' },
-  { text: 'Settings' },
-  { text: 'Notifications' },
-];
+const CHANNEL_TYPES = [
+  { value: 'slack', label: 'Slack', icon: '💬', description: 'Send alerts to Slack channels' },
+  { value: 'email', label: 'Email', icon: '📧', description: 'Email notifications (CRITICAL/HIGH real-time)' },
+  { value: 'jira', label: 'Jira', icon: '🎫', description: 'Auto-create Jira issues' },
+  { value: 'pagerduty', label: 'PagerDuty', icon: '🚨', description: 'On-call escalation for CRITICAL' },
+  { value: 'teams', label: 'Microsoft Teams', icon: '👥', description: 'Teams Adaptive Cards' },
+  { value: 'webhook', label: 'Generic Webhook', icon: '🔗', description: 'Custom HTTPS endpoint' },
+] as const;
 
-// ─── API helpers ──────────────────────────────────────────────────────────────
+// ─── Channel form ─────────────────────────────────────────────────────────────
 
-async function fetchChannels(): Promise<NotificationChannel[]> {
-  const res = await fetch('/api/v1/notifications/channels', {
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-  });
-  if (!res.ok) throw new Error('Failed to fetch channels');
-  const data = await res.json();
-  return data.channels ?? data ?? [];
+interface ChannelFormProps {
+  onSuccess: () => void;
+  editingChannel?: any;
 }
 
-async function createChannel(payload: Omit<NotificationChannel, 'id' | 'created_at'>): Promise<NotificationChannel> {
-  const res = await fetch('/api/v1/notifications/channels', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to create channel');
-  return res.json();
-}
-
-async function deleteChannel(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/notifications/channels/${id}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-  if (!res.ok) throw new Error('Failed to delete channel');
-}
-
-async function testChannel(channelId: string): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch('/api/v1/notifications/test', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ channel_id: channelId }),
-  });
-  if (!res.ok) throw new Error('Failed to test channel');
-  return res.json();
-}
-
-// ─── Type badge ───────────────────────────────────────────────────────────────
-
-function TypeBadge({ type }: { type: ChannelType }) {
-  const isSlack = type === 'slack';
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-      style={{
-        backgroundColor: isSlack ? 'var(--accent-dim)' : 'var(--medium-dim)',
-        color: isSlack ? 'var(--accent)' : 'var(--medium)',
-      }}
-    >
-      {isSlack ? '🔔' : '🔗'} {isSlack ? 'Slack' : 'Webhook'}
-    </span>
+function ChannelForm({ onSuccess, editingChannel }: ChannelFormProps) {
+  const [name, setName] = React.useState(editingChannel?.name || '');
+  const [channelType, setChannelType] = React.useState(editingChannel?.channel_type || 'slack');
+  const [config, setConfig] = React.useState<Record<string, string>>(editingChannel?.config || {});
+  const [severities, setSeverities] = React.useState<Set<string>>(
+    new Set(editingChannel?.severity_filter || ['CRITICAL', 'HIGH'])
   );
-}
-
-// ─── Add channel form ─────────────────────────────────────────────────────────
-
-function AddChannelForm({ onSuccess }: { onSuccess: () => void }) {
-  const [name, setName] = React.useState('');
-  const [type, setType] = React.useState<ChannelType>('slack');
-  const [webhookUrl, setWebhookUrl] = React.useState('');
-  const [webhookSecret, setWebhookSecret] = React.useState('');
-  const [severities, setSeverities] = React.useState<Set<string>>(new Set(['CRITICAL', 'HIGH']));
+  const [modules, setModules] = React.useState<Set<string>>(
+    new Set(editingChannel?.module_filter || [])
+  );
+  const [accounts, setAccounts] = React.useState<string>(
+    editingChannel?.account_filter?.join(', ') || ''
+  );
+  const [tagKey, setTagKey] = React.useState('');
+  const [tagValue, setTagValue] = React.useState('');
+  const [tags, setTags] = React.useState<Record<string, string>>(editingChannel?.tag_filter || {});
   const [error, setError] = React.useState<string | null>(null);
 
-  const queryClient = useQueryClient();
-  const createMutation = useMutation({
-    mutationFn: createChannel,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications', 'channels'] });
-      setName(''); setWebhookUrl(''); setWebhookSecret('');
-      setSeverities(new Set(['CRITICAL', 'HIGH']));
-      setError(null);
-      onSuccess();
-    },
-    onError: (e: Error) => setError(e.message),
-  });
+  const createMutation = useCreateChannel();
+  const updateMutation = useUpdateChannel();
 
   const toggleSeverity = (sev: string) => {
     setSeverities(prev => {
@@ -122,136 +62,239 @@ function AddChannelForm({ onSuccess }: { onSuccess: () => void }) {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !webhookUrl.trim()) {
-      setError('Name and URL are required');
-      return;
-    }
-    const config: Record<string, string> = type === 'slack'
-      ? { webhook_url: webhookUrl }
-      : { url: webhookUrl, ...(webhookSecret ? { secret: webhookSecret } : {}) };
-
-    createMutation.mutate({
-      name: name.trim(),
-      type,
-      config,
-      severity_filter: Array.from(severities),
-      active: true,
+  const toggleModule = (mod: string) => {
+    setModules(prev => {
+      const next = new Set(prev);
+      if (next.has(mod)) next.delete(mod); else next.add(mod);
+      return next;
     });
   };
 
+  const addTag = () => {
+    if (tagKey && tagValue) {
+      setTags(prev => ({ ...prev, [tagKey]: tagValue }));
+      setTagKey('');
+      setTagValue('');
+    }
+  };
+
+  const removeTag = (key: string) => {
+    setTags(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError('Channel name is required');
+      return;
+    }
+
+    const data = {
+      name: name.trim(),
+      channel_type: channelType,
+      config,
+      severity_filter: Array.from(severities),
+      module_filter: modules.size > 0 ? Array.from(modules) : undefined,
+      account_filter: accounts ? accounts.split(',').map(a => a.trim()).filter(Boolean) : undefined,
+      tag_filter: Object.keys(tags).length > 0 ? tags : undefined,
+      is_active: true,
+    };
+
+    try {
+      if (editingChannel) {
+        await updateMutation.mutateAsync({ channelId: editingChannel.id, data });
+      } else {
+        await createMutation.mutateAsync(data);
+      }
+      setError(null);
+      onSuccess();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save channel');
+    }
+  };
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
   return (
-    <form onSubmit={handleSubmit} className="cv-container p-6 space-y-4">
-      <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Add Notification Channel</h3>
+    <form onSubmit={handleSubmit} className="cv-container p-6 space-y-5">
+      <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+        {editingChannel ? 'Edit Channel' : 'Add Notification Channel'}
+      </h3>
 
       {error && (
-        <div
-          className="flex items-center gap-2 rounded-lg border p-3 text-sm"
-          style={{
-            borderColor: 'var(--critical)',
-            backgroundColor: 'var(--critical-dim)',
-            color: 'var(--critical)',
-          }}
-        >
+        <div className="flex items-center gap-2 rounded-lg border p-3 text-sm" style={{ borderColor: 'var(--critical)', backgroundColor: 'var(--critical-dim)', color: 'var(--critical)' }}>
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
           {error}
         </div>
       )}
 
+      {/* Basic info */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Channel Name</label>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Channel Name *</label>
           <input
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="e.g. Security Alerts"
             className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
-            style={{
-              borderColor: 'var(--border-default)',
-              backgroundColor: 'var(--bg-surface)',
-              color: 'var(--text-primary)',
-            }}
+            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
           />
         </div>
         <div>
-          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Type</label>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Channel Type *</label>
           <select
-            value={type}
-            onChange={e => setType(e.target.value as ChannelType)}
+            value={channelType}
+            onChange={e => setChannelType(e.target.value)}
+            disabled={!!editingChannel}
             className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
-            style={{
-              borderColor: 'var(--border-default)',
-              backgroundColor: 'var(--bg-surface)',
-              color: 'var(--text-primary)',
-            }}
+            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
           >
-            <option value="slack">Slack</option>
-            <option value="webhook">Generic Webhook</option>
+            {CHANNEL_TYPES.map(ct => (
+              <option key={ct.value} value={ct.value}>{ct.icon} {ct.label}</option>
+            ))}
           </select>
         </div>
       </div>
 
-      <div>
-        <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-          {type === 'slack' ? 'Slack Webhook URL' : 'Webhook URL'}
-        </label>
-        <input
-          type="url"
-          value={webhookUrl}
-          onChange={e => setWebhookUrl(e.target.value)}
-          placeholder={type === 'slack' ? 'https://hooks.slack.com/services/...' : 'https://your-endpoint.com/webhook'}
-          className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
-          style={{
-            borderColor: 'var(--border-default)',
-            backgroundColor: 'var(--bg-surface)',
-            color: 'var(--text-primary)',
-          }}
-        />
+      {/* Channel-specific config */}
+      <div className="space-y-3">
+        <h4 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Configuration</h4>
+        
+        {channelType === 'slack' && (
+          <input
+            type="url"
+            value={config.webhook_url || ''}
+            onChange={e => setConfig({ ...config, webhook_url: e.target.value })}
+            placeholder="https://hooks.slack.com/services/..."
+            className="w-full rounded-md border px-3 py-2 text-sm"
+            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+          />
+        )}
+
+        {channelType === 'email' && (
+          <div className="grid grid-cols-2 gap-3">
+            <input placeholder="SMTP Host" value={config.smtp_host || ''} onChange={e => setConfig({ ...config, smtp_host: e.target.value })} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+            <input placeholder="SMTP Port" value={config.smtp_port || '587'} onChange={e => setConfig({ ...config, smtp_port: e.target.value })} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+            <input placeholder="SMTP User" value={config.smtp_user || ''} onChange={e => setConfig({ ...config, smtp_user: e.target.value })} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+            <input type="password" placeholder="SMTP Password" value={config.smtp_password || ''} onChange={e => setConfig({ ...config, smtp_password: e.target.value })} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+            <input placeholder="From Email" value={config.from_email || ''} onChange={e => setConfig({ ...config, from_email: e.target.value })} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+            <input placeholder="To Emails (comma-separated)" value={config.to_emails || ''} onChange={e => setConfig({ ...config, to_emails: e.target.value })} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+          </div>
+        )}
+
+        {channelType === 'jira' && (
+          <div className="grid grid-cols-2 gap-3">
+            <input placeholder="Jira URL" value={config.url || ''} onChange={e => setConfig({ ...config, url: e.target.value })} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+            <input placeholder="Email" value={config.email || ''} onChange={e => setConfig({ ...config, email: e.target.value })} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+            <input type="password" placeholder="API Token" value={config.api_token || ''} onChange={e => setConfig({ ...config, api_token: e.target.value })} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+            <input placeholder="Project Key" value={config.project_key || ''} onChange={e => setConfig({ ...config, project_key: e.target.value })} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+          </div>
+        )}
+
+        {channelType === 'pagerduty' && (
+          <input placeholder="Integration Key" value={config.integration_key || ''} onChange={e => setConfig({ ...config, integration_key: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+        )}
+
+        {channelType === 'teams' && (
+          <input type="url" placeholder="Teams Webhook URL" value={config.webhook_url || ''} onChange={e => setConfig({ ...config, webhook_url: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+        )}
+
+        {channelType === 'webhook' && (
+          <div className="space-y-2">
+            <input type="url" placeholder="Webhook URL" value={config.url || ''} onChange={e => setConfig({ ...config, url: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+            <input type="password" placeholder="Secret (optional, for HMAC)" value={config.secret || ''} onChange={e => setConfig({ ...config, secret: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+          </div>
+        )}
       </div>
 
-      {type === 'webhook' && (
+      {/* Routing filters */}
+      <div className="space-y-4">
+        <h4 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Routing Filters</h4>
+        
+        {/* Severity */}
         <div>
-          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-            Secret (optional — used for HMAC signature)
-          </label>
+          <label className="block text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Severity Filter</label>
+          <div className="flex flex-wrap gap-2">
+            {SEVERITY_OPTIONS.map(sev => (
+              <label key={sev} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" checked={severities.has(sev)} onChange={() => toggleSeverity(sev)} className="h-3.5 w-3.5 rounded" />
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{sev}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Modules */}
+        <div>
+          <label className="block text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Module Filter (optional)</label>
+          <div className="flex flex-wrap gap-2">
+            {MODULE_OPTIONS.map(mod => (
+              <label key={mod} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" checked={modules.has(mod)} onChange={() => toggleModule(mod)} className="h-3.5 w-3.5 rounded" />
+                <span className="text-xs uppercase" style={{ color: 'var(--text-secondary)' }}>{mod}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Accounts */}
+        <div>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Account Filter (optional)</label>
           <input
-            type="password"
-            value={webhookSecret}
-            onChange={e => setWebhookSecret(e.target.value)}
-            placeholder="Signing secret"
-            className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
-            style={{
-              borderColor: 'var(--border-default)',
-              backgroundColor: 'var(--bg-surface)',
-              color: 'var(--text-primary)',
-            }}
+            type="text"
+            value={accounts}
+            onChange={e => setAccounts(e.target.value)}
+            placeholder="account-123, account-456 (comma-separated)"
+            className="w-full rounded-md border px-3 py-2 text-sm"
+            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
           />
         </div>
-      )}
 
-      <div>
-        <label className="block text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Severity Filter</label>
-        <div className="flex flex-wrap gap-2">
-          {SEVERITY_OPTIONS.map(sev => (
-            <label key={sev} className="flex items-center gap-1.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={severities.has(sev)}
-                onChange={() => toggleSeverity(sev)}
-                className="h-3.5 w-3.5 rounded"
-                style={{ borderColor: 'var(--border-default)' }}
-              />
-              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{sev}</span>
-            </label>
-          ))}
+        {/* Tags */}
+        <div>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Tag Filter (optional)</label>
+          <div className="flex gap-2 mb-2">
+            <input
+              type="text"
+              value={tagKey}
+              onChange={e => setTagKey(e.target.value)}
+              placeholder="Key"
+              className="flex-1 rounded-md border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+            />
+            <input
+              type="text"
+              value={tagValue}
+              onChange={e => setTagValue(e.target.value)}
+              placeholder="Value"
+              className="flex-1 rounded-md border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+            />
+            <Button type="button" variant="outline" size="sm" onClick={addTag}>Add</Button>
+          </div>
+          {Object.keys(tags).length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(tags).map(([k, v]) => (
+                <span key={k} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs" style={{ borderColor: 'var(--accent)', backgroundColor: 'var(--accent-dim)', color: 'var(--accent)' }}>
+                  {k}={v}
+                  <button type="button" onClick={() => removeTag(k)} className="ml-0.5 rounded-full p-0.5">
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      <Button type="submit" className="gap-2" disabled={createMutation.isPending}>
-        {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-        Add Channel
+      <Button type="submit" className="gap-2" disabled={isPending}>
+        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+        {editingChannel ? 'Update Channel' : 'Add Channel'}
       </Button>
     </form>
   );
@@ -259,35 +302,21 @@ function AddChannelForm({ onSuccess }: { onSuccess: () => void }) {
 
 // ─── Channel card ─────────────────────────────────────────────────────────────
 
-function ChannelCard({ channel }: { channel: NotificationChannel }) {
-  const queryClient = useQueryClient();
-  const [testResult, setTestResult] = React.useState<{ success: boolean; error?: string } | null>(null);
-  const [testing, setTesting] = React.useState(false);
-  const [deleteHover, setDeleteHover] = React.useState(false);
+function ChannelCard({ channel, onEdit }: { channel: any; onEdit: () => void }) {
+  const deleteMutation = useDeleteChannel();
+  const testMutation = useTestChannel();
 
-  const deleteMutation = useMutation({
-    mutationFn: () => deleteChannel(channel.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications', 'channels'] }),
-  });
-
-  const handleTest = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const result = await testChannel(channel.id);
-      setTestResult(result);
-    } catch (e) {
-      setTestResult({ success: false, error: e instanceof Error ? e.message : 'Test failed' });
-    } finally {
-      setTesting(false);
-    }
+  const handleTest = () => {
+    testMutation.mutate({ channel_id: channel.id });
   };
 
   const handleDelete = () => {
     if (confirm(`Delete channel "${channel.name}"?`)) {
-      deleteMutation.mutate();
+      deleteMutation.mutate(channel.id);
     }
   };
+
+  const channelTypeInfo = CHANNEL_TYPES.find(ct => ct.value === channel.channel_type);
 
   return (
     <div className="cv-container p-5">
@@ -295,56 +324,31 @@ function ChannelCard({ channel }: { channel: NotificationChannel }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{channel.name}</span>
-            <TypeBadge type={channel.type} />
-            {channel.active ? (
-              <span
-                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                style={{ backgroundColor: 'var(--success-dim)', color: 'var(--success)' }}
-              >
-                Active
-              </span>
-            ) : (
-              <span
-                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-tertiary)' }}
-              >
-                Inactive
-              </span>
-            )}
+            <span className="text-lg">{channelTypeInfo?.icon}</span>
+            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{channelTypeInfo?.label}</span>
           </div>
-          <div className="text-xs mb-2" style={{ color: 'var(--text-tertiary)' }}>
-            Severity: {channel.severity_filter.join(', ') || 'All'}
+          <div className="text-xs space-y-1" style={{ color: 'var(--text-tertiary)' }}>
+            <div>Severity: {channel.severity_filter?.join(', ') || 'All'}</div>
+            {channel.module_filter?.length > 0 && <div>Modules: {channel.module_filter.join(', ')}</div>}
+            {channel.account_filter?.length > 0 && <div>Accounts: {channel.account_filter.join(', ')}</div>}
           </div>
-          {testResult && (
-            <div
-              className="flex items-center gap-1.5 text-xs mt-2"
-              style={{ color: testResult.success ? 'var(--success)' : 'var(--critical)' }}
-            >
-              {testResult.success
-                ? <><CheckCircle2 className="h-3.5 w-3.5" /> Test successful</>
-                : <><XCircle className="h-3.5 w-3.5" /> {testResult.error ?? 'Test failed'}</>
-              }
+          {testMutation.data && (
+            <div className="flex items-center gap-1.5 text-xs mt-2" style={{ color: testMutation.data.data.success ? 'var(--success)' : 'var(--critical)' }}>
+              {testMutation.data.data.success ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+              {testMutation.data.data.message}
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleTest} disabled={testing}>
-            {testing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-            Test
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            <Edit2 className="h-3 w-3" />
           </Button>
-          <button
-            className="h-8 w-8 p-0 flex items-center justify-center rounded-md transition-colors"
-            style={{
-              color: deleteHover ? 'var(--critical)' : 'var(--text-tertiary)',
-              backgroundColor: deleteHover ? 'var(--critical-dim)' : 'transparent',
-            }}
-            onMouseEnter={() => setDeleteHover(true)}
-            onMouseLeave={() => setDeleteHover(false)}
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-          >
-            {deleteMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-          </button>
+          <Button variant="outline" size="sm" onClick={handleTest} disabled={testMutation.isPending}>
+            {testMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleteMutation.isPending}>
+            {deleteMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+          </Button>
         </div>
       </div>
     </div>
@@ -355,39 +359,44 @@ function ChannelCard({ channel }: { channel: NotificationChannel }) {
 
 export default function NotificationsPage() {
   const [showForm, setShowForm] = React.useState(false);
+  const [editingChannel, setEditingChannel] = React.useState<any>(null);
 
   React.useEffect(() => {
     document.title = 'Notifications - Settings - CloudVisor';
   }, []);
 
-  const { data: channels = [], isLoading, isError } = useQuery({
-    queryKey: ['notifications', 'channels'],
-    queryFn: fetchChannels,
-    staleTime: 60_000,
-  });
+  const { data, isLoading, isError } = useNotificationChannels();
+  const channels = data?.data || [];
+
+  const handleEdit = (channel: any) => {
+    setEditingChannel(channel);
+    setShowForm(true);
+  };
+
+  const handleFormSuccess = () => {
+    setShowForm(false);
+    setEditingChannel(null);
+  };
 
   return (
-    <ProtectedRoute>
-      <AppLayout breadcrumbs={BREADCRUMBS}>
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-h1" style={{ color: 'var(--text-primary)' }}>Notifications</h1>
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                Configure alert channels for security findings
-              </p>
-            </div>
-            <Button onClick={() => setShowForm(v => !v)} className="gap-2">
-              {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              {showForm ? 'Cancel' : 'Add Channel'}
-            </Button>
-          </div>
+    <>
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</h1>
+          <Button onClick={() => { setShowForm(v => !v); setEditingChannel(null); }} className="gap-2">
+            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {showForm ? 'Cancel' : 'Add Channel'}
+          </Button>
+        </div>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Configure alert channels with advanced routing rules
+        </p>
+      </div>
 
-          {/* Add channel form */}
-          {showForm && <AddChannelForm onSuccess={() => setShowForm(false)} />}
+      <div className="space-y-6">
 
-          {/* Channel list */}
+          {showForm && <ChannelForm onSuccess={handleFormSuccess} editingChannel={editingChannel} />}
+
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin" style={{ color: 'var(--accent)' }} />
@@ -396,7 +405,7 @@ export default function NotificationsPage() {
             <div className="cv-container p-6 flex flex-col items-center justify-center gap-3 text-center">
               <AlertTriangle className="h-8 w-8" style={{ color: 'var(--warning)' }} />
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                Could not load notification channels. The notifications API may not be configured yet.
+                Could not load notification channels
               </p>
             </div>
           ) : channels.length === 0 ? (
@@ -404,7 +413,7 @@ export default function NotificationsPage() {
               <Bell className="h-10 w-10" style={{ color: 'var(--text-tertiary)' }} />
               <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>No channels configured</h3>
               <p className="text-sm max-w-sm" style={{ color: 'var(--text-secondary)' }}>
-                Add a Slack or webhook channel to receive alerts when critical findings are detected.
+                Add notification channels to receive alerts via Slack, Email, Jira, PagerDuty, Teams, or Webhooks
               </p>
               <Button onClick={() => setShowForm(true)} className="gap-2 mt-2">
                 <Plus className="h-4 w-4" />
@@ -413,13 +422,12 @@ export default function NotificationsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {channels.map(channel => (
-                <ChannelCard key={channel.id} channel={channel} />
+              {channels.map((channel: any) => (
+                <ChannelCard key={channel.id} channel={channel} onEdit={() => handleEdit(channel)} />
               ))}
             </div>
           )}
         </div>
-      </AppLayout>
-    </ProtectedRoute>
-  );
-}
+      </>
+    );
+  }

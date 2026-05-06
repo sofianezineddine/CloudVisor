@@ -3,373 +3,971 @@
 'use client';
 
 import React from 'react';
-import ReactFlow, {
-  Background,
-  Controls,
-  MiniMap,
-  useNodesState,
-  useEdgesState,
-  useReactFlow,
-  BackgroundVariant,
-  Handle,
-  Position,
-  MarkerType,
-  Panel,
-  ReactFlowProvider,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
 import './asset-graph.css';
+import { useTheme } from '@/components/theme-provider';
 
-const TYPE_PALETTE = {
-  iamrole: { accent: '#f97316', label: 'IAM Role' },
-  iamuser: { accent: '#fb923c', label: 'IAM User' },
-  ec2: { accent: '#a78bfa', label: 'EC2' },
-  vpc: { accent: '#60a5fa', label: 'VPC' },
-  subnet: { accent: '#93c5fd', label: 'Subnet' },
-  securitygroup: { accent: '#f87171', label: 'Sec Group' },
-  s3bucket: { accent: '#38bdf8', label: 'S3' },
-  kmskey: { accent: '#fdba74', label: 'KMS' },
-  internet: { accent: '#f43f5e', label: 'Internet' },
-};
+// ─── Palette — all spec resource types ───────────────────────────────────────
+const NODE_TYPES = [
+  { id:'iamrole',        label:'IAM Role',      color:'#f0a030', icon:'◆' },
+  { id:'iamuser',        label:'IAM User',       color:'#e058a0', icon:'◆' },
+  { id:'securitygroup',  label:'Sec Group',      color:'#e05060', icon:'●' },
+  { id:'vpc',            label:'VPC',            color:'#4a90e8', icon:'◉' },
+  { id:'subnet',         label:'Subnet',         color:'#30b8c4', icon:'◆' },
+  { id:'s3bucket',       label:'S3 Bucket',      color:'#4a90e8', icon:'■' },
+  { id:'ec2',            label:'EC2',            color:'#9878e8', icon:'◆' },
+  { id:'lambdafunction', label:'Lambda',         color:'#c084fc', icon:'λ' },
+  { id:'rdsinstance',    label:'RDS',            color:'#38c472', icon:'◆' },
+  { id:'ekscluster',     label:'EKS',            color:'#818cf8', icon:'☸' },
+  { id:'internet',       label:'Internet',       color:'#e05060', icon:'◉' },
+];
 
-function getPalette(resourceType) {
-  const key = resourceType.split('::').pop()?.toLowerCase().replace(/_/g, '') || '';
-  return TYPE_PALETTE[key] || { accent: '#6e7681', label: key || 'Resource' };
+const TYPE_MAP: Record<string, typeof NODE_TYPES[0]> = {};
+NODE_TYPES.forEach(t => { TYPE_MAP[t.id] = t; });
+
+function getNodeType(resourceType: string) {
+  const k = resourceType.split('::').pop()?.toLowerCase().replace(/_/g,'') || '';
+  return TYPE_MAP[k] || { id: k, label: k || 'Resource', color: '#6b7194', icon: '◆' };
 }
 
-function deriveRisk(r) {
+// ─── Risk helpers ─────────────────────────────────────────────────────────────
+function riskScore(r: any): number {
+  if (r.risk_score != null && r.risk_score > 0) return r.risk_score;
   let s = 10;
-  if (r.is_public) s += 40;
+  if (r.is_public || r.is_internet_exposed) s += 20;
+  if (r.contains_pii || r.contains_sensitive_data) s += 15;
+  if (r.open_findings_count > 0) s += Math.min(r.open_findings_count * 10, 60);
   if (r.environment === 'prod') s = Math.round(s * 1.5);
   return Math.min(s, 100);
 }
 
-function AssetNode({ data, selected }) {
-  const { accent, label } = getPalette(data.resource_type);
-  const risk = data.resource_type === 'internet' ? 100 : deriveRisk(data);
-  const riskColor = risk >= 60 ? '#f85149' : risk >= 30 ? '#f97316' : '#3fb950';
+function riskLevel(score: number): 'high' | 'med' | 'low' {
+  return score >= 70 ? 'high' : score >= 40 ? 'med' : 'low';
+}
 
-  if (data.resource_type === 'internet') {
-    const internetStyle = {
-      background: 'rgba(248,81,73,0.07)',
-      border: '1.5px dashed rgba(248,81,73,0.45)',
-      borderRadius: '12px',
-      padding: '10px 18px',
-      textAlign: 'center',
-      minWidth: '96px',
-      boxShadow: selected ? '0 0 0 2px rgba(248,81,73,0.3)' : '0 2px 10px rgba(0,0,0,0.4)',
-    };
-    return React.createElement('div', { style: internetStyle },
-      React.createElement(Handle, { type: 'source', position: Position.Bottom, style: { background: '#f85149' } }),
-      React.createElement('div', { style: { fontSize: 22, lineHeight: 1, marginBottom: 4 } }, '🌐'),
-      React.createElement('div', { style: { color: '#f85149', fontSize: 10, fontWeight: 700 } }, 'Internet')
-    );
-  }
+function riskColor(score: number): string {
+  return score >= 70 ? '#e05060' : score >= 40 ? '#f0a030' : '#38c472';
+}
 
-  const nodeStyle = {
-    background: selected ? 'linear-gradient(135deg, #1c2128 0%, #161b22 100%)' : '#161b22',
-    border: `1px solid ${selected ? accent : '#30363d'}`,
-    borderRadius: '9px',
-    padding: '8px 12px',
-    width: '182px',
-    boxShadow: selected
-      ? `0 0 0 2px ${accent}30, 0 6px 24px rgba(0,0,0,0.6)`
-      : '0 2px 8px rgba(0,0,0,0.4)',
-    position: 'relative',
-  };
+// ─── Relationship rules ───────────────────────────────────────────────────────
+const RULES: Record<string, Array<[string, string]>> = {
+  ec2:            [['subnet','RUNS_IN'],['securitygroup','BELONGS_TO'],['iamrole','HAS_ROLE']],
+  instance:       [['subnet','RUNS_IN'],['securitygroup','BELONGS_TO'],['iamrole','HAS_ROLE']],
+  subnet:         [['vpc','BELONGS_TO']],
+  securitygroup:  [['vpc','BELONGS_TO']],
+  iamuser:        [['iamrole','HAS_ACCESS_TO']],
+  iamrole:        [['iamrole','ASSUMES'],['s3bucket','HAS_ACCESS_TO'],['rdsinstance','HAS_ACCESS_TO']],
+  lambdafunction: [['iamrole','HAS_ROLE'],['rdsinstance','CONNECTS_TO']],
+  ekscluster:     [['vpc','RUNS_IN']],
+};
 
-  return React.createElement('div', { style: nodeStyle },
-    React.createElement('div', {
-      style: {
-        position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
-        background: `linear-gradient(90deg, transparent, ${accent}60, transparent)`,
-        opacity: selected ? 1 : 0.4,
+const EDGE_COLORS: Record<string, string> = {
+  RUNS_IN:'#4a90e8', BELONGS_TO:'#6b7194', HAS_ROLE:'#f0a030',
+  HAS_ACCESS_TO:'#30b8c4', ASSUMES:'#f0a030', CONNECTS_TO:'#38c472',
+  CONTAINS:'#9878e8', RUNS_ON:'#9878e8', EXPOSES:'#e05060',
+};
+
+// ─── Graph data builder ───────────────────────────────────────────────────────
+interface GraphNode {
+  id: string;
+  x: number; y: number;
+  vx: number; vy: number;
+  r: number;
+  color: string;
+  label: string;
+  typeLabel: string;
+  typeId: string;
+  region: string;
+  risk: number;
+  riskLvl: 'high' | 'med' | 'low';
+  edgeCount: number;
+  hidden: boolean;
+  resource: any;
+}
+
+interface GraphEdge {
+  a: number; b: number;
+  rel: string;
+  color: string;
+  dashed: boolean;
+}
+
+function buildGraphData(resources: any[]): { nodes: GraphNode[]; edges: GraphEdge[]; connectedCount: number } {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  const idToIdx: Record<string, number> = {};
+  const connected = new Set<number>();
+  const seen = new Set<string>();
+
+  // Build nodes
+  resources.forEach((r, i) => {
+    const t = getNodeType(r.resource_type);
+    const rs = riskScore(r);
+    nodes.push({
+      id: r.id,
+      x: 100 + Math.random() * 1600,
+      y: 100 + Math.random() * 900,
+      vx: 0, vy: 0,
+      r: t.id === 'vpc' ? 10 : t.id === 'subnet' ? 8 : 6,
+      color: t.color,
+      label: r.name || r.id,
+      typeLabel: t.label,
+      typeId: t.id,
+      region: r.region || 'global',
+      risk: rs,
+      riskLvl: riskLevel(rs),
+      edgeCount: 0,
+      hidden: false,
+      resource: r,
+    });
+    idToIdx[r.id] = i;
+  });
+
+  // Index by type
+  const byType: Record<string, number[]> = {};
+  nodes.forEach((n, i) => {
+    if (!byType[n.typeId]) byType[n.typeId] = [];
+    byType[n.typeId].push(i);
+  });
+
+  // Build edges
+  nodes.forEach((n, ai) => {
+    const rules = RULES[n.typeId] || [];
+    for (const [tk, rel] of rules) {
+      for (const bi of (byType[tk] || []).slice(0, 6)) {
+        if (ai === bi) continue;
+        const nb = nodes[bi];
+        if (n.resource.account_id !== nb.resource.account_id) continue;
+        const key = `${Math.min(ai,bi)}-${Math.max(ai,bi)}-${rel}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const c = EDGE_COLORS[rel] || '#6b7194';
+        edges.push({ a: ai, b: bi, rel, color: c, dashed: rel === 'HAS_ACCESS_TO' });
+        nodes[ai].edgeCount++;
+        nodes[bi].edgeCount++;
+        connected.add(ai);
+        connected.add(bi);
       }
-    }),
-    React.createElement(Handle, { type: 'target', position: Position.Top, style: { background: accent } }),
-    React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' } },
-      React.createElement('span', {
-        style: {
-          background: `${accent}15`, color: accent,
-          fontSize: '8px', fontWeight: 700, letterSpacing: '0.08em',
-          textTransform: 'uppercase', padding: '2px 6px', borderRadius: '4px',
-          border: `1px solid ${accent}25`,
-        }
-      }, label),
-      React.createElement('span', {
-        style: {
-          width: '7px', height: '7px', borderRadius: '50%',
-          background: riskColor, boxShadow: `0 0 6px ${riskColor}70`,
-        },
-        title: `Risk: ${risk}`,
-      })
-    ),
-    React.createElement('div', {
-      style: {
-        color: '#cdd9e5', fontSize: '11px', fontWeight: 500, lineHeight: 1.35,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      },
-      title: data.name,
-    }, data.name),
-    React.createElement('div', {
-      style: { color: '#484f58', fontSize: '9px', marginTop: '3px' }
-    }, data.region || 'global',
-      data.is_public && React.createElement('span', {
-        style: {
-          color: '#f85149', fontWeight: 700, fontSize: '8px',
-          background: 'rgba(248,81,73,0.1)', padding: '1px 4px',
-          borderRadius: '3px', marginLeft: '4px',
-        }
-      }, 'PUBLIC')
-    ),
-    React.createElement(Handle, { type: 'source', position: Position.Bottom, style: { background: accent } })
+    }
+    // Public resources → internet
+    if (n.resource.is_public || n.resource.is_internet_exposed) {
+      connected.add(ai);
+    }
+  });
+
+  const connectedCount = connected.size;
+  return { nodes, edges, connectedCount };
+}
+
+// ─── Sidebar component ────────────────────────────────────────────────────────
+function Sidebar({
+  stats, presentTypes, selectedNode, onClose, onFilter, filterText, onToggleType, hiddenTypes, isDark,
+}: {
+  stats: { connected: number; edges: number; isolated: number; total: number };
+  presentTypes: string[];
+  selectedNode: GraphNode | null;
+  onClose: () => void;
+  onFilter: (q: string) => void;
+  filterText: string;
+  onToggleType: (id: string) => void;
+  hiddenTypes: Set<string>;
+  isDark?: boolean;
+}) {
+  return (
+    <>
+      {/* Search */}
+      <div className="ag-sb-sec">
+        <div className="ag-sb-label">Search</div>
+        <input
+          className="ag-filter-input"
+          placeholder="Filter assets..."
+          value={filterText}
+          onChange={e => onFilter(e.target.value)}
+        />
+      </div>
+
+      {/* Stats */}
+      <div className="ag-sb-sec">
+        <div className="ag-sb-label">Graph overview</div>
+        <div className="ag-stats-grid">
+          <div className="ag-stat-card">
+            <div className="ag-stat-num ag-s-connected">{stats.connected}</div>
+            <div className="ag-stat-lbl">CONNECTED</div>
+          </div>
+          <div className="ag-stat-card">
+            <div className="ag-stat-num ag-s-edges">{stats.edges}</div>
+            <div className="ag-stat-lbl">EDGES</div>
+          </div>
+          <div className="ag-stat-card">
+            <div className="ag-stat-num ag-s-isolated">{stats.isolated}</div>
+            <div className="ag-stat-lbl">ISOLATED</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Node types legend */}
+      <div className="ag-sb-sec">
+        <div className="ag-sb-label">Node types</div>
+        {presentTypes.map(tid => {
+          const t = TYPE_MAP[tid] || { id: tid, label: tid, color: '#6b7194' };
+          const hidden = hiddenTypes.has(tid);
+          return (
+            <div key={tid} className="ag-leg-item" onClick={() => onToggleType(tid)}>
+              <div className="ag-leg-dot" style={{ background: hidden ? t.color + '44' : t.color }} />
+              <span className="ag-leg-name" style={{ opacity: hidden ? 0.4 : 1 }}>{t.label}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Relationships */}
+      <div className="ag-sb-sec">
+        <div className="ag-sb-label">Relationships</div>
+        {[
+          { rel: 'ASSUMES',       color: '#f0a030', dashed: false },
+          { rel: 'HAS ACCESS TO', color: '#30b8c4', dashed: true  },
+          { rel: 'BELONGS TO',    color: '#6b7194', dashed: false },
+          { rel: 'RUNS IN',       color: '#4a90e8', dashed: false },
+          { rel: 'HAS ROLE',      color: '#f0a030', dashed: false },
+        ].map(({ rel, color, dashed }) => (
+          <div key={rel} className="ag-rel-item">
+            <div className="ag-rel-line" style={{
+              background: dashed ? 'none' : color,
+              borderTop: dashed ? `1px dashed ${color}` : 'none',
+            }} />
+            <span className="ag-rel-name">{rel}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Risk scale */}
+      <div className="ag-sb-sec">
+        <div className="ag-sb-label">Risk scale</div>
+        {[
+          { color: '#e05060', label: 'High (≥70)' },
+          { color: '#f0a030', label: 'Medium (≥40)' },
+          { color: '#38c472', label: 'Low (<40)' },
+        ].map(({ color, label }) => (
+          <div key={label} className="ag-risk-row">
+            <div className="ag-risk-dot" style={{ background: color }} />
+            <span className="ag-risk-lbl">{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Selected node */}
+      {selectedNode && (
+        <div className="ag-sb-sec">
+          <div className="ag-sb-label">Selected node</div>
+          <div className="ag-sel-panel">
+            <div className="ag-sel-name">{selectedNode.label}</div>
+            {[
+              { l: 'Type',     v: selectedNode.typeLabel },
+              { l: 'Region',   v: selectedNode.region },
+              { l: 'Edges',    v: String(selectedNode.edgeCount) },
+              { l: 'Risk',     v: `${selectedNode.riskLvl.toUpperCase()} (${Math.round(selectedNode.risk)})`,
+                color: riskColor(selectedNode.risk) },
+              { l: 'Provider', v: selectedNode.resource?.provider?.toUpperCase() || '—' },
+              { l: 'Exposure', v: selectedNode.resource?.is_public ? '⚠ Public' : 'Private',
+                color: selectedNode.resource?.is_public ? '#e05060' : undefined },
+            ].map(({ l, v, color }) => (
+              <div key={l} className="ag-sel-row">
+                <span>{l}</span>
+                <span className="ag-sel-val" style={color ? { color } : {}}>{v}</span>
+              </div>
+            ))}
+            <button className="ag-sel-action" onClick={onClose}>✕ Deselect</button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
-const nodeTypes = { asset: AssetNode };
+// ─── Main canvas graph component ─────────────────────────────────────────────
+function CanvasGraph({ resources, loading, onSwitchToTable }: {
+  resources: any[];
+  loading: boolean;
+  onSwitchToTable?: () => void;
+}) {
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const mmRef = React.useRef<HTMLCanvasElement>(null);
+  const tooltipRef = React.useRef<HTMLDivElement>(null);
 
-function buildGraph(resources) {
-  const nodes = [];
-  const edges = [];
+  // Graph state — stored in refs to avoid re-renders on every frame
+  const graphRef = React.useRef<{ nodes: GraphNode[]; edges: GraphEdge[]; connectedCount: number } | null>(null);
+  const transformRef = React.useRef({ x: 0, y: 0, scale: 1 });
+  const draggingRef = React.useRef(false);
+  const lastMouseRef = React.useRef({ x: 0, y: 0 });
+  const hoveredRef = React.useRef<GraphNode | null>(null);
+  const selectedRef = React.useRef<GraphNode | null>(null);
+  const draggingNodeRef = React.useRef<GraphNode | null>(null);       // node being dragged
+  const lassoRef = React.useRef<{ x1:number;y1:number;x2:number;y2:number } | null>(null); // lasso rect
+  const lassoActiveRef = React.useRef(false);
+  const selectedGroupRef = React.useRef<Set<number>>(new Set());     // multi-selected node indices
+  const groupDragRef = React.useRef(false);                          // dragging a group
+  const hiddenTypesRef = React.useRef<Set<string>>(new Set());
+  const filterRef = React.useRef('');
+  const rafRef = React.useRef<number>(0);
+  const isDarkRef = React.useRef(true);
 
-  const groups = {};
-  for (const r of resources) {
-    const key = r.resource_type;
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(r);
+  // React state for sidebar (only updates when selection/filter changes)
+  const [selected, setSelected] = React.useState<GraphNode | null>(null);
+  const [filterText, setFilterText] = React.useState('');
+  const [hiddenTypes, setHiddenTypes] = React.useState<Set<string>>(new Set());
+  const [stats, setStats] = React.useState({ connected: 0, edges: 0, isolated: 0, total: 0 });
+  const [presentTypes, setPresentTypes] = React.useState<string[]>([]);
+  const [sidebarOpen, setSidebarOpen] = React.useState(true);
+
+  // Use global theme from header toggle
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  // Build graph data when resources change
+  React.useEffect(() => {
+    if (!resources.length) return;
+    const data = buildGraphData(resources);
+    graphRef.current = data;
+    setStats({
+      connected: data.connectedCount,
+      edges: data.edges.length,
+      isolated: resources.length - data.connectedCount,
+      total: resources.length,
+    });
+    const types = [...new Set(data.nodes.map(n => n.typeId))];
+    setPresentTypes(types);
+    resetView();
+  }, [resources.length]); // eslint-disable-line
+
+  // Sync isDarkRef with global theme and redraw
+  React.useEffect(() => {
+    isDarkRef.current = isDark;
+    drawFrame();
+  }, [isDark]); // eslint-disable-line
+
+  // Canvas sizing — observe wrap for resize
+  React.useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const ro = new ResizeObserver(() => resizeCanvas());
+    ro.observe(wrap);
+    resizeCanvas();
+    return () => ro.disconnect();
+  }, []); // eslint-disable-line
+
+  function resizeCanvas() {
+    const wrap = wrapRef.current;
+    const canvas = canvasRef.current;
+    if (!wrap || !canvas) return;
+    const { width, height } = wrap.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
+    drawFrame();
   }
 
-  const sortedGroups = Object.entries(groups).sort(([, a], [, b]) => b.length - a.length);
+  function getCanvasSize() {
+    const canvas = canvasRef.current;
+    if (!canvas) return { W: 0, H: 0 };
+    return { W: parseFloat(canvas.style.width) || 0, H: parseFloat(canvas.style.height) || 0 };
+  }
 
-  const NODE_W = 192, NODE_H = 82, H_GAP = 14, V_GAP = 18;
-  const GROUP_PAD = 20, GROUP_GAP_X = 28, GROUP_GAP_Y = 36;
-  const MAX_COLS = 6, GROUPS_PER_ROW = 3;
+  // World ↔ screen transforms
+  function ws(x: number, y: number) {
+    const t = transformRef.current;
+    return { x: x * t.scale + t.x, y: y * t.scale + t.y };
+  }
+  function sw(x: number, y: number) {
+    const t = transformRef.current;
+    return { x: (x - t.x) / t.scale, y: (y - t.y) / t.scale };
+  }
 
-  let rowX = 0, rowY = 0, colInRow = 0, maxRowH = 0;
+  function drawFrame() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+    const { W, H } = getCanvasSize();
+    if (!W || !H) return;
+    ctx.clearRect(0, 0, W, H);
 
-  for (const [, items] of sortedGroups) {
-    const cols = Math.min(MAX_COLS, items.length);
-    const rows = Math.ceil(items.length / cols);
-    const gw = cols * NODE_W + (cols - 1) * H_GAP + GROUP_PAD * 2;
-    const gh = rows * NODE_H + (rows - 1) * V_GAP + GROUP_PAD * 2 + 24;
+    const t = transformRef.current;
+    const graph = graphRef.current;
+    const selNode = selectedRef.current;
+    const hovNode = hoveredRef.current;
+    const dark = isDarkRef.current;
 
-    for (let i = 0; i < items.length; i++) {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      nodes.push({
-        id: items[i].id,
-        type: 'asset',
-        position: {
-          x: rowX + GROUP_PAD + col * (NODE_W + H_GAP),
-          y: rowY + GROUP_PAD + 24 + row * (NODE_H + V_GAP),
-        },
-        data: items[i],
+    // Background fill
+    ctx.fillStyle = dark ? '#0d0f14' : '#eef0f5';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid
+    ctx.save();
+    ctx.strokeStyle = dark ? 'rgba(42,47,66,0.28)' : 'rgba(180,185,210,0.35)';
+    ctx.lineWidth = 0.5;
+    const gs = 60 * t.scale;
+    const ox = t.x % gs, oy = t.y % gs;
+    for (let x = ox; x < W; x += gs) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = oy; y < H; y += gs) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    ctx.restore();
+
+    if (!graph) return;
+
+    const selId = selNode ? graph.nodes.indexOf(selNode) : -1;
+    const selNeighbors = new Set<number>();
+    if (selId >= 0) {
+      graph.edges.forEach(e => {
+        if (e.a === selId) selNeighbors.add(e.b);
+        if (e.b === selId) selNeighbors.add(e.a);
       });
     }
 
-    maxRowH = Math.max(maxRowH, gh);
-    colInRow++;
-    if (colInRow >= GROUPS_PER_ROW) {
-      colInRow = 0; rowX = 0;
-      rowY += maxRowH + GROUP_GAP_Y;
-      maxRowH = 0;
-    } else {
-      rowX += gw + GROUP_GAP_X;
+    // Edges
+    graph.edges.forEach(e => {
+      const na = graph.nodes[e.a], nb = graph.nodes[e.b];
+      if (na.hidden || nb.hidden) return;
+      const pa = ws(na.x, na.y), pb = ws(nb.x, nb.y);
+      const isSel = selId >= 0 && (e.a === selId || e.b === selId);
+      ctx.save();
+      ctx.strokeStyle = isSel ? e.color + 'cc' : e.color + '30';
+      ctx.lineWidth = isSel ? 1.5 : 0.6;
+      if (e.dashed) ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // Nodes
+    graph.nodes.forEach((n, i) => {
+      if (n.hidden) return;
+      const p = ws(n.x, n.y);
+      if (p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) return;
+
+      const isHov = hovNode === n;
+      const isSel = selId === i;
+      const isGroupSel = selectedGroupRef.current.has(i);
+      const isNeighbor = selId >= 0 && selNeighbors.has(i) && !isSel;
+      const isDim = selId >= 0 && !isSel && !isNeighbor && !isGroupSel;
+      const r = n.r * t.scale * (isHov || isSel ? 1.5 : 1);
+      const alpha = isDim ? 0.12 : 1;
+
+      // Glow
+      if ((isHov || isSel || n.riskLvl === 'high') && !isDim) {
+        ctx.save();
+        ctx.globalAlpha = isHov || isSel ? 0.35 : 0.15;
+        const grad = ctx.createRadialGradient(p.x, p.y, r * 0.5, p.x, p.y, r * 2.8);
+        grad.addColorStop(0, n.color);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r * 2.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      // Fill
+      const riskA = n.riskLvl === 'high' ? 0.9 : n.riskLvl === 'med' ? 0.75 : 0.55;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = n.color + Math.round(riskA * 255).toString(16).padStart(2, '0');
+      ctx.fill();
+
+      // Border
+      ctx.strokeStyle = isSel ? '#ffffff' : isGroupSel ? '#4a90e8' : isHov ? n.color : n.color + '70';
+      ctx.lineWidth = isSel ? 2 : isGroupSel ? 1.5 : isHov ? 1.5 : 0.5;
+      ctx.stroke();
+
+      // Label
+      if ((isHov || isSel || isNeighbor) && t.scale > 0.4) {
+        ctx.font = `${Math.min(11, 10 * t.scale)}px 'IBM Plex Mono', monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = isHov || isSel ? '#e2e4ef' : '#9398b8';
+        ctx.fillText(n.label.slice(0, 14), p.x, p.y + r + 11 * t.scale + 2);
+      }
+
+      ctx.restore();
+    });
+
+    drawMinimap(graph.nodes.filter(n => !n.hidden));
+
+    // Draw lasso selection rect
+    const lasso = lassoRef.current;
+    if (lasso) {
+      const dark = isDarkRef.current;
+      ctx.save();
+      ctx.strokeStyle = '#4a90e8';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(lasso.x1, lasso.y1, lasso.x2 - lasso.x1, lasso.y2 - lasso.y1);
+      ctx.fillStyle = 'rgba(74,144,232,0.06)';
+      ctx.fillRect(lasso.x1, lasso.y1, lasso.x2 - lasso.x1, lasso.y2 - lasso.y1);
+      ctx.restore();
     }
   }
 
-  const roles = resources.filter(r => r.resource_type.includes('iamrole'));
-  const users = resources.filter(r => r.resource_type.includes('iamuser'));
-  for (const user of users) {
-    for (const role of roles.slice(0, 4)) {
-      if (user.account_id === role.account_id) {
-        edges.push({
-          id: `${user.id}-${role.id}`,
-          source: user.id, target: role.id,
-          type: 'smoothstep',
-          style: { stroke: '#f97316', strokeWidth: 1.2, opacity: 0.45 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: '#f97316', width: 10, height: 10 },
+  function drawMinimap(nodes: GraphNode[]) {
+    const mm = mmRef.current;
+    if (!mm) return;
+    const mw = 100, mh = 70;
+    const ctx = mm.getContext('2d')!;
+    ctx.clearRect(0, 0, mw, mh);
+    const dark = isDarkRef.current;
+    ctx.fillStyle = dark ? 'rgba(20,23,32,0.85)' : 'rgba(240,241,245,0.92)';
+    ctx.fillRect(0, 0, mw, mh);
+
+    if (!nodes.length) return;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    nodes.forEach(n => {
+      if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x;
+      if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y;
+    });
+    const ww = maxX - minX || 1, wh = maxY - minY || 1;
+    const sc = Math.min(mw / ww, mh / wh) * 0.82;
+    const ox = (mw - ww * sc) / 2, oy = (mh - wh * sc) / 2;
+
+    nodes.forEach(n => {
+      const px = ox + (n.x - minX) * sc, py = oy + (n.y - minY) * sc;
+      ctx.beginPath();
+      ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = n.color + '90';
+      ctx.fill();
+    });
+
+    const { W, H } = getCanvasSize();
+    const t = transformRef.current;
+    const vx = (-t.x / t.scale - minX) * sc + ox;
+    const vy = (-t.y / t.scale - minY) * sc + oy;
+    const vw = (W / t.scale) * sc, vh = (H / t.scale) * sc;
+    ctx.strokeStyle = 'rgba(74,144,232,0.55)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(vx, vy, vw, vh);
+  }
+
+  function resetView() {
+    const graph = graphRef.current;
+    const { W, H } = getCanvasSize();
+    if (!graph || !W || !H) return;
+    const vis = graph.nodes.filter(n => !n.hidden);
+    if (!vis.length) return;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    vis.forEach(n => {
+      if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x;
+      if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y;
+    });
+    const pad = 60;
+    const ww = maxX - minX + pad * 2, wh = maxY - minY + pad * 2;
+    const scale = Math.min(W / ww, H / wh, 2);
+    transformRef.current = {
+      scale,
+      x: W / 2 - (minX + (maxX - minX) / 2) * scale,
+      y: H / 2 - (minY + (maxY - minY) / 2) * scale,
+    };
+    drawFrame();
+  }
+
+  function zoom(factor: number) {
+    const { W, H } = getCanvasSize();
+    const t = transformRef.current;
+    const newScale = Math.max(0.08, Math.min(6, t.scale * factor));
+    transformRef.current = {
+      scale: newScale,
+      x: W / 2 - (W / 2 - t.x) * (newScale / t.scale),
+      y: H / 2 - (H / 2 - t.y) * (newScale / t.scale),
+    };
+    drawFrame();
+  }
+
+  function toggleLayout() {
+    const graph = graphRef.current;
+    if (!graph) return;
+    const cx = 900, cy = 550, clusterR = 380;
+    const types = [...new Set(graph.nodes.map(n => n.typeId))];
+    types.forEach((tid, ti) => {
+      const angle = (ti / types.length) * Math.PI * 2;
+      const tx = cx + Math.cos(angle) * clusterR;
+      const ty = cy + Math.sin(angle) * clusterR;
+      const typeNodes = graph.nodes.filter(n => n.typeId === tid);
+      typeNodes.forEach((n, i) => {
+        const a = (i / typeNodes.length) * Math.PI * 2;
+        const spread = 60 + Math.min(typeNodes.length, 50) * 2.5;
+        n.x = tx + Math.cos(a) * spread;
+        n.y = ty + Math.sin(a) * spread;
+      });
+    });
+    resetView();
+  }
+
+  // Mouse events — pan, node drag, lasso select, group drag
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const wp = sw(mx, my);
+      const graph = graphRef.current;
+
+      // Check if clicking on a node
+      let hitNode: GraphNode | null = null;
+      let hitIdx = -1;
+      if (graph) {
+        graph.nodes.forEach((n, i) => {
+          if (n.hidden) return;
+          const d = Math.hypot(n.x - wp.x, n.y - wp.y);
+          if (d < (n.r + 6) / transformRef.current.scale) { hitNode = n; hitIdx = i; }
         });
       }
-    }
-  }
 
-  const publicResources = resources.filter(r => r.is_public);
-  if (publicResources.length > 0) {
-    nodes.push({
-      id: '__internet__', type: 'asset',
-      position: { x: -280, y: 60 },
-      data: {
-        id: '__internet__', name: 'Internet', resource_type: 'internet',
-        region: '', is_public: false, environment: 'unknown',
-        provider: 'aws', account_id: '', organization_id: '',
-        cloud_resource_id: '', tags: {}, first_seen_at: null, last_seen_at: null,
-      },
-    });
-    for (const r of publicResources) {
-      edges.push({
-        id: `inet-${r.id}`,
-        source: '__internet__', target: r.id,
-        type: 'smoothstep', animated: true,
-        style: { stroke: '#f85149', strokeWidth: 1.5, opacity: 0.65 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#f85149', width: 10, height: 10 },
+      if (hitNode) {
+        // If node is in group, start group drag
+        if (selectedGroupRef.current.has(hitIdx)) {
+          groupDragRef.current = true;
+        } else {
+          // Start dragging this single node
+          draggingNodeRef.current = hitNode;
+          selectedGroupRef.current.clear();
+        }
+        lastMouseRef.current = { x: e.clientX, y: e.clientY };
+      } else {
+        // Start lasso or pan
+        if (e.shiftKey) {
+          // Shift+drag = lasso
+          lassoActiveRef.current = true;
+          lassoRef.current = { x1: mx, y1: my, x2: mx, y2: my };
+        } else {
+          // Regular drag = pan canvas
+          draggingRef.current = true;
+          selectedGroupRef.current.clear();
+        }
+        lastMouseRef.current = { x: e.clientX, y: e.clientY };
+      }
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      // Finish lasso — select nodes inside rect
+      if (lassoActiveRef.current && lassoRef.current) {
+        const graph = graphRef.current;
+        if (graph) {
+          const { x1, y1, x2, y2 } = lassoRef.current;
+          const lx1 = Math.min(x1, x2), lx2 = Math.max(x1, x2);
+          const ly1 = Math.min(y1, y2), ly2 = Math.max(y1, y2);
+          const newGroup = new Set<number>();
+          graph.nodes.forEach((n, i) => {
+            if (n.hidden) return;
+            const p = ws(n.x, n.y);
+            if (p.x >= lx1 && p.x <= lx2 && p.y >= ly1 && p.y <= ly2) newGroup.add(i);
+          });
+          selectedGroupRef.current = newGroup;
+        }
+        lassoRef.current = null;
+        lassoActiveRef.current = false;
+      }
+      draggingRef.current = false;
+      draggingNodeRef.current = null;
+      groupDragRef.current = false;
+      drawFrame();
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - lastMouseRef.current.x;
+      const dy = e.clientY - lastMouseRef.current.y;
+
+      // Pan canvas
+      if (draggingRef.current) {
+        const t = transformRef.current;
+        t.x += dx; t.y += dy;
+        lastMouseRef.current = { x: e.clientX, y: e.clientY };
+        drawFrame();
+        return;
+      }
+
+      // Drag single node
+      if (draggingNodeRef.current) {
+        const n = draggingNodeRef.current;
+        n.x += dx / transformRef.current.scale;
+        n.y += dy / transformRef.current.scale;
+        lastMouseRef.current = { x: e.clientX, y: e.clientY };
+        drawFrame();
+        return;
+      }
+
+      // Drag group
+      if (groupDragRef.current) {
+        const graph = graphRef.current;
+        if (graph) {
+          const sc = transformRef.current.scale;
+          selectedGroupRef.current.forEach(i => {
+            graph.nodes[i].x += dx / sc;
+            graph.nodes[i].y += dy / sc;
+          });
+        }
+        lastMouseRef.current = { x: e.clientX, y: e.clientY };
+        drawFrame();
+        return;
+      }
+
+      // Update lasso rect
+      if (lassoActiveRef.current && lassoRef.current) {
+        const rect = canvas.getBoundingClientRect();
+        lassoRef.current.x2 = e.clientX - rect.left;
+        lassoRef.current.y2 = e.clientY - rect.top;
+        drawFrame();
+        return;
+      }
+
+      // Hover detection
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const wp = sw(mx, my);
+      const graph = graphRef.current;
+      if (!graph) return;
+
+      let found: GraphNode | null = null, bestDist = Infinity;
+      graph.nodes.forEach(n => {
+        if (n.hidden) return;
+        const d = Math.hypot(n.x - wp.x, n.y - wp.y);
+        const threshold = (n.r + 5) / transformRef.current.scale;
+        if (d < threshold && d < bestDist) { bestDist = d; found = n; }
       });
-    }
+
+      if (found !== hoveredRef.current) { hoveredRef.current = found; drawFrame(); }
+
+      const tt = tooltipRef.current;
+      if (!tt) return;
+      if (found) {
+        tt.classList.add('show');
+        tt.style.left = (mx + 16) + 'px';
+        tt.style.top = (my - 10) + 'px';
+        (tt.querySelector('#ag-tt-name') as HTMLElement).textContent = found.label;
+        (tt.querySelector('#ag-tt-type') as HTMLElement).textContent = found.typeLabel;
+        (tt.querySelector('#ag-tt-region') as HTMLElement).textContent = found.region;
+        (tt.querySelector('#ag-tt-edges') as HTMLElement).textContent = String(found.edgeCount);
+        const riskEl = tt.querySelector('#ag-tt-risk') as HTMLElement;
+        riskEl.textContent = found.riskLvl.charAt(0).toUpperCase() + found.riskLvl.slice(1);
+        riskEl.className = 'ag-tt-risk ag-risk-' + found.riskLvl;
+      } else {
+        tt.classList.remove('show');
+      }
+    };
+
+    const onClick = (e: MouseEvent) => {
+      if (Math.hypot(e.movementX, e.movementY) > 4) return;
+      if (lassoActiveRef.current) return;
+      const newSel = hoveredRef.current === selectedRef.current ? null : hoveredRef.current;
+      selectedRef.current = newSel;
+      setSelected(newSel);
+      drawFrame();
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const factor = e.deltaY > 0 ? 0.85 : 1.18;
+      const t = transformRef.current;
+      const newScale = Math.max(0.08, Math.min(6, t.scale * factor));
+      transformRef.current = {
+        scale: newScale,
+        x: mx - (mx - t.x) * (newScale / t.scale),
+        y: my - (my - t.y) * (newScale / t.scale),
+      };
+      drawFrame();
+    };
+
+    // Cursor style
+    const onMouseMoveForCursor = (e: MouseEvent) => {
+      if (draggingNodeRef.current || groupDragRef.current) {
+        canvas.style.cursor = 'grabbing';
+      } else if (hoveredRef.current) {
+        canvas.style.cursor = 'pointer';
+      } else if (e.shiftKey) {
+        canvas.style.cursor = 'crosshair';
+      } else {
+        canvas.style.cursor = draggingRef.current ? 'grabbing' : 'grab';
+      }
+    };
+
+    canvas.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mousemove', onMouseMoveForCursor);
+    canvas.addEventListener('click', onClick);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mousemove', onMouseMoveForCursor);
+      canvas.removeEventListener('click', onClick);
+      canvas.removeEventListener('wheel', onWheel);
+    };
+  }, []); // eslint-disable-line
+
+  function handleFilter(q: string) {
+    filterRef.current = q.toLowerCase();
+    setFilterText(q);
+    const graph = graphRef.current;
+    if (!graph) return;
+    graph.nodes.forEach(n => {
+      n.hidden = hiddenTypesRef.current.has(n.typeId) ||
+        (filterRef.current !== '' &&
+          !n.label.toLowerCase().includes(filterRef.current) &&
+          !n.typeLabel.toLowerCase().includes(filterRef.current));
+    });
+    drawFrame();
   }
 
-  return { nodes, edges };
-}
-
-function LegendPanel({ items }) {
-  const [open, setOpen] = React.useState(false);
-  return React.createElement('div', null,
-    React.createElement('button', {
-      onClick: () => setOpen(o => !o),
-      className: 'legend-toggle-btn',
-    }, '● Legend ', React.createElement('span', { style: { transform: open ? 'rotate(180deg)' : 'none', display: 'inline-block', transition: 'transform 0.2s' } }, '▾')),
-    open && React.createElement('div', { className: 'legend-content' },
-      React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 18px', marginBottom: '8px' } },
-        items.map(({ key, accent, label }) =>
-          React.createElement('div', { key, style: { display: 'flex', alignItems: 'center', gap: '6px' } },
-            React.createElement('span', { style: { width: '7px', height: '7px', borderRadius: '50%', background: accent, flexShrink: 0 } }),
-            React.createElement('span', { style: { color: '#8b949e', fontSize: '9px' } }, label)
-          )
-        )
-      ),
-      React.createElement('div', { style: { borderTop: '1px solid #21262d', paddingTop: '8px', display: 'flex', gap: '12px' } },
-        [['#f85149', 'High'], ['#f97316', 'Med'], ['#3fb950', 'Low']].map(([c, l]) =>
-          React.createElement('div', { key: l, style: { display: 'flex', alignItems: 'center', gap: '5px' } },
-            React.createElement('span', { style: { width: '7px', height: '7px', borderRadius: '50%', background: c } }),
-            React.createElement('span', { style: { color: '#8b949e', fontSize: '9px' } }, l)
-          )
-        )
-      )
-    )
-  );
-}
-
-function AssetGraphInner({ resources, loading }) {
-  const { nodes: init_n, edges: init_e } = React.useMemo(() => buildGraph(resources), []);
-  const [nodes, , onNodesChange] = useNodesState(init_n);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(init_e);
-  const [selected, setSelected] = React.useState(null);
-  const { fitView } = useReactFlow();
-
-  React.useEffect(() => {
-    const t = setTimeout(() => fitView({ padding: 0.1, duration: 500 }), 120);
-    return () => clearTimeout(t);
-  }, [fitView]);
-
-  const onNodeClick = React.useCallback((_, node) => {
-    if (node.id === '__internet__') { setSelected(null); return; }
-    const r = resources.find(r => r.id === node.id) || null;
-    setSelected(r);
-    setEdges(eds => eds.map(e => ({
-      ...e,
-      style: { ...e.style, opacity: e.source === node.id || e.target === node.id ? 1 : 0.06 },
-    })));
-  }, [resources, setEdges]);
-
-  const onPaneClick = React.useCallback(() => {
-    setSelected(null);
-    setEdges(eds => eds.map(e => ({ ...e, style: { ...e.style, opacity: 0.5 } })));
-  }, [setEdges]);
+  function handleToggleType(tid: string) {
+    const next = new Set(hiddenTypesRef.current);
+    if (next.has(tid)) next.delete(tid); else next.add(tid);
+    hiddenTypesRef.current = next;
+    setHiddenTypes(new Set(next));
+    const graph = graphRef.current;
+    if (!graph) return;
+    graph.nodes.forEach(n => {
+      n.hidden = next.has(n.typeId) ||
+        (filterRef.current !== '' &&
+          !n.label.toLowerCase().includes(filterRef.current) &&
+          !n.typeLabel.toLowerCase().includes(filterRef.current));
+    });
+    drawFrame();
+  }
 
   if (loading) {
-    return React.createElement('div', { className: 'graph-loading' },
-      React.createElement('div', { className: 'loading-spinner' }),
-      React.createElement('p', { style: { color: '#8b949e', fontSize: '13px' } }, 'Building asset graph…')
+    return (
+      <div className={`ag-root ${isDark ? 'ag-dark' : 'ag-light'}`}>
+        <div className="ag-loading">
+          <div className="ag-spinner" />
+          <p style={{ color: '#6b7194', fontSize: 12 }}>Building relationship graph…</p>
+        </div>
+      </div>
     );
   }
 
-  if (resources.length === 0) {
-    return React.createElement('div', { className: 'graph-empty' },
-      React.createElement('p', { style: { color: '#8b949e', fontSize: '13px' } }, 'No assets to visualize.')
+  if (!resources.length) {
+    return (
+      <div className={`ag-root ${isDark ? 'ag-dark' : 'ag-light'}`}>
+        <div className="ag-empty">
+          <div style={{ fontSize: 40, marginBottom: 12 }}>◈</div>
+          <div style={{ color: '#e2e4ef', fontSize: 13, fontWeight: 500 }}>No resources discovered</div>
+          <div style={{ color: '#6b7194', fontSize: 11, marginTop: 6 }}>Connect a cloud account and run a sync.</div>
+        </div>
+      </div>
     );
   }
 
-  const presentKeys = [...new Set(resources.map(r => r.resource_type.split('::').pop()?.toLowerCase().replace(/_/g, '') || ''))];
-  const legendItems = presentKeys.map(k => ({ key: k, ...getPalette(k) })).filter(e => e.key !== 'internet').slice(0, 10);
+  return (
+    <div className={`ag-root ${isDark ? 'ag-dark' : 'ag-light'}`}>
+      {/* Header */}
+      <div className="ag-header">
+        <span className="ag-header-title">Asset Inventory</span>
+        <span className="ag-header-count">{resources.length.toLocaleString()}</span>
+        <span className="ag-badge-live">● LIVE</span>
+        <span className="ag-header-spacer" />
+        <button className="ag-btn" onClick={resetView}>Fit view</button>
+        <button className="ag-btn" onClick={toggleLayout}>⟳ Layout</button>
+        {onSwitchToTable && (
+          <button className="ag-btn ag-btn-primary" onClick={onSwitchToTable}>
+            ☰ Table view
+          </button>
+        )}
+      </div>
 
-  return React.createElement('div', { className: 'asset-graph-container' },
-    React.createElement(ReactFlow, {
-      nodes,
-      edges,
-      onNodesChange,
-      onEdgesChange,
-      onNodeClick,
-      onPaneClick,
-      nodeTypes,
-      fitView: true,
-      fitViewOptions: { padding: 0.1 },
-      minZoom: 0.04,
-      maxZoom: 3,
-      proOptions: { hideAttribution: true },
-      defaultEdgeOptions: { style: { opacity: 0.5 } },
-      nodesDraggable: true,
-      nodesConnectable: false,
-    },
-      React.createElement(Background, { variant: BackgroundVariant.Dots, gap: 30, size: 1, color: 'rgba(139,148,158,0.05)' }),
-      React.createElement(Controls, { showInteractive: false }),
-      React.createElement(MiniMap, {
-        nodeColor: (node) => {
-          if (node.id === '__internet__') return '#f85149';
-          const r = resources.find(r => r.id === node.id);
-          return r ? getPalette(r.resource_type).accent : '#484f58';
-        },
-        maskColor: 'rgba(13,17,23,0.65)',
-        nodeStrokeWidth: 0,
-        pannable: true,
-        zoomable: true,
-      }),
-      React.createElement(Panel, { position: 'top-right' },
-        React.createElement('button', {
-          onClick: () => fitView({ padding: 0.1, duration: 500 }),
-          className: 'fit-view-btn',
-        }, '⊞ Fit View')
-      ),
-      React.createElement(Panel, { position: 'top-left' },
-        React.createElement(LegendPanel, { items: legendItems })
-      )
-    ),
-    selected && React.createElement('div', { className: 'detail-panel' },
-      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '12px' } },
-        React.createElement('div', null,
-          React.createElement('div', { style: { color: '#e6edf3', fontSize: '13px', fontWeight: 600 } }, selected.name),
-          React.createElement('div', { style: { color: '#6e7681', fontSize: '10px', marginTop: '3px' } }, getPalette(selected.resource_type).label)
-        ),
-        React.createElement('button', {
-          onClick: () => setSelected(null),
-          style: { color: '#484f58', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }
-        }, '✕')
-      ),
-      [
-        { label: 'Provider', value: selected.provider.toUpperCase() },
-        { label: 'Region', value: selected.region || 'global' },
-        { label: 'Environment', value: selected.environment },
-        { label: 'Exposure', value: selected.is_public ? '⚠ Public' : 'Private', danger: selected.is_public },
-        { label: 'Risk', value: String(deriveRisk(selected)) },
-      ].map(({ label, value, danger }) =>
-        React.createElement('div', {
-          key: label,
-          style: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }
-        },
-          React.createElement('span', { style: { color: '#6e7681', fontSize: '11px' } }, label),
-          React.createElement('span', {
-            style: {
-              color: danger ? '#f85149' : '#cdd9e5',
-              fontSize: '11px', fontWeight: 500,
-            }
-          }, value)
-        )
-      )
-    )
+      {/* Body — sidebar LEFT, canvas RIGHT */}
+      <div className="ag-body">
+        {/* Left collapsible sidebar */}
+        <div className={`ag-sidebar ${sidebarOpen ? 'ag-sb-expanded' : 'ag-sb-collapsed'}`}>
+          {/* Toggle button — right edge of sidebar */}
+          <div className="ag-sb-toggle" onClick={() => setSidebarOpen(o => !o)}
+            title={sidebarOpen ? 'Collapse panel' : 'Expand panel'}>
+            <span className="ag-sb-chevron" />
+          </div>
+
+          {/* Icon strip — visible when collapsed */}
+          {!sidebarOpen && (
+            <div className="ag-sb-icons">
+              <button className="ag-sb-icon-btn" title="Search" onClick={() => setSidebarOpen(true)}>⌕</button>
+              <button className="ag-sb-icon-btn" title="Stats"  onClick={() => setSidebarOpen(true)}>◈</button>
+              <button className="ag-sb-icon-btn" title="Types"  onClick={() => setSidebarOpen(true)}>◆</button>
+              <button className="ag-sb-icon-btn" title="Risk"   onClick={() => setSidebarOpen(true)}>⚠</button>
+            </div>
+          )}
+
+          {/* Full content — visible when expanded */}
+          <div className="ag-sb-content">
+            <Sidebar
+              stats={stats}
+              presentTypes={presentTypes}
+              selectedNode={selected}
+              onClose={() => { selectedRef.current = null; setSelected(null); drawFrame(); }}
+              onFilter={handleFilter}
+              filterText={filterText}
+              onToggleType={handleToggleType}
+              hiddenTypes={hiddenTypes}
+              isDark={isDark}
+            />
+          </div>
+        </div>
+
+        {/* Canvas */}
+        <div className="ag-canvas-wrap" ref={wrapRef}>
+          <canvas id="ag-graph" ref={canvasRef} />
+
+          {/* Tooltip */}
+          <div className="ag-tooltip" ref={tooltipRef}>
+            <div className="ag-tt-name" id="ag-tt-name">—</div>
+            <div className="ag-tt-row"><span>Type</span><span className="ag-tt-val" id="ag-tt-type">—</span></div>
+            <div className="ag-tt-row"><span>Region</span><span className="ag-tt-val" id="ag-tt-region">—</span></div>
+            <div className="ag-tt-row"><span>Edges</span><span className="ag-tt-val" id="ag-tt-edges">—</span></div>
+            <div><span className="ag-tt-risk" id="ag-tt-risk">—</span></div>
+          </div>
+
+          {/* Zoom controls */}
+          <div className="ag-controls">
+            <button className="ag-ctrl-btn" onClick={() => zoom(1.25)} title="Zoom in">+</button>
+            <button className="ag-ctrl-btn" onClick={() => zoom(0.8)} title="Zoom out">−</button>
+            <button className="ag-ctrl-btn" onClick={resetView} title="Reset">⊡</button>
+          </div>
+
+          {/* Minimap */}
+          <div className="ag-minimap">
+            <canvas id="ag-minimap" ref={mmRef} width={100} height={70} />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="ag-footer">
+        <div className="ag-footer-left">
+          <span className="ag-footer-dot" style={{ background: '#38c472' }} />
+          <span className="ag-footer-text">{stats.connected} connected · {stats.edges} edges · {stats.isolated} isolated</span>
+        </div>
+        <div className="ag-footer-center">
+          <span className="ag-footer-hint">Scroll to zoom · Drag to pan · Click node to inspect · Shift+drag to select group</span>
+        </div>
+        <div className="ag-footer-right">
+          <span className="ag-footer-text">CloudVisor Asset Graph</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
-export function AssetGraph({ resources, loading }) {
-  const graphKey = React.useMemo(() => resources.map(r => r.id).sort().join(','), [resources]);
-  return React.createElement(ReactFlowProvider, null,
-    React.createElement(AssetGraphInner, { key: graphKey, resources, loading })
-  );
+// ─── Export ───────────────────────────────────────────────────────────────────
+export function AssetGraph({ resources, loading, onSwitchToTable }: {
+  resources: any[];
+  loading: boolean;
+  onSwitchToTable?: () => void;
+}) {
+  return <CanvasGraph resources={resources} loading={loading} onSwitchToTable={onSwitchToTable} />;
 }

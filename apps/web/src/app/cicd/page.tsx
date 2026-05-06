@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { AppLayout } from '@/components/layout';
 import { ProtectedRoute } from '@/components/protected-route';
 import { Code, AlertTriangle, Key, Shield, FileCode, Download } from 'lucide-react';

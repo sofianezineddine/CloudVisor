@@ -47,7 +47,13 @@ Environment variables:
 | GET | /internal/graph/stats | Get graph statistics |
 """
 
-from .main import app
-
 __version__ = "1.0.0"
-__all__ = ["app"]
+
+
+def get_app():
+    """Lazy import to avoid triggering app startup at import time."""
+    from .main import app
+    return app
+
+
+__all__ = ["get_app"]

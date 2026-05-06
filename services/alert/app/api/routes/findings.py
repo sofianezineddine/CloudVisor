@@ -96,6 +96,13 @@ async def bulk_update(
     organization_id: str = Depends(get_org_id),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    # Spec: Max 500 findings per bulk operation
+    if len(data.finding_ids) > 500:
+        raise HTTPException(
+            status_code=400,
+            detail="Bulk operations limited to 500 findings per request"
+        )
+    
     finding_service = FindingService(db)
     updated = 0
 
@@ -108,3 +115,91 @@ async def bulk_update(
             pass
 
     return {"updated": updated, "total": len(data.finding_ids)}
+
+
+@router.post("/{finding_id}/suppress")
+async def suppress_finding(
+    finding_id: str,
+    reason: str | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> FindingResponse:
+    """Suppress a finding with reason."""
+    finding_service = FindingService(db)
+    finding = await finding_service.update_finding_status(
+        finding_id, "suppressed", reason=reason
+    )
+    return FindingResponse(**finding)
+
+
+@router.post("/{finding_id}/accept-risk")
+async def accept_risk(
+    finding_id: str,
+    justification: str | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> FindingResponse:
+    """Accept risk for a finding with justification."""
+    finding_service = FindingService(db)
+    finding = await finding_service.update_finding_status(
+        finding_id, "accepted_risk", reason=justification
+    )
+    return FindingResponse(**finding)
+
+
+@router.post("/{finding_id}/acknowledge")
+async def acknowledge_finding(
+    finding_id: str,
+    user_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> FindingResponse:
+    """Acknowledge a finding (for SLA tracking)."""
+    finding_service = FindingService(db)
+    finding = await finding_service.acknowledge_finding(finding_id, user_id or "system")
+    return FindingResponse(**finding)
+
+
+@router.get("/sla-violations")
+async def get_sla_violations(
+    organization_id: str = Depends(get_org_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get findings that have violated SLA targets."""
+    finding_service = FindingService(db)
+    violations = await finding_service.get_sla_violations(organization_id)
+    return {"violations": violations, "total": len(violations)}
+
+
+@router.get("/metrics")
+async def get_metrics(
+    organization_id: str = Depends(get_org_id),
+    redis = Depends(get_redis),
+) -> dict:
+    """Get pre-aggregated metrics from Redis for dashboard."""
+    from app.services.metrics import MetricsService
+    metrics_service = MetricsService(redis)
+    return await metrics_service.get_dashboard_metrics(organization_id)
+
+
+@router.post("/submit")
+async def submit_finding(
+    finding_data: dict,
+    organization_id: str = Depends(get_org_id),
+    db: AsyncSession = Depends(get_db),
+    redis = Depends(get_redis),
+) -> FindingResponse:
+    """
+    Direct REST submission endpoint for CI/CD CLI tools.
+    Accepts finding data and processes it through the same pipeline as Kafka events.
+    """
+    # Ensure organization_id is set
+    finding_data["organization_id"] = organization_id
+    
+    finding_service = FindingService(db, redis)
+    finding = await finding_service.ingest_finding(finding_data)
+    
+    # Send notifications if not suppressed
+    if finding.get("status") == "open":
+        from app.services.notifications import NotificationService
+        notif_service = NotificationService(db, redis)
+        await notif_service.send_notification(finding)
+    
+    return FindingResponse(**finding)

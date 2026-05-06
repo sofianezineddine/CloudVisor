@@ -32,7 +32,7 @@ class NotificationService:
         channels = await self._get_active_channels(organization_id)
 
         for channel in channels:
-            if not self._channel_matches_severity(channel, severity):
+            if not self._channel_matches_filters(channel, finding):
                 continue
 
             await self._send_to_channel(channel, finding)
@@ -51,6 +51,38 @@ class NotificationService:
             return True
         return severity in channel.severity_filter
 
+    def _channel_matches_filters(
+        self, channel: NotificationChannelModel, finding: dict[str, Any]
+    ) -> bool:
+        """Check if finding matches all channel routing filters."""
+        # Severity filter
+        if channel.severity_filter:
+            if finding.get("severity") not in channel.severity_filter:
+                return False
+
+        # Module filter (based on rule_id prefix, e.g., "cspm.", "cwpp.")
+        if channel.module_filter:
+            rule_id = finding.get("rule_id", "")
+            module = rule_id.split(".")[0] if "." in rule_id else ""
+            if module not in channel.module_filter:
+                return False
+
+        # Account filter
+        if channel.account_filter:
+            if finding.get("account_id") not in channel.account_filter:
+                return False
+
+        # Tag filter (finding must have all specified tags)
+        if channel.tag_filter:
+            finding_tags = finding.get("tags", {})
+            if not isinstance(finding_tags, dict):
+                return False
+            for key, value in channel.tag_filter.items():
+                if finding_tags.get(key) != value:
+                    return False
+
+        return True
+
     async def _send_to_channel(
         self, channel: NotificationChannelModel, finding: dict[str, Any]
     ) -> None:
@@ -68,7 +100,7 @@ class NotificationService:
             return
 
         try:
-            # Use the notifier registry for Slack and webhook
+            # Use the notifier registry for all channel types
             notifier = get_notifier(channel.channel_type)
             if notifier:
                 channel_dict = {
@@ -77,55 +109,14 @@ class NotificationService:
                     "config": channel.config,
                 }
                 await notifier.send_with_retry(finding, channel_dict)
-            elif channel.channel_type == "jira":
-                await self._send_jira(channel.config, finding)
-            elif channel.channel_type == "email":
-                await self._send_email(channel.config, finding)
+            else:
+                logger.warning(f"No notifier found for channel type: {channel.channel_type}")
 
             await self._log_notification(channel.id, finding["id"], "sent")
 
         except Exception as e:
             logger.error(f"Failed to send notification: {e}")
             await self._log_notification(channel.id, finding["id"], "failed", str(e))
-
-    async def _send_slack(self, config: dict, finding: dict) -> None:
-        webhook_url = config.get("webhook_url")
-        if not webhook_url:
-            return
-
-        payload = {
-            "text": f":rotating_light: *{finding['severity']}* - {finding['title']}",
-            "blocks": [
-                {"type": "section", "text": {"type": "mrkdwn", "text": f"*{finding['title']}*"}},
-                {
-                    "type": "section",
-                    "fields": [
-                        {"type": "mrkdwn", "text": f"*Severity:*\n{finding['severity']}"},
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Resource:*\n{finding.get('resource_name', 'N/A')}",
-                        },
-                    ],
-                },
-            ],
-        }
-
-        async with httpx.AsyncClient() as client:
-            await client.post(webhook_url, json=payload)
-
-    async def _send_jira(self, config: dict, finding: dict) -> None:
-        logger.info(f"Would create Jira issue for finding: {finding['id']}")
-
-    async def _send_email(self, config: dict, finding: dict) -> None:
-        logger.info(f"Would send email for finding: {finding['id']}")
-
-    async def _send_webhook(self, config: dict, finding: dict) -> None:
-        webhook_url = config.get("url")
-        if not webhook_url:
-            return
-
-        async with httpx.AsyncClient() as client:
-            await client.post(webhook_url, json=finding)
 
     async def _log_notification(
         self, channel_id: str, finding_id: str, status: str, error: str | None = None
@@ -155,6 +146,9 @@ class ChannelService:
         channel_type: str,
         config: dict[str, Any],
         severity_filter: list[str] | None = None,
+        module_filter: list[str] | None = None,
+        account_filter: list[str] | None = None,
+        tag_filter: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         channel = NotificationChannelModel(
             id=str(uuid.uuid4()),
@@ -163,6 +157,9 @@ class ChannelService:
             channel_type=channel_type,
             config=config,
             severity_filter=severity_filter or [],
+            module_filter=module_filter or [],
+            account_filter=account_filter or [],
+            tag_filter=tag_filter or {},
             is_active=True,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
@@ -186,8 +183,12 @@ class ChannelService:
         self,
         channel_id: str,
         name: str | None = None,
+        config: dict[str, Any] | None = None,
         is_active: bool | None = None,
         severity_filter: list[str] | None = None,
+        module_filter: list[str] | None = None,
+        account_filter: list[str] | None = None,
+        tag_filter: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         result = await self._db.execute(
             select(NotificationChannelModel).where(NotificationChannelModel.id == channel_id)
@@ -199,10 +200,18 @@ class ChannelService:
 
         if name:
             channel.name = name
+        if config is not None:
+            channel.config = config
         if is_active is not None:
             channel.is_active = is_active
-        if severity_filter:
+        if severity_filter is not None:
             channel.severity_filter = severity_filter
+        if module_filter is not None:
+            channel.module_filter = module_filter
+        if account_filter is not None:
+            channel.account_filter = account_filter
+        if tag_filter is not None:
+            channel.tag_filter = tag_filter
 
         channel.updated_at = datetime.utcnow()
         await self._db.commit()
@@ -257,6 +266,8 @@ class ChannelService:
             "name": channel.name,
             "channel_type": channel.channel_type,
             "severity_filter": channel.severity_filter,
+            "module_filter": channel.module_filter or [],
+            "account_filter": channel.account_filter or [],
             "is_active": channel.is_active,
             "created_at": channel.created_at.isoformat(),
         }

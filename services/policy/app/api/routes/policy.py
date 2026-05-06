@@ -1,6 +1,7 @@
 """API routes for policy management."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, get_redis, get_policy_settings_cached
@@ -236,3 +237,45 @@ async def dry_run(
     )
 
     return DryRunResponse(**result)
+
+
+# ─── Rule rollback endpoints (spec §3.4) ──────────────────────────────────────
+
+class RollbackRequest(BaseModel):
+    target_version: str
+
+
+@router.get("/rules/custom/{rule_id}/history")
+async def get_rule_history(
+    rule_id: str,
+    organization_id: str = Depends(get_organization_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get version history for a custom rule."""
+    from app.opa import OPAService
+    policy_settings = get_policy_settings_cached()
+    opa_service = OPAService(policy_settings.opa_url)
+    rule_service = RuleManagementService(db, opa_service)
+    history = await rule_service.get_rule_history(rule_id, organization_id)
+    return {"rule_id": rule_id, "history": history}
+
+
+@router.post("/rules/custom/{rule_id}/rollback", response_model=RuleResponse)
+async def rollback_rule(
+    rule_id: str,
+    data: RollbackRequest,
+    organization_id: str = Depends(get_organization_id),
+    db: AsyncSession = Depends(get_db),
+) -> RuleResponse:
+    """Rollback a custom rule to a previous version — spec §3.4."""
+    from app.opa import OPAService
+    policy_settings = get_policy_settings_cached()
+    opa_service = OPAService(policy_settings.opa_url)
+    rule_service = RuleManagementService(db, opa_service)
+    try:
+        rule = await rule_service.rollback_rule(rule_id, organization_id, data.target_version)
+        if not rule:
+            raise HTTPException(status_code=404, detail="Rule not found")
+        return RuleResponse(**rule)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

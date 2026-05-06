@@ -94,6 +94,7 @@ async def init_dependencies(settings: CloudvisorSettings, graph_settings: GraphS
             elasticsearch_client=_elasticsearch_client,
             event_producer=graph_producer,
             db_session_factory=_session_factory,
+            redis_client=_redis_client,
         )
 
         _resource_consumer = ResourceEventConsumer(

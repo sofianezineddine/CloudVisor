@@ -1,8 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { AppLayout } from '@/components/layout';
-import { ProtectedRoute } from '@/components/protected-route';
 import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { CreditCard, Loader2, AlertTriangle, TrendingUp, Package, Cloud, Users } from 'lucide-react';
@@ -65,7 +63,7 @@ function UsageBar({ label, current, max, icon: Icon }: {
   const textColor = pct >= 90 ? 'var(--critical)' : pct >= 70 ? 'var(--warning)' : 'var(--success)';
 
   return (
-    <div className="cv-container p-5">
+    <div className="rounded-lg border p-5" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Icon className="h-4 w-4" style={{ color: 'var(--text-secondary)' }} />
@@ -117,22 +115,22 @@ export default function BillingPage() {
   const tierStyle = TIER_STYLES[info.plan_tier] ?? TIER_STYLES.free;
 
   return (
-    <ProtectedRoute>
-      <AppLayout breadcrumbs={[{ text: 'Home', href: '/console' }, { text: 'Settings' }, { text: 'Billing' }]}>
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-h1" style={{ color: 'var(--text-primary)' }}>Billing</h1>
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                Your current plan and usage
-              </p>
-            </div>
-            <Button disabled className="gap-2 opacity-60 cursor-not-allowed">
-              <TrendingUp className="h-4 w-4" />
-              Upgrade Plan
-            </Button>
-          </div>
+    <>
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>Billing</h1>
+          <Button disabled className="gap-2 opacity-60 cursor-not-allowed">
+            <TrendingUp className="h-4 w-4" />
+            Upgrade Plan
+          </Button>
+        </div>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Your current plan and usage
+        </p>
+      </div>
+
+      <div className="space-y-6">
 
           {isLoading && (
             <div className="flex items-center justify-center py-8">
@@ -148,7 +146,7 @@ export default function BillingPage() {
           )}
 
           {/* Current plan */}
-          <div className="cv-container p-6">
+          <div className="rounded-lg border p-6" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: 'var(--accent-dim)' }}>
@@ -201,7 +199,7 @@ export default function BillingPage() {
 
           {/* Upgrade CTA */}
           {info.plan_tier === 'free' && (
-            <div className="cv-container p-6" style={{ borderColor: 'var(--accent)', backgroundColor: 'var(--accent-dim)' }}>
+            <div className="rounded-lg border p-6" style={{ borderColor: 'var(--accent)', backgroundColor: 'var(--accent-dim)' }}>
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Unlock more with a paid plan</h3>
@@ -217,7 +215,6 @@ export default function BillingPage() {
             </div>
           )}
         </div>
-      </AppLayout>
-    </ProtectedRoute>
+    </>
   );
 }

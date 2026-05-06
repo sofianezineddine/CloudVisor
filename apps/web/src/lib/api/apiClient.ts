@@ -80,6 +80,9 @@ export interface NotificationChannel {
   channel_type: string;
   config: Record<string, unknown>;
   severity_filter: string[];
+  module_filter?: string[];
+  account_filter?: string[];
+  tag_filter?: Record<string, string>;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -281,10 +284,31 @@ export const notificationsAPI = {
     channel_type: string;
     config: Record<string, unknown>;
     severity_filter?: string[];
+    module_filter?: string[];
+    account_filter?: string[];
+    tag_filter?: Record<string, string>;
     is_active?: boolean;
   }): Promise<ApiEnvelope<NotificationChannel>> {
     return apiFetch('/v1/notifications/channels', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateChannel(
+    channelId: string,
+    data: {
+      name?: string;
+      config?: Record<string, unknown>;
+      severity_filter?: string[];
+      module_filter?: string[];
+      account_filter?: string[];
+      tag_filter?: Record<string, string>;
+      is_active?: boolean;
+    }
+  ): Promise<ApiEnvelope<NotificationChannel>> {
+    return apiFetch(`/v1/notifications/channels/${channelId}`, {
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   },

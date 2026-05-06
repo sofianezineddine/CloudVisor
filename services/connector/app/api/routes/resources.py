@@ -22,7 +22,7 @@ async def list_resources(
     search: str | None = Query(default=None),
     is_public: bool | None = Query(default=None),
     environment: str | None = Query(default=None),
-    limit: int = Query(default=100, le=500),
+    limit: int = Query(default=100, le=2000),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
@@ -53,7 +53,8 @@ async def list_resources(
     total_result = await db.execute(count_stmt)
     total = total_result.scalar() or 0
 
-    stmt = stmt.order_by(DiscoveredResourceModel.name).offset(offset).limit(limit)
+    # Order by resource_type first so diverse types are interleaved, then by name
+    stmt = stmt.order_by(DiscoveredResourceModel.resource_type, DiscoveredResourceModel.name).offset(offset).limit(limit)
     result = await db.execute(stmt)
     resources = result.scalars().all()
 

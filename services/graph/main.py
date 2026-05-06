@@ -4,6 +4,12 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from cloudvisor_utils.config import get_settings
 from cloudvisor_utils.logging_utils import configure_logging, get_logger
@@ -21,6 +27,18 @@ from app.core.config import get_graph_settings
 from app.api.routes import assets_router
 
 
+def _setup_tracing(service_name: str, otlp_endpoint: str | None = None) -> None:
+    """Configure OpenTelemetry tracing — Rule 9: observability is not optional."""
+    resource = Resource.create({"service.name": service_name})
+    provider = TracerProvider(resource=resource)
+
+    if otlp_endpoint:
+        exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
+        provider.add_span_processor(BatchSpanProcessor(exporter))
+
+    trace.set_tracer_provider(provider)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     graph_settings = get_graph_settings()
@@ -33,6 +51,15 @@ def create_app() -> FastAPI:
     logger = get_logger("graph")
     logger.info("Starting CloudVisor Graph service")
 
+    # ── OpenTelemetry tracing ─────────────────────────────────────────────────
+    otlp_endpoint = getattr(settings, "otlp_endpoint", None) or getattr(
+        graph_settings, "otlp_endpoint", None
+    )
+    _setup_tracing(
+        service_name=graph_settings.service_name,
+        otlp_endpoint=otlp_endpoint,
+    )
+
     app = FastAPI(
         title="CloudVisor Graph",
         description="Unified Asset Graph & Inventory Service",
@@ -40,6 +67,9 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
     )
+
+    # Instrument FastAPI with OTel (auto-traces every request)
+    FastAPIInstrumentor.instrument_app(app)
 
     app.add_middleware(
         CORSMiddleware,

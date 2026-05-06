@@ -12,29 +12,44 @@ logger = logging.getLogger(__name__)
 # Maps resource_type suffix → list of (target_type_suffix, relationship_type)
 # Used by _resolve_and_create_relationships to auto-wire edges after node upsert.
 RELATIONSHIP_RULES: dict[str, list[tuple[str, str]]] = {
+    # AWS Compute
     "ec2":                  [("subnet", "RUNS_IN"), ("securitygroup", "BELONGS_TO"), ("iamrole", "HAS_ROLE")],
     "instance":             [("subnet", "RUNS_IN"), ("securitygroup", "BELONGS_TO"), ("iamrole", "HAS_ROLE")],
+    # Networking
     "subnet":               [("vpc", "BELONGS_TO")],
+    "subnetwork":           [("network", "BELONGS_TO")],
+    # Azure Compute
     "virtualmachine":       [("virtualnetwork", "RUNS_IN"), ("networksecuritygroup", "BELONGS_TO")],
+    # IAM — spec: IAMUser -[:HAS_ACCESS_TO]-> IAMRole (via group membership + policy)
+    "iamuser":              [("iamrole", "HAS_ACCESS_TO")],
+    # IAM Role — spec: IAMRole -[:ASSUMES]-> IAMRole (cross-account trust)
     "iamrole":              [("iamrole", "ASSUMES")],
+    # Serverless
     "lambdafunction":       [("iamrole", "HAS_ROLE"), ("rdsinstance", "CONNECTS_TO")],
-    "ekscluster":           [("vpc", "RUNS_IN")],
+    "cloudfunction":        [("serviceaccount", "HAS_ROLE")],
+    # Kubernetes — spec: EKSCluster -[:RUNS_IN]-> VPC, EKSCluster -[:CONTAINS]-> NodeGroup
+    "ekscluster":           [("vpc", "RUNS_IN"), ("nodegroup", "CONTAINS")],
+    "akskubernetesservice": [("virtualnetwork", "RUNS_IN")],
     "kubernetesservice":    [("virtualnetwork", "RUNS_IN")],
     "gkecluster":           [("network", "RUNS_IN")],
     "okecluster":           [("vcn", "RUNS_IN")],
-    "nodegroup":            [("ec2", "RUNS_ON")],
-    "s3bucket":             [],  # IAM roles reference S3 via policy analysis
+    # spec: NodeGroup -[:RUNS_ON]-> EC2Instance
+    "nodegroup":            [("ec2", "RUNS_ON"), ("instance", "RUNS_ON")],
+    # Storage — IAM roles reference S3 via policy analysis (handled separately)
+    "s3bucket":             [],
     "bucket":               [],
 }
 
 # Flat lookup used by tests: resource_type → list of relationship type strings
 RELATIONSHIP_TYPES: dict[str, list[str]] = {
-    "EC2":          ["RUNS_IN", "BELONGS_TO", "HAS_ROLE"],
-    "S3Bucket":     ["CONTAINS"],
-    "IAMRole":      ["HAS_ACCESS_TO", "ASSUMES"],
-    "Lambda":       ["HAS_ROLE", "CONNECTS_TO"],
-    "EKSCluster":   ["RUNS_IN", "CONTAINS"],
-    "Subnet":       ["BELONGS_TO"],
+    "EC2":           ["RUNS_IN", "BELONGS_TO", "HAS_ROLE"],
+    "S3Bucket":      ["CONTAINS"],
+    "IAMRole":       ["HAS_ACCESS_TO", "ASSUMES"],
+    "IAMUser":       ["HAS_ACCESS_TO"],
+    "Lambda":        ["HAS_ROLE", "CONNECTS_TO"],
+    "EKSCluster":    ["RUNS_IN", "CONTAINS"],
+    "NodeGroup":     ["RUNS_ON"],
+    "Subnet":        ["BELONGS_TO"],
     "SecurityGroup": ["ALLOWS_INBOUND_FROM"],
 }
 
@@ -76,10 +91,13 @@ class AssetNode:
             "tags": json.dumps(self.tags) if self.tags else "{}",
             "organization_id": self.organization_id,
             "is_public": self.is_public,
+            "is_internet_exposed": self.is_public,          # spec alias
+            "has_public_access": self.is_public,             # spec alias
             "environment": self.environment,
             "risk_score": self.risk_score,
             "open_findings_count": self.open_findings_count,
             "contains_pii": self.contains_pii,
+            "contains_sensitive_data": self.contains_pii,   # spec alias
             "is_admin": self.is_admin,
             "is_production": self.environment == "prod",
             "first_seen_at": self.first_seen_at.isoformat(),
@@ -94,17 +112,56 @@ class AssetNode:
 class GraphService:
     """Service for managing the asset graph in Neo4j."""
 
+    # Redis TTL for cached queries (spec: 60 seconds)
+    _CACHE_TTL = 60
+
     def __init__(
         self,
         neo4j_client: Any,
         elasticsearch_client: Any = None,
         event_producer: Any = None,
         db_session_factory: Any = None,
+        redis_client: Any = None,
     ):
         self._neo4j = neo4j_client
         self._es = elasticsearch_client
         self._producer = event_producer
         self._db_session_factory = db_session_factory
+        self._redis = redis_client  # for query result caching (spec §3.2)
+
+    # ─── Redis cache helpers ──────────────────────────────────────────────────
+
+    async def _cache_get(self, key: str) -> Any | None:
+        """Get a cached value from Redis. Returns None if unavailable."""
+        if not self._redis:
+            return None
+        try:
+            import json as _json
+            raw = await self._redis.get(key)
+            return _json.loads(raw) if raw else None
+        except Exception:
+            return None
+
+    async def _cache_set(self, key: str, value: Any, ttl: int | None = None) -> None:
+        """Store a value in Redis with TTL. Silently ignores errors."""
+        if not self._redis:
+            return
+        try:
+            import json as _json
+            await self._redis.setex(key, ttl or self._CACHE_TTL, _json.dumps(value, default=str))
+        except Exception:
+            pass
+
+    async def _cache_invalidate(self, pattern: str) -> None:
+        """Delete all Redis keys matching a pattern."""
+        if not self._redis:
+            return
+        try:
+            keys = await self._redis.keys(pattern)
+            if keys:
+                await self._redis.delete(*keys)
+        except Exception:
+            pass
 
     # ─── Node CRUD ────────────────────────────────────────────────────────────
 
@@ -128,6 +185,10 @@ class GraphService:
 
         if self._es:
             await self._index_asset(asset)
+
+        # Invalidate cached list/stats queries for this org
+        await self._cache_invalidate(f"graph:assets:{asset.organization_id}:*")
+        await self._cache_invalidate(f"graph:stats:{asset.organization_id}:*")
 
         if self._producer:
             await self._producer.emit_asset_created(
@@ -175,6 +236,12 @@ class GraphService:
         if self._db_session_factory:
             await self._create_snapshot(asset, previous_node)
 
+        # Invalidate cached queries for this org
+        await self._cache_invalidate(f"graph:assets:{asset.organization_id}:*")
+        await self._cache_invalidate(f"graph:stats:{asset.organization_id}:*")
+        # Invalidate single-asset cache
+        await self._cache_invalidate(f"graph:asset:{asset.id}")
+
         logger.debug(f"Updated asset node: {asset.id}")
         return result[0]["a"] if result else {}
 
@@ -187,6 +254,12 @@ class GraphService:
 
         if self._es:
             await self._es.delete_document("assets", asset_id)
+
+        # Invalidate all caches for this asset and org
+        await self._cache_invalidate(f"graph:asset:{asset_id}")
+        if org_id:
+            await self._cache_invalidate(f"graph:assets:{org_id}:*")
+            await self._cache_invalidate(f"graph:stats:{org_id}:*")
 
         if self._producer and org_id:
             await self._producer.emit_asset_deleted(
@@ -511,24 +584,59 @@ class GraphService:
         if start_id and end_id:
             return await self._neo4j.find_paths(start_id, end_id, max_hops)
 
-        # Default: internet-exposed → high-risk targets
+        # Default: internet-exposed → high-risk targets (spec query 2 variant)
         query = f"""
         MATCH path = (entry:Asset)-[*1..{max_hops}]->(target:Asset)
         WHERE entry.is_public = true
           AND target.risk_score > 50
           AND entry.id <> target.id
+        WITH path, entry, target, length(path) AS pathLength
         RETURN [n IN nodes(path) | {{
             id: n.id,
             name: n.name,
             resource_type: n.resource_type,
             risk_score: n.risk_score
         }}] AS path_nodes,
-        length(path) AS pathLength
+        pathLength
         ORDER BY pathLength ASC
         LIMIT 10
         """
         result = await self._neo4j.execute_query(query)
         return [r.get("path_nodes", []) for r in result]
+
+    async def find_pii_attack_paths(
+        self, organization_id: str, max_hops: int = 6
+    ) -> list[dict[str, Any]]:
+        """Spec query 2: internet → sensitive database (up to max_hops hops).
+
+        MATCH path = (i:InternetGateway)-[:CONNECTS_TO*1..6]->(db:RDSInstance)
+        WHERE db.contains_pii = true
+        RETURN path, length(path) ORDER BY length(path) ASC LIMIT 10
+        """
+        query = f"""
+        MATCH path = (entry:Asset)-[*1..{max_hops}]->(db:Asset)
+        WHERE entry.organization_id = $org_id
+          AND entry.is_public = true
+          AND (
+            toLower(db.resource_type) CONTAINS 'rds'
+            OR toLower(db.resource_type) CONTAINS 'database'
+            OR toLower(db.resource_type) CONTAINS 'sql'
+          )
+          AND (db.contains_pii = true OR db.contains_sensitive_data = true)
+        WITH path, entry, db, length(path) AS pathLength
+        RETURN [n IN nodes(path) | {{
+            id: n.id,
+            name: n.name,
+            resource_type: n.resource_type,
+            risk_score: n.risk_score,
+            contains_pii: n.contains_pii
+        }}] AS path_nodes,
+        pathLength
+        ORDER BY pathLength ASC
+        LIMIT 10
+        """
+        result = await self._neo4j.execute_query(query, {"org_id": organization_id})
+        return [{"path": r.get("path_nodes", []), "length": r.get("pathLength", 0)} for r in result]
 
     # ─── Spec Cypher queries ──────────────────────────────────────────────────
 
@@ -579,30 +687,51 @@ class GraphService:
         return await self._neo4j.get_stats()
 
     async def get_asset_counts_by_type(self, organization_id: str) -> dict[str, int]:
+        cache_key = f"graph:stats:{organization_id}:by_type"
+        cached = await self._cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         query = """
         MATCH (a:Asset {organization_id: $org_id})
         RETURN a.resource_type AS resource_type, count(a) AS count
         ORDER BY count DESC
         """
         result = await self._neo4j.execute_query(query, {"org_id": organization_id})
-        return {r["resource_type"]: r["count"] for r in result}
+        data = {r["resource_type"]: r["count"] for r in result}
+        await self._cache_set(cache_key, data)
+        return data
 
     async def get_asset_counts_by_provider(self, organization_id: str) -> dict[str, int]:
+        cache_key = f"graph:stats:{organization_id}:by_provider"
+        cached = await self._cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         query = """
         MATCH (a:Asset {organization_id: $org_id})
         RETURN a.provider AS provider, count(a) AS count
         """
         result = await self._neo4j.execute_query(query, {"org_id": organization_id})
-        return {r["provider"]: r["count"] for r in result}
+        data = {r["provider"]: r["count"] for r in result}
+        await self._cache_set(cache_key, data)
+        return data
 
     async def get_public_assets(self, organization_id: str) -> list[dict[str, Any]]:
         """Get all internet-exposed assets."""
+        cache_key = f"graph:assets:{organization_id}:public"
+        cached = await self._cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         query = """
         MATCH (a:Asset {organization_id: $org_id, is_public: true})
         RETURN a ORDER BY a.risk_score DESC LIMIT 100
         """
         result = await self._neo4j.execute_query(query, {"org_id": organization_id})
-        return [r["a"] for r in result]
+        data = [r["a"] for r in result]
+        await self._cache_set(cache_key, data)
+        return data
 
 
 class RiskScoreService:

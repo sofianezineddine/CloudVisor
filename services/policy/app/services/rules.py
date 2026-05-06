@@ -134,8 +134,10 @@ class RuleManagementService:
         description: str | None = None,
         remediation: str | None = None,
         compliance_mapping: list[dict] | None = None,
+        changed_by: str | None = None,
+        change_reason: str | None = None,
     ) -> dict[str, Any] | None:
-        """Update a custom rule."""
+        """Update a custom rule — saves previous version to history for rollback."""
         result = await self._db.execute(
             select(RuleModel).where(
                 RuleModel.rule_id == rule_id,
@@ -152,6 +154,27 @@ class RuleManagementService:
             validation = await self._opa.validate_rego(rego_code)
             if not validation.get("valid"):
                 raise ValueError(f"Invalid Rego: {validation.get('error')}")
+
+        # ── Save current version to history before overwriting ────────────────
+        from ..models.policy import RuleVersionHistoryModel
+        history = RuleVersionHistoryModel(
+            id=str(uuid.uuid4()),
+            rule_id=rule.rule_id,
+            organization_id=rule.organization_id,
+            version=rule.version,
+            rego_code=rule.rego_code,
+            title=rule.title,
+            description=rule.description,
+            severity=rule.severity,
+            remediation=rule.remediation,
+            compliance_mapping=rule.compliance_mapping or [],
+            changed_by=changed_by,
+            changed_at=datetime.utcnow(),
+            change_reason=change_reason,
+        )
+        self._db.add(history)
+
+        if rego_code:
             rule.rego_code = rego_code
             rule.version = self._increment_version(rule.version)
 
@@ -173,6 +196,65 @@ class RuleManagementService:
         await self._opa.load_policy(policy_name, rule.rego_code, metadata)
 
         return self._rule_to_dict(rule)
+
+    async def rollback_rule(
+        self,
+        rule_id: str,
+        organization_id: str,
+        target_version: str,
+    ) -> dict[str, Any] | None:
+        """Rollback a custom rule to a previous version — spec §3.4."""
+        from ..models.policy import RuleVersionHistoryModel
+
+        # Find the target version in history
+        hist_result = await self._db.execute(
+            select(RuleVersionHistoryModel).where(
+                RuleVersionHistoryModel.rule_id == rule_id,
+                RuleVersionHistoryModel.organization_id == organization_id,
+                RuleVersionHistoryModel.version == target_version,
+            ).order_by(RuleVersionHistoryModel.changed_at.desc()).limit(1)
+        )
+        history = hist_result.scalar_one_or_none()
+        if not history:
+            raise ValueError(f"Version {target_version} not found in history for rule {rule_id}")
+
+        # Apply the rollback as a new update (preserves current as history)
+        return await self.update_custom_rule(
+            rule_id=rule_id,
+            organization_id=organization_id,
+            rego_code=history.rego_code,
+            title=history.title,
+            description=history.description,
+            remediation=history.remediation,
+            compliance_mapping=history.compliance_mapping,
+            changed_by="system",
+            change_reason=f"Rollback to version {target_version}",
+        )
+
+    async def get_rule_history(
+        self,
+        rule_id: str,
+        organization_id: str,
+    ) -> list[dict[str, Any]]:
+        """Get version history for a rule."""
+        from ..models.policy import RuleVersionHistoryModel
+
+        result = await self._db.execute(
+            select(RuleVersionHistoryModel).where(
+                RuleVersionHistoryModel.rule_id == rule_id,
+                RuleVersionHistoryModel.organization_id == organization_id,
+            ).order_by(RuleVersionHistoryModel.changed_at.desc())
+        )
+        history = result.scalars().all()
+        return [
+            {
+                "version": h.version,
+                "changed_at": h.changed_at.isoformat(),
+                "changed_by": h.changed_by,
+                "change_reason": h.change_reason,
+            }
+            for h in history
+        ]
 
     async def delete_custom_rule(
         self,

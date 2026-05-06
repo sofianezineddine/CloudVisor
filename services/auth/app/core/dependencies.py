@@ -22,6 +22,7 @@ _engine: object | None = None
 _session_factory: object | None = None
 _kafka_producer: object | None = None
 _session_cleanup_task: asyncio.Task | None = None
+_audit_retention_service: object | None = None  # Fix 3: audit log retention
 
 
 async def init_dependencies(settings: CloudvisorSettings, auth_settings: AuthSettings) -> None:
@@ -105,6 +106,15 @@ async def init_dependencies(settings: CloudvisorSettings, auth_settings: AuthSet
 
     # Start background session cleanup task
     _session_cleanup_task = asyncio.create_task(_session_cleanup_loop())
+
+    # Fix 3: Start audit log retention job (spec §3.3: 365 days minimum)
+    from ..services.audit_retention import AuditRetentionService
+    _audit_retention_service = AuditRetentionService(
+        session_factory=_session_factory,
+        retention_days=auth_settings.audit_log_retention_days,
+    )
+    _audit_retention_service.start()
+
     logger.info("Auth service dependencies initialized")
 
 
@@ -149,7 +159,7 @@ async def _cleanup_expired_sessions() -> None:
 
 async def shutdown_dependencies() -> None:
     """Clean up dependencies."""
-    global _redis_client, _engine, _kafka_producer, _session_cleanup_task
+    global _redis_client, _engine, _kafka_producer, _session_cleanup_task, _audit_retention_service
 
     if _session_cleanup_task:
         _session_cleanup_task.cancel()
@@ -158,6 +168,11 @@ async def shutdown_dependencies() -> None:
         except asyncio.CancelledError:
             pass
         _session_cleanup_task = None
+
+    # Stop audit retention job
+    if _audit_retention_service:
+        await _audit_retention_service.stop()
+        _audit_retention_service = None
 
     if _kafka_producer:
         await _kafka_producer.stop()

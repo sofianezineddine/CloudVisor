@@ -20,7 +20,18 @@ class AuthSettings(BaseSettings):
 
     service_name: str = Field(default="auth")
     secret_key: str = Field(default="change-me-in-production-min-32-chars!")
-    algorithm: str = Field(default="HS256")
+
+    # ── JWT algorithm — spec §3.3 requires RS256 ─────────────────────────────
+    # Set algorithm=RS256 and provide rsa_private_key / rsa_public_key in .env
+    # to enable asymmetric signing.  Falls back to HS256 when keys are absent.
+    algorithm: str = Field(default="RS256")
+    # PEM-encoded RSA private key (used to sign tokens).
+    # Set AUTH_RSA_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n..." in .env
+    rsa_private_key: str = Field(default="")
+    # PEM-encoded RSA public key (used to verify tokens by other services).
+    # Set AUTH_RSA_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n..." in .env
+    rsa_public_key: str = Field(default="")
+
     access_token_expire_minutes: int = Field(default=15)
     refresh_token_expire_days: int = Field(default=30)
     bcrypt_rounds: int = Field(default=12)
@@ -54,6 +65,36 @@ class AuthSettings(BaseSettings):
 
     saml_enabled: bool = Field(default=False)
     oidc_enabled: bool = Field(default=False)
+
+    # ── Audit log retention — spec §3.3: 365 days minimum ────────────────────
+    audit_log_retention_days: int = Field(default=365)
+
+    @property
+    def effective_private_key(self) -> str | None:
+        """Return RSA private key if configured, else None (triggers HS256 fallback).
+        
+        Handles both real newlines and escaped \\n sequences from .env files.
+        """
+        key = self.rsa_private_key.strip()
+        if not key:
+            return None
+        # Replace escaped \n sequences with real newlines (common in .env files)
+        if '\\n' in key:
+            key = key.replace('\\n', '\n')
+        return key
+
+    @property
+    def effective_public_key(self) -> str | None:
+        """Return RSA public key if configured, else None.
+        
+        Handles both real newlines and escaped \\n sequences from .env files.
+        """
+        key = self.rsa_public_key.strip()
+        if not key:
+            return None
+        if '\\n' in key:
+            key = key.replace('\\n', '\n')
+        return key
 
 
 def get_auth_settings() -> AuthSettings:

@@ -110,7 +110,11 @@ async def logout(
     auth_settings = get_auth_settings_cached()
     auth_service = AuthService(db, auth_settings, redis)
     try:
-        payload = decode_token(token, auth_settings.secret_key)
+        payload = decode_token(
+            token,
+            auth_settings.secret_key,
+            public_key=auth_settings.effective_public_key,
+        )
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -189,7 +193,11 @@ async def get_current_user(
     auth_settings = get_auth_settings_cached()
 
     try:
-        payload = decode_token(authorization.replace("Bearer ", ""), auth_settings.secret_key)
+        payload = decode_token(
+            authorization.replace("Bearer ", ""),
+            auth_settings.secret_key,
+            public_key=auth_settings.effective_public_key,
+        )
         user_id = payload.get("sub")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
@@ -246,7 +254,11 @@ async def update_current_user(
     auth_settings = get_auth_settings_cached()
 
     try:
-        payload = decode_token(authorization.replace("Bearer ", ""), auth_settings.secret_key)
+        payload = decode_token(
+            authorization.replace("Bearer ", ""),
+            auth_settings.secret_key,
+            public_key=auth_settings.effective_public_key,
+        )
         user_id = payload.get("sub")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
@@ -278,7 +290,10 @@ async def change_password(
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
 ) -> dict:
-    """Change current user password."""
+    """Change current user password.
+
+    Spec §3.3: Force-expire all other active sessions after password change.
+    """
     from ...models import UserModel
     from ...services import AuthService
     from ...services.utils import decode_token
@@ -292,8 +307,13 @@ async def change_password(
     auth_settings = get_auth_settings_cached()
 
     try:
-        payload = decode_token(authorization.replace("Bearer ", ""), auth_settings.secret_key)
+        payload = decode_token(
+            authorization.replace("Bearer ", ""),
+            auth_settings.secret_key,
+            public_key=auth_settings.effective_public_key,
+        )
         user_id = payload.get("sub")
+        current_session_id = payload.get("session_id")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -325,7 +345,16 @@ async def change_password(
     user.updated_at = datetime.utcnow()
     await db.commit()
 
-    return {"message": "Password changed successfully"}
+    # ── Spec §3.3: Force-expire ALL other active sessions ────────────────────
+    invalidated = await auth_service.invalidate_all_sessions(
+        user_id=user_id,
+        except_session_id=current_session_id,  # keep the current session alive
+    )
+
+    return {
+        "message": "Password changed successfully",
+        "sessions_invalidated": invalidated,
+    }
 
 
 # ─────────────────────────────────────────────────────────────
