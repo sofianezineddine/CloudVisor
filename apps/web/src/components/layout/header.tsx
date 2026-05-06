@@ -294,6 +294,76 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ─── Service breadcrumb mapping ──────────────────────────────────────────────
+const SERVICE_BREADCRUMBS: Record<string, { service: string; tabs?: Record<string, string> }> = {
+  '/cspm': { 
+    service: 'CSPM',
+    tabs: {
+      'overview': 'Overview',
+      'misconfigurations': 'Misconfigurations', 
+      'compliance': 'Compliance',
+      'policies': 'Policies',
+      'inventory': 'Inventory',
+      'reports': 'Reports',
+      'scan-history': 'Scan History'
+    }
+  },
+  '/cwpp': { service: 'CWPP' },
+  '/ciem': { service: 'CIEM' },
+  '/kspm': { service: 'KSPM' },
+  '/dspm': { service: 'DSPM' },
+  '/cicd': { service: 'CI/CD Security' },
+  '/cdr': { service: 'CDR' },
+  '/aiops': { service: 'AIOps' },
+  '/copilot': { service: 'AI Copilot' },
+  '/findings': { service: 'Findings' },
+  '/incidents': { service: 'Incidents' },
+  '/assets': { service: 'Assets' },
+  '/compliance': { service: 'Compliance' },
+  '/risk-map': { service: 'Risk Explorer' },
+};
+
+// Generate AWS-style breadcrumbs based on pathname
+function generateServiceBreadcrumbs(pathname: string, activeTab?: string): BreadcrumbItem[] {
+  // Check if this is a service page
+  const serviceConfig = SERVICE_BREADCRUMBS[pathname];
+  if (serviceConfig) {
+    const breadcrumbs: BreadcrumbItem[] = [{ text: serviceConfig.service }];
+    
+    // Add tab if specified and exists
+    if (activeTab && serviceConfig.tabs && serviceConfig.tabs[activeTab]) {
+      breadcrumbs.push({ text: serviceConfig.tabs[activeTab] });
+    }
+    
+    return breadcrumbs;
+  }
+  
+  // Check for nested service paths (e.g., /cspm/policies)
+  for (const [basePath, config] of Object.entries(SERVICE_BREADCRUMBS)) {
+    if (pathname.startsWith(basePath + '/')) {
+      const breadcrumbs: BreadcrumbItem[] = [{ text: config.service, href: basePath }];
+      
+      // Extract the sub-path
+      const subPath = pathname.slice(basePath.length + 1);
+      if (config.tabs && config.tabs[subPath]) {
+        breadcrumbs.push({ text: config.tabs[subPath] });
+      } else {
+        // Capitalize the sub-path as fallback
+        breadcrumbs.push({ text: subPath.charAt(0).toUpperCase() + subPath.slice(1) });
+      }
+      
+      return breadcrumbs;
+    }
+  }
+  
+  // Default breadcrumbs for non-service pages
+  if (pathname.startsWith('/settings')) {
+    return [{ text: 'Settings' }];
+  }
+  
+  return [];
+}
+
 // ─── Breadcrumbs ──────────────────────────────────────────────────────────────
 interface BreadcrumbItem { text: string; href?: string; }
 
@@ -424,10 +494,12 @@ export function Header({
   onSidebarToggle,
   breadcrumbs,
   sidebarOpen = false,
+  activeTab,
 }: {
   onSidebarToggle?: () => void;
   breadcrumbs?: BreadcrumbItem[];
   sidebarOpen?: boolean;
+  activeTab?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -710,8 +782,8 @@ export function Header({
                 </div>
                 <div className="py-1">
                   {[
-                    { label: 'Profile', href: '/profile', icon: User },
-                    { label: 'Cloud accounts', href: '/settings', icon: Cloud },
+                    { label: 'Profile', href: '/settings/profile', icon: User },
+                    { label: 'Cloud accounts', href: '/settings/cloud-accounts', icon: Cloud },
                     { label: 'Team & access', href: '/settings/team', icon: Users },
                     { label: 'API keys', href: '/settings/api-keys', icon: KeyRound },
                   ].map(item => (
@@ -805,12 +877,16 @@ export function Header({
 export function Bar3({
   onSidebarToggle,
   breadcrumbs,
+  activeTab,
 }: {
   onSidebarToggle?: () => void;
   breadcrumbs?: BreadcrumbItem[];
+  activeTab?: string;
 }) {
   const pathname = usePathname();
-  const isConsole = pathname === '/console';
+  
+  // Generate service breadcrumbs if none provided
+  const displayBreadcrumbs = breadcrumbs || generateServiceBreadcrumbs(pathname, activeTab);
 
   return (
     <div
@@ -830,10 +906,10 @@ export function Bar3({
           <Menu className="h-4 w-4" />
         </button>
 
-        {/* Breadcrumbs — only show when navigated to a sub-section (breadcrumbs.length > 1) */}
-        {breadcrumbs && breadcrumbs.length > 1 && (
+        {/* Breadcrumbs — AWS style service navigation */}
+        {displayBreadcrumbs && displayBreadcrumbs.length > 0 && (
           <div className="ml-2">
-            <Breadcrumbs items={breadcrumbs} />
+            <Breadcrumbs items={displayBreadcrumbs} />
           </div>
         )}
       </div>

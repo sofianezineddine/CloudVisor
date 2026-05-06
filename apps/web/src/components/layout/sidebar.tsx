@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, X, Search } from 'lucide-react';
 
 // ─── CSPM sub-tabs shown in sidebar when on /cspm ────────────────────────────
 const CSPM_TABS = [
@@ -111,11 +111,25 @@ function CountBadge({ count }: { count: number }) {
 export function Sidebar({ onClose, onMobileClose, cspmActiveTab, onCspmTabChange }: SidebarProps) {
   const pathname = usePathname();
   const [collapsedSections, setCollapsedSections] = React.useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = React.useState('');
   const handleClose = onClose ?? onMobileClose;
 
   const isHome = HOME_PATHS.includes(pathname);
   const isConsole = CONSOLE_PATHS.includes(pathname);
   const isOnCspm = pathname === '/cspm' || pathname.startsWith('/cspm/');
+
+  // Filter navigation items based on search query
+  const filteredSections = React.useMemo(() => {
+    if (!searchQuery.trim()) return navSections;
+    
+    const query = searchQuery.toLowerCase();
+    return navSections.map(section => ({
+      ...section,
+      items: section.items.filter(item => 
+        item.label.toLowerCase().includes(query)
+      )
+    })).filter(section => section.items.length > 0);
+  }, [searchQuery]);
 
   const toggleSection = (id: string) => {
     setCollapsedSections(prev => {
@@ -176,6 +190,29 @@ export function Sidebar({ onClose, onMobileClose, cspmActiveTab, onCspmTabChange
           </button>
         )}
       </div>
+
+      {/* Search Bar - AWS Style */}
+      {!isOnCspm && !isConsole && !isHome && (
+        <div className="border-b px-3 py-2" style={{ borderColor: 'var(--sidebar-border, #d5dbdb)' }}>
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
+            <input
+              type="text"
+              placeholder="Search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded border px-7 py-1.5 text-sm focus:outline-none focus:ring-1"
+              style={{
+                backgroundColor: 'var(--bg-surface)',
+                borderColor: 'var(--border-default)',
+                color: 'var(--text-primary)',
+              }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+              onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-default)')}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-1" style={{ scrollbarWidth: 'none' }}>
@@ -257,7 +294,7 @@ export function Sidebar({ onClose, onMobileClose, cspmActiveTab, onCspmTabChange
             })}
           </ul>
         ) : (
-          navSections.map((section, idx) => {
+          filteredSections.map((section, idx) => {
             const isSectionCollapsed = collapsedSections.has(section.id);
             return (
               <div key={section.id} className={idx > 0 ? 'mt-0.5' : ''}>

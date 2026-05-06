@@ -12,7 +12,7 @@ import {
   History,
   Bell,
   Users,
-  Settings,
+  Cloud,
 } from 'lucide-react';
 
 const settingsSections = [
@@ -30,7 +30,7 @@ const settingsSections = [
     id: 'workspace',
     label: 'Workspace',
     items: [
-      { id: 'cloud-accounts', label: 'Cloud Accounts', href: '/settings/cloud-accounts', icon: Settings },
+      { id: 'cloud-accounts', label: 'Cloud Accounts', href: '/settings/cloud-accounts', icon: Cloud },
       { id: 'team', label: 'Team', href: '/settings/team', icon: Users },
       { id: 'notifications', label: 'Notifications', href: '/settings/notifications', icon: Bell },
     ],
@@ -123,19 +123,6 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
                 }}
               >
                 <div className="p-4">
-                  {/* Header */}
-                  <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Settings className="h-5 w-5" style={{ color: 'var(--accent)' }} />
-                      <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        Settings
-                      </h2>
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                      Manage your account and preferences
-                    </p>
-                  </div>
-
                   {/* Navigation */}
                   <nav className="space-y-6">
                     {settingsSections.map((section) => (

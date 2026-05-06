@@ -171,6 +171,7 @@ export function AppLayout({
         onSidebarToggle={toggleSidebar}
         breadcrumbs={breadcrumbs}
         sidebarOpen={sidebarOpen}
+        activeTab={cspmActiveTab}
       />
 
       {/*  Body row: Q panel + (Bar 3 + Sidebar + Content)  */}
@@ -209,7 +210,7 @@ export function AppLayout({
           }}
         >
           {/* Bar 3 - moves with content */}
-          <Bar3 onSidebarToggle={toggleSidebar} breadcrumbs={breadcrumbs} />
+          <Bar3 onSidebarToggle={toggleSidebar} breadcrumbs={breadcrumbs} activeTab={cspmActiveTab} />
 
           {/* Content row: Sidebar + Main content */}
           <div className="flex flex-1">
