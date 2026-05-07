@@ -21,6 +21,7 @@ class WebhookNotifier(BaseNotifier):
             return False
 
         payload_bytes = json.dumps(finding, default=str).encode("utf-8")
+        # HMAC-SHA256 signature per spec: X-CloudVisor-Signature: sha256=<hmac>
         signature = hmac.new(
             secret.encode("utf-8") if secret else b"",
             payload_bytes,

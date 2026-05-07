@@ -120,6 +120,17 @@ export function useSuppressFinding() {
   });
 }
 
+export function useAcceptRisk() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, justification }: { id: string; justification: string }) =>
+      apiClient.findings.acceptRisk(id, justification),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: findingKeys.all() });
+    },
+  });
+}
+
 export function useBulkUpdateFindings() {
   const queryClient = useQueryClient();
   return useMutation({

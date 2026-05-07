@@ -69,6 +69,21 @@ class ServiceProxy:
             resp.raise_for_status()
             return resp.json()
 
+    async def put(
+        self,
+        path: str,
+        json: dict | None = None,
+        headers: dict | None = None,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.put(
+                f"{self._base_url}{path}",
+                json=json,
+                headers=headers or {},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     async def delete(
         self,
         path: str,

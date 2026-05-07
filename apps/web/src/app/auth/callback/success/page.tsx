@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function OAuthCallbackSuccessPage() {
   const [status, setStatus] = useState('Processing OAuth callback...');
+  const router = useRouter();
 
   useEffect(() => {
     // Extract tokens from URL hash
@@ -26,20 +28,18 @@ export default function OAuthCallbackSuccessPage() {
       // Clear the hash from URL
       window.history.replaceState(null, '', window.location.pathname);
 
-      // Wait 1 second before redirecting to give auth context time to sync
-      setTimeout(() => {
-        window.location.assign('/console');
-      }, 1000);
+      // Force a page reload to ensure AuthProvider picks up the new tokens
+      // This is more reliable than trying to sync the auth context
+      window.location.href = '/console';
     } else {
       setStatus('No tokens received. Redirecting to login...');
       console.error('Missing tokens in redirect URL');
-      // Show error details
       console.log('Full URL:', window.location.href);
       setTimeout(() => {
         window.location.assign('/login?error=oauth_failed');
       }, 2000);
     }
-  }, []);
+  }, [router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--bg-base)]">

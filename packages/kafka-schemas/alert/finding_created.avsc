@@ -1,0 +1,22 @@
+{
+  "type": "record",
+  "name": "FindingCreatedEvent",
+  "namespace": "cloudvisor.alert",
+  "doc": "Emitted by Alert Pipeline when a new unique finding is persisted",
+  "fields": [
+    {"name": "event_type", "type": "string", "default": "finding.created"},
+    {"name": "finding_id", "type": "string"},
+    {"name": "organization_id", "type": "string"},
+    {"name": "rule_id", "type": "string"},
+    {"name": "resource_id", "type": "string"},
+    {"name": "severity", "type": "string"},
+    {"name": "title", "type": "string"},
+    {"name": "provider", "type": ["null", "string"], "default": null},
+    {"name": "account_id", "type": ["null", "string"], "default": null},
+    {"name": "region", "type": ["null", "string"], "default": null},
+    {"name": "resource_type", "type": ["null", "string"], "default": null},
+    {"name": "compliance_mapping", "type": {"type": "array", "items": "string"}, "default": []},
+    {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"},
+    {"name": "correlation_id", "type": ["null", "string"], "default": null}
+  ]
+}

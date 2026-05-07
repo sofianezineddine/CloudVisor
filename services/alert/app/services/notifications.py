@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import httpx
 
 from ..models import NotificationChannelModel, NotificationLogModel
 
@@ -16,9 +15,10 @@ logger = logging.getLogger(__name__)
 class NotificationService:
     """Service for routing and sending notifications."""
 
-    def __init__(self, db: AsyncSession, redis_client: Any = None):
+    def __init__(self, db: AsyncSession, redis_client: Any = None, kafka_producer: Any = None):
         self._db = db
         self._redis = redis_client
+        self._producer = kafka_producer
         self._rate_limit = 10
 
     async def send_notification(
@@ -113,10 +113,28 @@ class NotificationService:
                 logger.warning(f"No notifier found for channel type: {channel.channel_type}")
 
             await self._log_notification(channel.id, finding["id"], "sent")
+            # Emit notification.sent Kafka event per spec §3.5
+            await self._emit_kafka("notification.sent", {
+                "event_type": "notification.sent",
+                "finding_id": finding["id"],
+                "channel_id": channel.id,
+                "channel_type": channel.channel_type,
+                "organization_id": finding.get("organization_id"),
+                "severity": finding.get("severity"),
+            })
 
         except Exception as e:
             logger.error(f"Failed to send notification: {e}")
             await self._log_notification(channel.id, finding["id"], "failed", str(e))
+            # Emit notification.failed Kafka event per spec §3.5
+            await self._emit_kafka("notification.failed", {
+                "event_type": "notification.failed",
+                "finding_id": finding["id"],
+                "channel_id": channel.id,
+                "channel_type": channel.channel_type,
+                "organization_id": finding.get("organization_id"),
+                "error": str(e),
+            })
 
     async def _log_notification(
         self, channel_id: str, finding_id: str, status: str, error: str | None = None
@@ -131,6 +149,21 @@ class NotificationService:
         )
         self._db.add(log)
         await self._db.commit()
+
+    async def _emit_kafka(self, topic: str, event: dict[str, Any]) -> None:
+        """Emit Kafka event. Non-fatal if producer unavailable."""
+        if not self._producer:
+            return
+        try:
+            import json as _json
+            from datetime import datetime as _dt
+            event.setdefault("timestamp", _dt.utcnow().isoformat())
+            await self._producer.send_and_wait(
+                topic,
+                value=_json.dumps(event, default=str).encode("utf-8"),
+            )
+        except Exception as e:
+            logger.error(f"Failed to emit {topic}: {e}")
 
 
 class ChannelService:
@@ -241,24 +274,37 @@ class ChannelService:
             raise ValueError("Channel not found")
 
         test_finding = {
-            "id": "test-finding",
-            "title": "Test Notification",
+            "id": "test-finding-000",
+            "organization_id": channel.organization_id,
+            "title": "Test Notification from CloudVisor",
             "severity": "HIGH",
             "resource_name": "test-resource",
+            "resource_id": "test-resource-id",
+            "account_id": "test-account",
+            "region": "us-east-1",
+            "provider": "aws",
+            "description": "This is a test notification to verify your channel configuration.",
+            "remediation": "No action required — this is a test.",
         }
 
         try:
-            if channel.channel_type == "slack":
-                await self._send_slack_test(channel.config, test_finding)
-            return {"success": True, "message": "Test sent successfully"}
+            from ..notifiers import get_notifier
+            notifier = get_notifier(channel.channel_type)
+            if not notifier:
+                return {"success": False, "message": f"No notifier for channel type: {channel.channel_type}"}
+
+            channel_dict = {
+                "id": channel.id,
+                "channel_type": channel.channel_type,
+                "config": channel.config,
+            }
+            success = await notifier.send(test_finding, channel_dict)
+            if success:
+                return {"success": True, "message": "Test notification sent successfully"}
+            else:
+                return {"success": False, "message": "Notifier returned failure — check channel configuration"}
         except Exception as e:
             return {"success": False, "message": str(e)}
-
-    async def _send_slack_test(self, config: dict, finding: dict) -> None:
-        webhook_url = config.get("webhook_url")
-        if webhook_url:
-            async with httpx.AsyncClient() as client:
-                await client.post(webhook_url, json={"text": "Test from CloudVisor"})
 
     def _channel_to_dict(self, channel: NotificationChannelModel) -> dict[str, Any]:
         return {

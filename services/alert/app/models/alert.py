@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import Boolean, DateTime, Integer, String, Text, JSON, ARRAY, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, INET
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -30,7 +30,7 @@ class FindingModel(Base):
     account_id: Mapped[str] = mapped_column(String(255), nullable=True)
     region: Mapped[str] = mapped_column(String(50), nullable=True)
     resource_type: Mapped[str] = mapped_column(String(100), nullable=True)
-    tags: Mapped[list] = mapped_column(ARRAY(String), default=list)
+    tags: Mapped[dict] = mapped_column(JSON, default=dict)  # GAP 15: dict[str,str] key-value tags
     compliance_mapping: Mapped[list] = mapped_column(ARRAY(JSON), default=list)
     context: Mapped[dict] = mapped_column(JSON, default=dict)
     assignee_id: Mapped[str | None] = mapped_column(
@@ -57,7 +57,7 @@ class FindingHistoryModel(Base):
     )
     old_status: Mapped[str] = mapped_column(String(20), nullable=True)
     new_status: Mapped[str] = mapped_column(String(20), nullable=False)
-    changed_by: Mapped[str] = mapped_column(String(255), nullable=True)
+    changed_by: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)  # GAP 13: UUID type per spec
     reason: Mapped[str] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
@@ -79,6 +79,7 @@ class IncidentModel(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class SuppressionRuleModel(Base):
@@ -134,3 +135,25 @@ class NotificationLogModel(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     sent_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class AuditLogModel(Base):
+    """GAP 1: Audit log table — pass-through storage for audit.events Kafka topic.
+    Matches spec §5.1 schema exactly.
+    """
+    __tablename__ = "audit_log"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    organization_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
+    user_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
+    action: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_type: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resource_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    event_metadata: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow
+    )

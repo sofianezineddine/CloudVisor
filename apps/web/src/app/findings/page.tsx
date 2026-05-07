@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Finding } from '@/lib/api/apiClient';
-import { useFindings, useFindingStats, useBulkUpdateFindings, useUpdateFinding } from '@/hooks/use-findings';
+import { useFindings, useFindingStats, useBulkUpdateFindings, useUpdateFinding, useAcceptRisk, useSuppressFinding } from '@/hooks/use-findings';
 import { useQueryClient } from '@tanstack/react-query';
 import { NoAccountsConnectedEmptyState } from '@/components/ui/no-accounts-empty-state';
 import { NoScanDataEmptyState } from '@/components/ui/no-scan-empty-state';
@@ -63,6 +63,8 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
 function FindingActions({ finding, onStatusChange }: { finding: Finding; onStatusChange: (id: string, status: string) => void }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
+  const acceptRisk = useAcceptRisk();
+  const suppressFinding = useSuppressFinding();
 
   React.useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -79,6 +81,25 @@ function FindingActions({ finding, onStatusChange }: { finding: Finding; onStatu
     { label: 'Accept risk', status: 'accepted_risk', show: finding.status === 'open' },
     { label: 'Reopen', status: 'open', show: ['resolved', 'suppressed', 'accepted_risk'].includes(finding.status) },
   ].filter(a => a.show);
+
+  const handleAction = async (e: React.MouseEvent, status: string) => {
+    e.stopPropagation();
+    setOpen(false);
+    // Use dedicated endpoints for suppress and accept-risk
+    if (status === 'accepted_risk') {
+      try {
+        await acceptRisk.mutateAsync({ id: finding.id, justification: 'Accepted via findings table' });
+        onStatusChange(finding.id, status);
+      } catch {}
+    } else if (status === 'suppressed') {
+      try {
+        await suppressFinding.mutateAsync({ id: finding.id, reason: 'Suppressed via findings table action' });
+        onStatusChange(finding.id, status);
+      } catch {}
+    } else {
+      onStatusChange(finding.id, status);
+    }
+  };
 
   return (
     <div ref={ref} className="relative">
@@ -97,7 +118,7 @@ function FindingActions({ finding, onStatusChange }: { finding: Finding; onStatu
           {actions.map(a => (
             <button
               key={a.status}
-              onClick={(e) => { e.stopPropagation(); onStatusChange(finding.id, a.status); setOpen(false); }}
+              onClick={(e) => handleAction(e, a.status)}
               className="w-full px-3 py-2 text-left text-sm transition-colors"
               style={{ color: 'var(--text-primary)' }}
             >

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   User,
   Building2,
@@ -11,13 +12,38 @@ import {
   Edit3,
   Save,
   Lock,
+  Monitor,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
 
+function getToken() {
+  return typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+}
+
+async function authFetch(path: string, options: RequestInit = {}) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = React.useState(false);
   const [formData, setFormData] = React.useState({
     firstName: '',
@@ -285,6 +311,83 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Active Sessions */}
+      <SessionsSection />
     </>
+  );
+}
+
+// ─── Sessions section ─────────────────────────────────────────────────────────
+
+function SessionsSection() {
+  const queryClient = useQueryClient();
+
+  const { data: sessionsData, isLoading } = useQuery({
+    queryKey: ['auth-sessions'],
+    queryFn: () => authFetch('/auth/sessions'),
+    select: (d) => d?.sessions ?? [],
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (sessionId: string) =>
+      authFetch(`/auth/sessions/${sessionId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth-sessions'] });
+      toast.success('Session revoked');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const sessions = sessionsData ?? [];
+
+  return (
+    <div className="mt-6 cv-container p-6">
+      <h3 className="mb-4 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+        Active Sessions
+      </h3>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--accent)' }} />
+        </div>
+      ) : sessions.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No active sessions found.</p>
+      ) : (
+        <div className="space-y-3">
+          {sessions.map((session: any) => (
+            <div key={session.id}
+              className="flex items-center justify-between rounded-md border p-3"
+              style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-elevated)' }}>
+              <div className="flex items-center gap-3">
+                <Monitor className="h-4 w-4" style={{ color: 'var(--text-secondary)' }} />
+                <div>
+                  <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {session.device_info || 'Unknown device'}
+                  </div>
+                  <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    {session.ip_address && `${session.ip_address} · `}
+                    Last active {session.last_active_at
+                      ? new Date(session.last_active_at).toLocaleString()
+                      : 'unknown'}
+                  </div>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => revokeMutation.mutate(session.id)}
+                disabled={revokeMutation.isPending}
+              >
+                {revokeMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

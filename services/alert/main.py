@@ -14,7 +14,7 @@ from app.core.dependencies import (
     get_alert_settings_cached,
 )
 from app.core.config import get_alert_settings
-from app.api.routes import findings_router, suppressions_router, notifications_router, incidents_router
+from app.api.routes import findings_router, suppressions_router, notifications_router, notifications_test_router, incidents_router
 
 
 def create_app() -> FastAPI:
@@ -45,11 +45,21 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # ── Prometheus metrics (Rule 9: every service exposes /metrics) ───────────
     try:
         from cloudvisor_utils.metrics import setup_metrics
         setup_metrics(app, "alert")
     except Exception as e:
         logger.warning(f"Metrics setup failed: {e}")
+
+    # ── OpenTelemetry tracing (Rule 9: OTel traces from first commit) ─────────
+    try:
+        from cloudvisor_utils.tracing import setup_tracing, instrument_fastapi
+        setup_tracing(service_name=alert_settings.service_name)
+        instrument_fastapi(app)
+        logger.info("OpenTelemetry tracing initialized")
+    except Exception as e:
+        logger.warning(f"OTel tracing setup failed (non-fatal): {e}")
 
     @app.on_event("startup")
     async def startup_event() -> None:
@@ -76,6 +86,7 @@ def create_app() -> FastAPI:
     app.include_router(findings_router, prefix="/internal")
     app.include_router(suppressions_router, prefix="/internal")
     app.include_router(notifications_router, prefix="/internal")
+    app.include_router(notifications_test_router, prefix="/internal")  # GAP 8: POST /internal/notifications/test
     app.include_router(incidents_router, prefix="/internal")
 
     return app

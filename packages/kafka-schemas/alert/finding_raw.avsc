@@ -1,0 +1,24 @@
+{
+  "type": "record",
+  "name": "FindingRawEvent",
+  "namespace": "cloudvisor.alert",
+  "doc": "Raw undeduped finding emitted by Policy Engine or CDR service",
+  "fields": [
+    {"name": "organization_id", "type": "string"},
+    {"name": "account_id", "type": "string"},
+    {"name": "provider", "type": "string"},
+    {"name": "rule_id", "type": "string"},
+    {"name": "resource_id", "type": "string"},
+    {"name": "resource_name", "type": ["null", "string"], "default": null},
+    {"name": "resource_type", "type": ["null", "string"], "default": null},
+    {"name": "severity", "type": {"type": "enum", "name": "Severity", "symbols": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]}},
+    {"name": "title", "type": "string"},
+    {"name": "description", "type": ["null", "string"], "default": null},
+    {"name": "remediation", "type": ["null", "string"], "default": null},
+    {"name": "region", "type": ["null", "string"], "default": null},
+    {"name": "tags", "type": {"type": "map", "values": "string"}, "default": {}},
+    {"name": "compliance_mapping", "type": {"type": "array", "items": "string"}, "default": []},
+    {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"},
+    {"name": "correlation_id", "type": "string"}
+  ]
+}

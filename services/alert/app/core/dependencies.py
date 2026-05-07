@@ -21,12 +21,13 @@ _session_factory = None
 _redis_client = None
 _finding_consumer = None
 _resource_consumer = None
+_audit_consumer = None
 
 
 async def init_dependencies(settings: CloudvisorSettings, alert_settings: AlertSettings) -> None:
     """Initialize all dependencies at app startup."""
     global _engine, _session_factory, _redis_client
-    global _finding_consumer, _resource_consumer
+    global _finding_consumer, _resource_consumer, _audit_consumer
 
     from ..models import Base
 
@@ -64,7 +65,7 @@ async def init_dependencies(settings: CloudvisorSettings, alert_settings: AlertS
         logger.warning(f"Alert Kafka producer failed to start: {e}")
         _kafka_producer = None
 
-    from ..consumers.finding_events import FindingEventConsumer, ResourceEventConsumer
+    from ..consumers.finding_events import FindingEventConsumer, ResourceEventConsumer, AuditEventConsumer
     from ..services import FindingService, NotificationService
 
     _finding_consumer = FindingEventConsumer(
@@ -74,6 +75,11 @@ async def init_dependencies(settings: CloudvisorSettings, alert_settings: AlertS
         kafka_producer=_kafka_producer,
     )
     _resource_consumer = ResourceEventConsumer(
+        bootstrap_servers=kafka_servers,
+        session_factory=_session_factory,
+    )
+    # GAP 1: Audit event consumer — pass-through to audit_log table
+    _audit_consumer = AuditEventConsumer(
         bootstrap_servers=kafka_servers,
         session_factory=_session_factory,
     )
@@ -92,16 +98,25 @@ async def init_dependencies(settings: CloudvisorSettings, alert_settings: AlertS
     except Exception as e:
         logger.warning(f"Resource consumer failed to start: {e}")
 
+    try:
+        await _audit_consumer.start()
+        asyncio.create_task(_audit_consumer.run())
+        logger.info("Audit event consumer started")
+    except Exception as e:
+        logger.warning(f"Audit consumer failed to start: {e}")
+
     logger.info("Alert service dependencies initialized")
 
 
 async def shutdown_dependencies() -> None:
-    global _redis_client, _engine, _finding_consumer, _resource_consumer
+    global _redis_client, _engine, _finding_consumer, _resource_consumer, _audit_consumer
 
     if _finding_consumer:
         await _finding_consumer.stop()
     if _resource_consumer:
         await _resource_consumer.stop()
+    if _audit_consumer:
+        await _audit_consumer.stop()
 
     if _redis_client:
         await _redis_client.close()

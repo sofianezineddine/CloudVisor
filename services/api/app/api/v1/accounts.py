@@ -1,20 +1,25 @@
 """
-GET    /v1/accounts          — List connected cloud accounts
+GET    /v1/accounts          — List connected cloud accounts (cursor-based pagination)
 POST   /v1/accounts          — Connect new cloud account
 GET    /v1/accounts/{id}     — Account status and health
 DELETE /v1/accounts/{id}     — Remove cloud account
-POST   /v1/accounts/{id}/scan — Trigger on-demand scan
+POST   /v1/accounts/{id}/scan — Trigger on-demand scan (async, returns 202)
 """
 
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.core.auth import AuthenticatedUser, get_current_user
 from app.core.proxy import get_connector_proxy
-from app.schemas.envelope import ok
+from app.schemas.envelope import (
+    ok,
+    parse_filter_params,
+    cursor_to_offset,
+    make_next_cursor,
+)
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -30,17 +35,28 @@ class ConnectAccountRequest(BaseModel):
 
 @router.get("")
 async def list_accounts(
+    request: Request,
+    cursor: str | None = Query(None, description="Opaque pagination cursor"),
+    limit: int = Query(50, ge=1, le=200),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """List all connected cloud accounts for the authenticated organization."""
     t0 = time.monotonic()
     proxy = get_connector_proxy()
+
+    filters = parse_filter_params(str(request.url.query))
+    offset, _limit = cursor_to_offset(cursor, limit)
+
+    params: dict[str, Any] = {"limit": limit, "offset": offset, **filters}
+
     try:
-        result = await proxy.get("/internal/accounts", headers=user.auth_headers)
+        result = await proxy.get("/internal/accounts", params=params, headers=user.auth_headers)
         accounts = result.get("accounts", [])
+        total = result.get("total", len(accounts))
         return ok(
             data=accounts,
-            total=result.get("total", len(accounts)),
+            total=total,
+            next_cursor=make_next_cursor(offset, limit, total),
             took_ms=int((time.monotonic() - t0) * 1000),
         )
     except Exception as e:
@@ -97,12 +113,17 @@ async def remove_account(
         raise HTTPException(status_code=502, detail=f"Connector service unavailable: {e}")
 
 
-@router.post("/{account_id}/scan")
+@router.post("/{account_id}/scan", status_code=202)
 async def trigger_scan(
     account_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Trigger an on-demand full scan for a cloud account."""
+    """
+    Trigger an on-demand full scan for a specific cloud account.
+
+    Returns HTTP 202 Accepted with a job_id.
+    Poll GET /v1/scans/{job_id} to check scan status.
+    """
     t0 = time.monotonic()
     proxy = get_connector_proxy()
     try:
@@ -111,6 +132,9 @@ async def trigger_scan(
             json={},
             headers=user.auth_headers,
         )
+        # Normalise: ensure job_id is present
+        if "job_id" not in result and "id" in result:
+            result["job_id"] = result["id"]
         return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Connector service unavailable: {e}")

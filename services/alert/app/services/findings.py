@@ -77,10 +77,34 @@ class FindingService:
         return hashlib.sha256(content.encode()).hexdigest()
 
     async def _get_by_fingerprint(self, fingerprint: str) -> FindingModel | None:
+        # GAP 2: Check Redis cache first (key: dedup:{fingerprint}) for p99 < 5ms target
+        if self._redis:
+            try:
+                cached_id = await self._redis.get(f"dedup:{fingerprint}")
+                if cached_id:
+                    result = await self._db.execute(
+                        select(FindingModel).where(FindingModel.id == cached_id)
+                    )
+                    finding = result.scalar_one_or_none()
+                    if finding:
+                        return finding
+                    # Cache entry stale — fall through to DB
+            except Exception as e:
+                logger.warning(f"Redis dedup cache read failed: {e}")
+
         result = await self._db.execute(
             select(FindingModel).where(FindingModel.fingerprint == fingerprint)
         )
-        return result.scalar_one_or_none()
+        finding = result.scalar_one_or_none()
+
+        # Populate cache on DB hit (TTL: indefinite — evicted on resolve)
+        if finding and self._redis:
+            try:
+                await self._redis.set(f"dedup:{fingerprint}", finding.id)
+            except Exception as e:
+                logger.warning(f"Redis dedup cache write failed: {e}")
+
+        return finding
 
     async def _create_new_finding(self, fingerprint: str, data: dict[str, Any]) -> dict[str, Any]:
         """Create a new finding, enrich, record history, emit finding.created to Kafka."""
@@ -257,6 +281,12 @@ class FindingService:
 
         if new_status == "resolved":
             finding.resolved_at = datetime.utcnow()
+            # GAP 2: Evict Redis dedup cache so the finding can be re-created on regression
+            if self._redis:
+                try:
+                    await self._redis.delete(f"dedup:{finding.fingerprint}")
+                except Exception as e:
+                    logger.warning(f"Redis dedup cache eviction failed: {e}")
 
         await self._record_history(finding_id, old_status, new_status, changed_by, reason)
         await self._db.commit()
@@ -317,7 +347,30 @@ class FindingService:
     async def get_finding(self, finding_id: str) -> dict[str, Any] | None:
         result = await self._db.execute(select(FindingModel).where(FindingModel.id == finding_id))
         finding = result.scalar_one_or_none()
-        return self._finding_to_dict(finding) if finding else None
+        if not finding:
+            return None
+
+        # GAP 3: Include history entries in the detail response
+        history_result = await self._db.execute(
+            select(FindingHistoryModel)
+            .where(FindingHistoryModel.finding_id == finding_id)
+            .order_by(FindingHistoryModel.timestamp.asc())
+        )
+        history_entries = history_result.scalars().all()
+
+        finding_dict = self._finding_to_dict(finding)
+        finding_dict["history"] = [
+            {
+                "id": h.id,
+                "old_status": h.old_status,
+                "new_status": h.new_status,
+                "changed_by": h.changed_by,
+                "reason": h.reason,
+                "timestamp": h.timestamp.isoformat(),
+            }
+            for h in history_entries
+        ]
+        return finding_dict
 
     async def list_findings(
         self,
@@ -346,9 +399,11 @@ class FindingService:
             query = query.where(FindingModel.account_id == account_id)
         if region:
             query = query.where(FindingModel.region == region)
+        # Module filter: match rule_id prefix (e.g. "cspm.", "cwpp.", "cdr.")
+        if module:
+            query = query.where(FindingModel.rule_id.like(f"{module}.%"))
 
-        # Default sort: severity DESC, first_seen_at DESC (most critical first)
-        severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
+        # Default sort: most recent first
         query = query.order_by(FindingModel.first_seen_at.desc()).limit(limit).offset(offset)
 
         result = await self._db.execute(query)
@@ -362,12 +417,22 @@ class FindingService:
 
         by_severity = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
         by_status = {"open": 0, "in_progress": 0, "resolved": 0, "suppressed": 0, "accepted_risk": 0}
+        # GAP 4: by_module — group by rule_id prefix (e.g. "cspm", "cwpp", "cdr")
+        by_module: dict[str, int] = {}
 
         for f in findings:
             by_severity[f.severity] = by_severity.get(f.severity, 0) + 1
             by_status[f.status] = by_status.get(f.status, 0) + 1
+            # Extract module prefix from rule_id (e.g. "cspm.s3-public-access" → "cspm")
+            module = f.rule_id.split(".")[0] if f.rule_id and "." in f.rule_id else (f.rule_id or "unknown")
+            by_module[module] = by_module.get(module, 0) + 1
 
-        return {"by_severity": by_severity, "by_status": by_status, "total": len(findings)}
+        return {
+            "by_severity": by_severity,
+            "by_status": by_status,
+            "by_module": by_module,
+            "total": len(findings),
+        }
 
     async def get_sla_violations(self, organization_id: str) -> list[dict[str, Any]]:
         """Get findings that have violated SLA targets."""
@@ -437,6 +502,29 @@ class FindingService:
             "acknowledge_violated": acknowledge_violated,
             "resolve_violated": resolve_violated,
         }
+
+    async def assign_finding(self, finding_id: str, assignee_id: str) -> dict[str, Any]:
+        """GAP 5: Assign a finding to a team member (used by bulk assignment)."""
+        result = await self._db.execute(
+            select(FindingModel).where(FindingModel.id == finding_id)
+        )
+        finding = result.scalar_one_or_none()
+        if not finding:
+            raise ValueError("Finding not found")
+
+        finding.assignee_id = assignee_id
+        finding.updated_at = datetime.utcnow()
+        await self._db.commit()
+
+        await self._emit_kafka("finding.updated", finding_id, {
+            "event_type": "finding.updated",
+            "finding_id": finding_id,
+            "organization_id": finding.organization_id,
+            "assignee_id": assignee_id,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+        return self._finding_to_dict(finding)
 
     async def acknowledge_finding(self, finding_id: str, user_id: str) -> dict[str, Any]:
         """Mark finding as acknowledged (for SLA tracking)."""
@@ -528,6 +616,7 @@ class FindingService:
             "resource_type": finding.resource_type,
             "tags": finding.tags,
             "compliance_mapping": finding.compliance_mapping,
+            "context": finding.context,  # GAP 10: include enrichment context
             "assignee_id": finding.assignee_id,
             "fingerprint": finding.fingerprint,
             "regression_count": finding.regression_count,

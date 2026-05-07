@@ -6,6 +6,7 @@ from .alert import (
     SuppressionRuleModel,
     NotificationChannelModel,
     NotificationLogModel,
+    AuditLogModel,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "SuppressionRuleModel",
     "NotificationChannelModel",
     "NotificationLogModel",
+    "AuditLogModel",
 ]

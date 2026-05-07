@@ -4,8 +4,10 @@ CSPM proxy routes — forwards all CSPM requests to the CSPM service.
 GET    /v1/cspm/stats
 GET    /v1/cspm/posture
 GET    /v1/cspm/posture/accounts
+GET    /v1/cspm/posture/trend
 GET    /v1/cspm/findings
 GET    /v1/cspm/findings/{id}
+GET    /v1/cspm/findings/{id}/remediation
 PATCH  /v1/cspm/findings/{id}/status
 GET    /v1/cspm/resources
 GET    /v1/cspm/compliance
@@ -13,6 +15,12 @@ GET    /v1/cspm/compliance/{framework}
 GET    /v1/cspm/scans
 POST   /v1/cspm/scans
 GET    /v1/cspm/scans/{id}
+GET    /v1/cspm/scans/{id}/resources
+GET    /v1/cspm/drift
+GET    /v1/cspm/reports
+POST   /v1/cspm/reports
+GET    /v1/cspm/reports/{id}
+GET    /v1/cspm/reports/{id}/download
 GET    /v1/cspm/rules          (proxied to Policy service)
 POST   /v1/cspm/rules/{id}/disable
 POST   /v1/cspm/rules/{id}/enable
@@ -33,151 +41,6 @@ from app.schemas.envelope import ok
 router = APIRouter(prefix="/cspm", tags=["cspm"])
 
 
-@router.get("/posture/trend")
-async def get_posture_trend(
-    days: int = Query(default=30, ge=7, le=90),
-    account_id: str | None = Query(None),
-    provider: str | None = Query(None),
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> dict[str, Any]:
-    t0 = time.monotonic()
-    cspm = get_cspm_proxy()
-    params: dict[str, Any] = {"org_id": user.organization_id, "days": days}
-    if account_id: params["account_id"] = account_id
-    if provider:   params["provider"] = provider
-    try:
-        result = await cspm.get(
-            "/api/v1/cspm/posture/trend",
-            params=params,
-        )
-        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
-
-
-@router.get("/drift")
-async def get_drift_findings(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> dict[str, Any]:
-    t0 = time.monotonic()
-    cspm = get_cspm_proxy()
-    try:
-        result = await cspm.get(
-            "/api/v1/cspm/drift",
-            params={"org_id": user.organization_id, "page": page, "page_size": page_size},
-        )
-        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
-
-
-@router.get("/scans/{scan_id}/resources")
-async def get_scan_resources(
-    scan_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> dict[str, Any]:
-    t0 = time.monotonic()
-    cspm = get_cspm_proxy()
-    try:
-        result = await cspm.get(
-            f"/api/v1/cspm/scans/{scan_id}/resources",
-            params={"org_id": user.organization_id},
-        )
-        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
-
-
-@router.get("/reports")
-async def list_reports(
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> dict[str, Any]:
-    t0 = time.monotonic()
-    cspm = get_cspm_proxy()
-    try:
-        result = await cspm.get(
-            "/api/v1/cspm/reports",
-            params={"org_id": user.organization_id},
-        )
-        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
-
-
-class ReportRequest(BaseModel):
-    report_type: str
-    framework: str | None = None
-    format: str = "csv"
-    date_from: str | None = None
-    date_to: str | None = None
-    account_ids: list[str] = []
-
-
-@router.post("/reports", status_code=201)
-async def create_report(
-    data: ReportRequest,
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> dict[str, Any]:
-    t0 = time.monotonic()
-    cspm = get_cspm_proxy()
-    try:
-        result = await cspm.post(
-            "/api/v1/cspm/reports",
-            json=data.model_dump(exclude_none=True),
-            params={"org_id": user.organization_id},
-        )
-        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
-
-
-@router.get("/reports/{report_id}")
-async def get_report(
-    report_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> dict[str, Any]:
-    t0 = time.monotonic()
-    cspm = get_cspm_proxy()
-    try:
-        result = await cspm.get(f"/api/v1/cspm/reports/{report_id}")
-        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
-
-
-@router.get("/reports/{report_id}/download")
-async def download_report(
-    report_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> Any:
-    """Proxy the file download from CSPM service."""
-    import httpx as _httpx
-    from fastapi.responses import StreamingResponse
-    from app.core.proxy import _CSPM_URL
-    t0 = time.monotonic()
-    try:
-        async with _httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                f"{_CSPM_URL}/api/v1/cspm/reports/{report_id}/download",
-                params={"org_id": user.organization_id},
-            )
-            if resp.status_code == 200:
-                content_type = resp.headers.get("content-type", "application/octet-stream")
-                cd = resp.headers.get("content-disposition", f'attachment; filename="report.csv"')
-                return StreamingResponse(
-                    iter([resp.content]),
-                    media_type=content_type,
-                    headers={"Content-Disposition": cd},
-                )
-            raise HTTPException(status_code=resp.status_code, detail="Download failed")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
-
-
 # ─── Stats ────────────────────────────────────────────────────────────────────
 
 @router.get("/stats")
@@ -189,8 +52,10 @@ async def get_stats(
     t0 = time.monotonic()
     cspm = get_cspm_proxy()
     params: dict[str, Any] = {"org_id": user.organization_id}
-    if account_id: params["account_id"] = account_id
-    if provider:   params["provider"] = provider
+    if account_id:
+        params["account_id"] = account_id
+    if provider:
+        params["provider"] = provider
     try:
         result = await cspm.get("/api/v1/cspm/stats", params=params)
         return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
@@ -199,6 +64,27 @@ async def get_stats(
 
 
 # ─── Posture ──────────────────────────────────────────────────────────────────
+
+@router.get("/posture/trend")
+async def get_posture_trend(
+    days: int = Query(default=30, ge=7, le=90),
+    account_id: str | None = Query(None),
+    provider: str | None = Query(None),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    t0 = time.monotonic()
+    cspm = get_cspm_proxy()
+    params: dict[str, Any] = {"org_id": user.organization_id, "days": days}
+    if account_id:
+        params["account_id"] = account_id
+    if provider:
+        params["provider"] = provider
+    try:
+        result = await cspm.get("/api/v1/cspm/posture/trend", params=params)
+        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
+
 
 @router.get("/posture/accounts")
 async def get_account_posture(
@@ -225,8 +111,10 @@ async def get_posture(
     t0 = time.monotonic()
     cspm = get_cspm_proxy()
     params: dict[str, Any] = {"org_id": user.organization_id}
-    if account_id: params["account_id"] = account_id
-    if provider:   params["provider"] = provider
+    if account_id:
+        params["account_id"] = account_id
+    if provider:
+        params["provider"] = provider
     try:
         result = await cspm.get("/api/v1/cspm/posture", params=params)
         return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
@@ -234,7 +122,45 @@ async def get_posture(
         raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
 
 
+# ─── Drift ────────────────────────────────────────────────────────────────────
+
+@router.get("/drift")
+async def get_drift_findings(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    t0 = time.monotonic()
+    cspm = get_cspm_proxy()
+    try:
+        result = await cspm.get(
+            "/api/v1/cspm/drift",
+            params={"org_id": user.organization_id, "page": page, "page_size": page_size},
+        )
+        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
+
+
 # ─── Findings ─────────────────────────────────────────────────────────────────
+
+@router.get("/findings/drift")
+async def get_findings_drift(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    t0 = time.monotonic()
+    cspm = get_cspm_proxy()
+    try:
+        result = await cspm.get(
+            "/api/v1/cspm/findings/drift",
+            params={"org_id": user.organization_id, "page": page, "page_size": page_size},
+        )
+        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
+
 
 @router.get("/findings")
 async def list_findings(
@@ -255,18 +181,23 @@ async def list_findings(
         "page": page,
         "page_size": page_size,
     }
-    if severity:   params["severity"] = severity
-    if status:     params["status"] = status
-    if provider:   params["provider"] = provider
-    if account_id: params["account_id"] = account_id
-    if region:     params["region"] = region
-    if rule_id:    params["rule_id"] = rule_id
+    if severity:
+        params["severity"] = severity
+    if status:
+        params["status"] = status
+    if provider:
+        params["provider"] = provider
+    if account_id:
+        params["account_id"] = account_id
+    if region:
+        params["region"] = region
+    if rule_id:
+        params["rule_id"] = rule_id
     try:
-        # Return the full paginated structure { items, total, page, page_size }
         result = await cspm.get("/api/v1/cspm/findings", params=params)
         return ok(
-            data=result,  # pass the whole { items, total, page, page_size } object
-            total=result.get("total", 0),
+            data=result,
+            total=result.get("total", 0) if isinstance(result, dict) else 0,
             took_ms=int((time.monotonic() - t0) * 1000),
         )
     except Exception as e:
@@ -342,10 +273,14 @@ async def list_resources(
         "page": page,
         "page_size": page_size,
     }
-    if provider:       params["provider"] = provider
-    if account_id:     params["account_id"] = account_id
-    if region:         params["region"] = region
-    if resource_type:  params["resource_type"] = resource_type
+    if provider:
+        params["provider"] = provider
+    if account_id:
+        params["account_id"] = account_id
+    if region:
+        params["region"] = region
+    if resource_type:
+        params["resource_type"] = resource_type
     try:
         result = await cspm.get("/api/v1/cspm/resources", params=params)
         items = result if isinstance(result, list) else result.get("items", result)
@@ -391,6 +326,37 @@ async def get_compliance_framework(
 
 # ─── Scans ────────────────────────────────────────────────────────────────────
 
+@router.get("/scans/{scan_id}/resources")
+async def get_scan_resources(
+    scan_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    t0 = time.monotonic()
+    cspm = get_cspm_proxy()
+    try:
+        result = await cspm.get(
+            f"/api/v1/cspm/scans/{scan_id}/resources",
+            params={"org_id": user.organization_id},
+        )
+        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
+
+
+@router.get("/scans/{scan_id}")
+async def get_scan(
+    scan_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    t0 = time.monotonic()
+    cspm = get_cspm_proxy()
+    try:
+        result = await cspm.get(f"/api/v1/cspm/scans/{scan_id}")
+        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
+
+
 @router.get("/scans")
 async def list_scans(
     account_id: str | None = Query(None),
@@ -401,9 +367,15 @@ async def list_scans(
 ) -> dict[str, Any]:
     t0 = time.monotonic()
     cspm = get_cspm_proxy()
-    params: dict[str, Any] = {"org_id": user.organization_id, "page": page, "page_size": page_size}
-    if account_id:   params["account_id"] = account_id
-    if account_ids:  params["account_ids"] = account_ids
+    params: dict[str, Any] = {
+        "org_id": user.organization_id,
+        "page": page,
+        "page_size": page_size,
+    }
+    if account_id:
+        params["account_id"] = account_id
+    if account_ids:
+        params["account_ids"] = account_ids
     try:
         result = await cspm.get("/api/v1/cspm/scans", params=params)
         items = result if isinstance(result, list) else result.get("items", result)
@@ -438,40 +410,22 @@ async def trigger_scan(
         raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
 
 
-@router.get("/scans/{scan_id}")
-async def get_scan(
-    scan_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> dict[str, Any]:
-    t0 = time.monotonic()
-    cspm = get_cspm_proxy()
-    try:
-        result = await cspm.get(f"/api/v1/cspm/scans/{scan_id}")
-        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
-
-
 # ─── Rules (proxied to Policy service) ───────────────────────────────────────
 
-@router.get("/rules")
-async def list_rules(
-    category: str = Query("cspm"),
-    provider: str | None = Query(None),
-    severity: str | None = Query(None),
+@router.post("/rules/dry-run")
+async def dry_run_rule(
+    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     t0 = time.monotonic()
     policy = get_policy_proxy()
-    params: dict[str, Any] = {
-        "organization_id": user.organization_id,
-        "x_org_id": user.organization_id,
-        "category": category,
-    }
-    if provider: params["provider"] = provider
-    if severity: params["severity"] = severity
+    body = await request.json()
     try:
-        result = await policy.get("/policy/rules", params=params)
+        result = await policy.post(
+            "/policy/evaluate/dry-run",
+            json=body,
+            params={"organization_id": user.organization_id},
+        )
         return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Policy service unavailable: {e}")
@@ -514,62 +468,29 @@ async def enable_rule(
         raise HTTPException(status_code=502, detail=f"Policy service unavailable: {e}")
 
 
-@router.post("/rules/dry-run")
-async def dry_run_rule(
-    request: Request,
+@router.get("/rules")
+async def list_rules(
+    category: str = Query("cspm"),
+    provider: str | None = Query(None),
+    severity: str | None = Query(None),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     t0 = time.monotonic()
     policy = get_policy_proxy()
-    body = await request.json()
+    params: dict[str, Any] = {
+        "organization_id": user.organization_id,
+        "x_org_id": user.organization_id,
+        "category": category,
+    }
+    if provider:
+        params["provider"] = provider
+    if severity:
+        params["severity"] = severity
     try:
-        result = await policy.post(
-            "/policy/evaluate/dry-run",
-            json=body,
-            params={"organization_id": user.organization_id},
-        )
+        result = await policy.get("/policy/rules", params=params)
         return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Policy service unavailable: {e}")
-
-
-# ─── Drift ────────────────────────────────────────────────────────────────────
-
-@router.get("/findings/drift")
-async def get_drift_findings(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> dict[str, Any]:
-    t0 = time.monotonic()
-    cspm = get_cspm_proxy()
-    try:
-        result = await cspm.get(
-            "/api/v1/cspm/findings/drift",
-            params={"org_id": user.organization_id, "page": page, "page_size": page_size},
-        )
-        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
-
-
-# ─── Scan resources ───────────────────────────────────────────────────────────
-
-@router.get("/scans/{scan_id}/resources")
-async def get_scan_resources(
-    scan_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> dict[str, Any]:
-    t0 = time.monotonic()
-    cspm = get_cspm_proxy()
-    try:
-        result = await cspm.get(
-            f"/api/v1/cspm/scans/{scan_id}/resources",
-            params={"org_id": user.organization_id},
-        )
-        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
 
 
 # ─── Reports ──────────────────────────────────────────────────────────────────
@@ -581,6 +502,53 @@ class ReportRequest(BaseModel):
     date_from: str | None = None
     date_to: str | None = None
     account_ids: list[str] = []
+
+
+@router.get("/reports/{report_id}/download")
+async def download_report(
+    report_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> Any:
+    """Proxy CSV download from CSPM service."""
+    from fastapi.responses import StreamingResponse
+    import httpx as _httpx
+    cspm_url = os.environ.get("API_CSPM_SERVICE_URL", "http://cv-cspm:8006")
+    try:
+        async with _httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{cspm_url}/api/v1/cspm/reports/{report_id}/download",
+                params={"org_id": user.organization_id},
+            )
+            if resp.status_code == 200:
+                content_type = resp.headers.get("content-type", "application/octet-stream")
+                cd = resp.headers.get(
+                    "content-disposition",
+                    f'attachment; filename="report-{report_id}.csv"',
+                )
+                return StreamingResponse(
+                    iter([resp.content]),
+                    media_type=content_type,
+                    headers={"Content-Disposition": cd},
+                )
+            raise HTTPException(status_code=resp.status_code, detail="Download failed")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
+
+
+@router.get("/reports/{report_id}")
+async def get_report(
+    report_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    t0 = time.monotonic()
+    cspm = get_cspm_proxy()
+    try:
+        result = await cspm.get(f"/api/v1/cspm/reports/{report_id}")
+        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
 
 
 @router.get("/reports")
@@ -614,47 +582,5 @@ async def create_report(
             params={"org_id": user.organization_id},
         )
         return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
-
-
-@router.get("/reports/{report_id}")
-async def get_report(
-    report_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> dict[str, Any]:
-    t0 = time.monotonic()
-    cspm = get_cspm_proxy()
-    try:
-        result = await cspm.get(f"/api/v1/cspm/reports/{report_id}")
-        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")
-
-
-@router.get("/reports/{report_id}/download")
-async def download_report(
-    report_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-):
-    """Proxy CSV download from CSPM service."""
-    from fastapi.responses import StreamingResponse
-    import httpx as _httpx
-    cspm_url = os.environ.get("CSPM_SERVICE_URL", "http://cv-cspm:8006")
-    try:
-        async with _httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                f"{cspm_url}/api/v1/cspm/reports/{report_id}/download",
-                params={"org_id": user.organization_id},
-            )
-            if resp.status_code == 200:
-                return StreamingResponse(
-                    iter([resp.content]),
-                    media_type="text/csv",
-                    headers={"Content-Disposition": f'attachment; filename="report-{report_id}.csv"'},
-                )
-            raise HTTPException(status_code=resp.status_code, detail="Download failed")
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"CSPM service unavailable: {e}")

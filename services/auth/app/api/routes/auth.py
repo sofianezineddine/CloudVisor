@@ -370,7 +370,8 @@ GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_USERINFO_URL = "https://api.github.com/user"
 
-FRONTEND_URL = "http://localhost:3000"
+import os as _os
+FRONTEND_URL = _os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 
 def _get_oauth_config(provider: str, auth_settings) -> dict:
@@ -583,25 +584,46 @@ async def oauth_callback(
     # Check if user exists, if not create them
     auth_service = AuthService(db, auth_settings, redis)
 
-    try:
-        result = await auth_service.oauth_login_or_register(
-            email=email,
-            provider=provider,
-            provider_id=str(userinfo.get("id", email)),
-            first_name=first_name,
-            last_name=last_name,
-            organization_name=organization_name,
-        )
-        tokens = result["tokens"]
+    # Retry up to 3 times for transient DB errors (e.g. DB still starting up)
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            result = await auth_service.oauth_login_or_register(
+                email=email,
+                provider=provider,
+                provider_id=str(userinfo.get("id", email)),
+                first_name=first_name,
+                last_name=last_name,
+                organization_name=organization_name,
+            )
+            tokens = result["tokens"]
 
-        # Redirect to frontend with tokens in URL hash (for SPA to pick up)
-        redirect_url = (
-            f"{FRONTEND_URL}/auth/callback/success"
-            f"#access_token={tokens['access_token']}"
-            f"&refresh_token={tokens['refresh_token']}"
-            f"&token_type={tokens['token_type']}"
-        )
-        return RedirectResponse(url=redirect_url)
+            redirect_url = (
+                f"{FRONTEND_URL}/auth/callback/success"
+                f"#access_token={tokens['access_token']}"
+                f"&refresh_token={tokens['refresh_token']}"
+                f"&token_type={tokens['token_type']}"
+            )
+            return RedirectResponse(url=redirect_url)
 
-    except ValueError as e:
-        return RedirectResponse(url=f"{FRONTEND_URL}/login?error={str(e)}")
+        except ValueError as e:
+            # Business logic error (e.g. email conflict) — don't retry
+            logger.warning(f"OAuth login rejected for {email}: {e}")
+            return RedirectResponse(url=f"{FRONTEND_URL}/login?error=oauth_failed")
+
+        except Exception as e:
+            # Transient error (DB not ready, network blip) — retry with backoff
+            last_error = e
+            logger.error(
+                f"OAuth login attempt {attempt + 1} failed for {email}: "
+                f"{type(e).__name__}: {e}"
+            )
+            if attempt < 2:
+                time.sleep(0.5 * (attempt + 1))
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
+
+    logger.error(f"OAuth login failed after 3 attempts for {email}: {last_error}")
+    return RedirectResponse(url=f"{FRONTEND_URL}/login?error=oauth_failed")

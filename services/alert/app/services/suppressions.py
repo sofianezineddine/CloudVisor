@@ -2,7 +2,7 @@
 
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +33,7 @@ class SuppressionService:
         """Create a suppression rule."""
         expires_at = None
         if expires_in_days:
-            expires_at = datetime.utcnow() + __import__("datetime").timedelta(days=expires_in_days)
+            expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
 
         rule = SuppressionRuleModel(
             id=str(uuid.uuid4()),
@@ -76,7 +76,11 @@ class SuppressionService:
                 continue
 
             if self._matches_rule(finding, rule):
-                logger.info(f"Finding {finding['id']} suppressed by rule {rule.id}")
+                # GAP 11: Log rule_id and resource_id instead of the temp finding id
+                logger.info(
+                    f"Finding suppressed by rule {rule.id}: "
+                    f"rule_id={finding.get('rule_id')} resource_id={finding.get('resource_id')}"
+                )
                 return True
 
         return False

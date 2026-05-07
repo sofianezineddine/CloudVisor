@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, get_redis
@@ -41,6 +42,7 @@ async def list_findings(
     account_id: str | None = None,
     region: str | None = None,
     resource_id: str | None = None,
+    module: str | None = None,  # GAP 9: expose module filter
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -54,6 +56,7 @@ async def list_findings(
         provider=provider,
         account_id=account_id,
         region=region,
+        module=module,  # GAP 9: pass module to service layer
         limit=limit,
         offset=offset,
     )
@@ -109,12 +112,70 @@ async def bulk_update(
     for finding_id in data.finding_ids:
         try:
             if data.status:
-                await finding_service.update_finding_status(finding_id, data.status)
+                await finding_service.update_finding_status(
+                    finding_id, data.status, reason=data.reason
+                )
                 updated += 1
-        except:
+            elif data.assignee_id:
+                # GAP 5: handle bulk assignment when no status change requested
+                await finding_service.assign_finding(finding_id, data.assignee_id)
+                updated += 1
+        except Exception:
             pass
 
     return {"updated": updated, "total": len(data.finding_ids)}
+
+
+class BulkSuppressRequest(BaseModel):
+    """GAP 6: Filter criteria for bulk suppression."""
+    severity: str | None = None
+    account_id: str | None = None
+    region: str | None = None
+    module: str | None = None
+    resource_id: str | None = None
+    reason: str = "Bulk suppression"
+
+
+@router.post("/bulk-suppress", response_model=dict)
+async def bulk_suppress(
+    data: "BulkSuppressRequest",
+    organization_id: str = Depends(get_org_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """GAP 6: Suppress all findings matching the given filter criteria."""
+    from sqlalchemy import select
+    from app.models.alert import FindingModel
+
+    query = select(FindingModel).where(
+        FindingModel.organization_id == organization_id,
+        FindingModel.status.in_(["open", "in_progress"]),
+    )
+    if data.severity:
+        query = query.where(FindingModel.severity == data.severity)
+    if data.account_id:
+        query = query.where(FindingModel.account_id == data.account_id)
+    if data.region:
+        query = query.where(FindingModel.region == data.region)
+    if data.module:
+        query = query.where(FindingModel.rule_id.like(f"{data.module}.%"))
+    if data.resource_id:
+        query = query.where(FindingModel.resource_id == data.resource_id)
+
+    result = await db.execute(query)
+    findings = result.scalars().all()
+
+    finding_service = FindingService(db)
+    suppressed = 0
+    for finding in findings:
+        try:
+            await finding_service.update_finding_status(
+                finding.id, "suppressed", reason=data.reason
+            )
+            suppressed += 1
+        except Exception:
+            pass
+
+    return {"suppressed": suppressed, "total": len(findings)}
 
 
 @router.post("/{finding_id}/suppress")

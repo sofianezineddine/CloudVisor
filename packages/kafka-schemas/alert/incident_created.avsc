@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "IncidentCreatedEvent",
+  "namespace": "cloudvisor.alert",
+  "doc": "Emitted when multiple findings are grouped into an incident",
+  "fields": [
+    {"name": "event_type", "type": "string", "default": "incident.created"},
+    {"name": "incident_id", "type": "string"},
+    {"name": "organization_id", "type": "string"},
+    {"name": "title", "type": "string"},
+    {"name": "severity", "type": "string"},
+    {"name": "finding_ids", "type": {"type": "array", "items": "string"}, "default": []},
+    {"name": "finding_count", "type": "int", "default": 0},
+    {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"}
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "FindingSuppressedEvent",
+  "namespace": "cloudvisor.alert",
+  "doc": "Emitted when a finding is suppressed (manually or by suppression rule)",
+  "fields": [
+    {"name": "event_type", "type": "string", "default": "finding.suppressed"},
+    {"name": "finding_id", "type": "string"},
+    {"name": "organization_id", "type": "string"},
+    {"name": "rule_id", "type": "string"},
+    {"name": "resource_id", "type": "string"},
+    {"name": "severity", "type": "string"},
+    {"name": "suppression_reason", "type": ["null", "string"], "default": null},
+    {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"}
+  ]
+}

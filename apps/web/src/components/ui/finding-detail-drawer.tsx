@@ -86,7 +86,7 @@ function parseRemediationSteps(remediation: string | null): string[] {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-6">
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
         {title}
       </h3>
       {children}
@@ -123,9 +123,9 @@ export function FindingDetailDrawer({
     setLoading(true);
     setError(null);
     apiClient.findings.get(findingId)
-      .then(res => setFinding(res?.data as FindingDetail ?? null))
-      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load finding'))
-      .finally(() => setLoading(false));
+      .then(res => setFinding(res?.data as FindingDetail ?? null)
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load finding')
+      .finally(() => setLoading(false);
   }, [findingId]);
 
   const handleAction = async (targetStatus: string) => {
@@ -157,12 +157,12 @@ export function FindingDetailDrawer({
     >
       {loading && (
         <div className="flex h-48 items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-[hsl(var(--accent))]" />
+          <Loader2 className="h-6 w-6 animate-spin text-[var(--accent)]" />
         </div>
       )}
 
       {error && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-[hsl(var(--critical))] bg-[hsl(var(--critical-dim))] p-3 text-sm text-[hsl(var(--critical))]">
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-[var(--critical)] bg-[var(--critical-dim)] p-3 text-sm text-[var(--critical)]">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
           {error}
           <button onClick={() => setError(null)} className="ml-auto text-xs underline">Dismiss</button>
@@ -175,7 +175,7 @@ export function FindingDetailDrawer({
           <div className="mb-5 flex flex-wrap items-center gap-2">
             <SeverityBadge severity={finding.severity} />
             <StatusBadge status={finding.status as any} />
-            <span className="flex items-center gap-1 text-xs text-[hsl(var(--text-tertiary))]">
+            <span className="flex items-center gap-1 text-xs text-[var(--text-tertiary)]">
               <Clock className="h-3 w-3" />
               {timeAgo(finding.first_seen_at)}
             </span>
@@ -198,27 +198,27 @@ export function FindingDetailDrawer({
                   ) : null}
                   {ACTION_LABELS[target] ?? target}
                 </Button>
-              ))}
+              )}
             </div>
           )}
 
           {/* ── Impact statement ────────────────────────────────────────── */}
           {finding.description && (
-            <div className="mb-5 rounded-md border-l-4 border-[hsl(var(--warning))] bg-[hsl(var(--warning-dim))] px-4 py-3">
-              <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--warning))]">
+            <div className="mb-5 rounded-md border-l-4 border-[var(--warning)] bg-[var(--warning-dim)] px-4 py-3">
+              <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--warning)]">
                 <AlertTriangle className="h-3 w-3" />
                 Why this matters
               </div>
-              <p className="text-sm text-[hsl(var(--text-primary))]">{finding.description}</p>
+              <p className="text-sm text-[var(--text-primary)]">{finding.description}</p>
             </div>
           )}
 
           {/* ── Resource card ────────────────────────────────────────────── */}
           <Section title="Affected Resource">
-            <div className="rounded-lg border border-[hsl(var(--border-default))] bg-[hsl(var(--bg-elevated))] p-4">
+            <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4">
               <div className="mb-3 flex items-center gap-2">
-                <Server className="h-4 w-4 text-[hsl(var(--text-secondary))]" />
-                <span className="font-medium text-[hsl(var(--text-primary))]">
+                <Server className="h-4 w-4 text-[var(--text-secondary)]" />
+                <span className="font-medium text-[var(--text-primary)]">
                   {finding.resource_name || finding.resource_id}
                 </span>
               </div>
@@ -230,19 +230,19 @@ export function FindingDetailDrawer({
                   { label: 'Region', value: finding.region },
                 ].filter(r => r.value).map(row => (
                   <div key={row.label}>
-                    <span className="text-[hsl(var(--text-tertiary))]">{row.label}: </span>
-                    <span className="font-mono text-[hsl(var(--text-secondary))]">{row.value}</span>
+                    <span className="text-[var(--text-tertiary)]">{row.label}: </span>
+                    <span className="font-mono text-[var(--text-secondary)]">{row.value}</span>
                   </div>
-                ))}
+                )}
               </div>
               {finding.tags && Object.keys(finding.tags).length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {Object.entries(finding.tags).slice(0, 6).map(([k, v]) => (
-                    <span key={k} className="flex items-center gap-1 rounded-full bg-[hsl(var(--bg-surface))] border border-[hsl(var(--border-faint))] px-2 py-0.5 text-[10px] text-[hsl(var(--text-tertiary))]">
+                    <span key={k} className="flex items-center gap-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-faint)] px-2 py-0.5 text-[10px] text-[var(--text-tertiary)]">
                       <Tag className="h-2.5 w-2.5" />
                       {k}={v}
                     </span>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
@@ -253,13 +253,13 @@ export function FindingDetailDrawer({
             <Section title="Remediation Steps">
               <ol className="space-y-2">
                 {remediationSteps.map((step, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm text-[hsl(var(--text-primary))]">
-                    <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[hsl(var(--accent-dim))] text-[10px] font-bold text-[hsl(var(--accent))]">
+                  <li key={i} className="flex items-start gap-3 text-sm text-[var(--text-primary)]">
+                    <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent-dim)] text-[10px] font-bold text-[var(--accent)]">
                       {i + 1}
                     </span>
                     <span>{step}</span>
                   </li>
-                ))}
+                )}
               </ol>
             </Section>
           )}
@@ -275,9 +275,9 @@ export function FindingDetailDrawer({
                   return (
                     <span
                       key={i}
-                      className="flex items-center gap-1 rounded-full border border-[hsl(var(--border-default))] bg-[hsl(var(--bg-elevated))] px-2.5 py-1 text-xs font-medium text-[hsl(var(--text-secondary))]"
+                      className="flex items-center gap-1 rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)]"
                     >
-                      <Shield className="h-3 w-3 text-[hsl(var(--accent))]" />
+                      <Shield className="h-3 w-3 text-[var(--accent)]" />
                       {label}
                     </span>
                   );
@@ -291,46 +291,46 @@ export function FindingDetailDrawer({
             <div className="space-y-3">
               {/* Always show first_seen */}
               <div className="flex items-start gap-3">
-                <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-[hsl(var(--success))]" />
+                <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-[var(--success)]" />
                 <div>
-                  <div className="text-sm text-[hsl(var(--text-primary))]">Finding detected</div>
-                  <div className="text-xs text-[hsl(var(--text-tertiary))]">{formatDate(finding.first_seen_at)}</div>
+                  <div className="text-sm text-[var(--text-primary)]">Finding detected</div>
+                  <div className="text-xs text-[var(--text-tertiary)]">{formatDate(finding.first_seen_at)}</div>
                 </div>
               </div>
 
               {/* History entries */}
               {(finding.history ?? []).map((entry, i) => (
                 <div key={i} className="flex items-start gap-3">
-                  <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-[hsl(var(--accent))]" />
+                  <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-[var(--accent)]" />
                   <div>
-                    <div className="flex items-center gap-1.5 text-sm text-[hsl(var(--text-primary))]">
+                    <div className="flex items-center gap-1.5 text-sm text-[var(--text-primary)]">
                       <span className="capitalize">{entry.from_status ?? 'open'}</span>
-                      <ChevronRight className="h-3 w-3 text-[hsl(var(--text-tertiary))]" />
+                      <ChevronRight className="h-3 w-3 text-[var(--text-tertiary)]" />
                       <span className="capitalize">{entry.to_status}</span>
                     </div>
-                    <div className="text-xs text-[hsl(var(--text-tertiary))]">
+                    <div className="text-xs text-[var(--text-tertiary)]">
                       {entry.changed_by} · {formatDate(entry.changed_at)}
                     </div>
                     {entry.note && (
-                      <div className="mt-1 text-xs text-[hsl(var(--text-secondary))]">{entry.note}</div>
+                      <div className="mt-1 text-xs text-[var(--text-secondary)]">{entry.note}</div>
                     )}
                   </div>
                 </div>
-              ))}
+              )}
 
               {/* Current status */}
               <div className="flex items-start gap-3">
                 <div className={cn(
                   'mt-1 h-2 w-2 flex-shrink-0 rounded-full',
-                  finding.status === 'open' ? 'bg-[hsl(var(--critical))]' :
-                  finding.status === 'resolved' ? 'bg-[hsl(var(--success))]' :
-                  'bg-[hsl(var(--medium))]'
+                  finding.status === 'open' ? 'bg-[var(--critical)]' :
+                  finding.status === 'resolved' ? 'bg-[var(--success)]' :
+                  'bg-[var(--medium)]'
                 )} />
                 <div>
-                  <div className="text-sm text-[hsl(var(--text-primary))] capitalize">
+                  <div className="text-sm text-[var(--text-primary)] capitalize">
                     Currently {finding.status.replace('_', ' ')}
                   </div>
-                  <div className="text-xs text-[hsl(var(--text-tertiary))]">
+                  <div className="text-xs text-[var(--text-tertiary)]">
                     Last seen {timeAgo(finding.last_seen_at)}
                   </div>
                 </div>

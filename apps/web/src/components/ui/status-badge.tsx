@@ -1,36 +1,102 @@
+/**
+ * StatusBadge — Cloudscape StatusIndicator pattern.
+ *
+ * Spec §3.2: "NEVER just a colored dot, never a bare label alone."
+ * Every state indicator is an icon + label pair (StatusIndicator).
+ *
+ * Maps finding lifecycle statuses to the correct Cloudscape StatusIndicator type:
+ *   open          → type="error"   (XCircle, red)
+ *   in_progress   → type="warning" (AlertTriangle, amber)
+ *   resolved      → type="success" (CheckCircle2, green)
+ *   suppressed    → type="stopped" (MinusSquare, gray)
+ *   accepted_risk → custom "accepted" (CheckCircle2, purple)
+ */
+
 import * as React from 'react';
+import {
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  MinusSquare,
+} from 'lucide-react';
+
+type FindingStatus = 'open' | 'in_progress' | 'resolved' | 'suppressed' | 'accepted_risk';
 
 interface StatusBadgeProps {
-  status: 'open' | 'in_progress' | 'resolved' | 'suppressed' | 'accepted_risk';
+  status: FindingStatus;
   size?: 'sm' | 'md';
 }
 
-const STATUS_MAP: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  open:          { label: 'Open',        color: 'var(--critical)', bg: 'var(--critical-bg)', border: 'var(--critical-border)' },
-  in_progress:   { label: 'In progress', color: 'var(--medium)',   bg: 'var(--medium-bg)',   border: 'var(--medium-border)' },
-  resolved:      { label: 'Resolved',    color: 'var(--success)',  bg: 'var(--success-bg)',  border: 'var(--low-border)' },
-  suppressed:    { label: 'Suppressed',  color: 'var(--info)',     bg: 'var(--info-bg)',     border: 'var(--info-border)' },
-  accepted_risk: { label: 'Accepted',    color: '#6b2fa0',         bg: 'rgba(107,47,160,0.08)', border: 'rgba(107,47,160,0.25)' },
-};
+interface StatusConfig {
+  label: string;
+  icon: React.ReactNode;
+  color: string;
+}
 
+function getStatusConfig(status: FindingStatus, iconSize: number): StatusConfig {
+  switch (status) {
+    case 'open':
+      return {
+        label: 'Open',
+        icon: <XCircle size={iconSize} strokeWidth={2} />,
+        color: 'var(--critical)',
+      };
+    case 'in_progress':
+      return {
+        label: 'In progress',
+        icon: <AlertTriangle size={iconSize} strokeWidth={2} />,
+        color: 'var(--medium)',
+      };
+    case 'resolved':
+      return {
+        label: 'Resolved',
+        icon: <CheckCircle2 size={iconSize} strokeWidth={2} />,
+        color: 'var(--success)',
+      };
+    case 'suppressed':
+      return {
+        label: 'Suppressed',
+        icon: <MinusSquare size={iconSize} strokeWidth={2} />,
+        color: 'var(--info)',
+      };
+    case 'accepted_risk':
+      return {
+        label: 'Accepted',
+        icon: <CheckCircle2 size={iconSize} strokeWidth={2} />,
+        color: '#7c3aed',
+      };
+    default:
+      return {
+        label: String(status),
+        icon: <MinusSquare size={iconSize} strokeWidth={2} />,
+        color: 'var(--text-tertiary)',
+      };
+  }
+}
+
+/**
+ * StatusBadge renders a Cloudscape-style StatusIndicator: icon + label.
+ * Never a bare colored dot. Never a label without an icon.
+ */
 export function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {
-  const s = STATUS_MAP[status] ?? STATUS_MAP.open;
+  const iconSize = size === 'sm' ? 12 : 14;
+  const fontSize = size === 'sm' ? '11px' : '13px';
+  const { label, icon, color } = getStatusConfig(status, iconSize);
+
   return (
     <span
-      className="inline-flex items-center gap-1 font-semibold"
+      className="inline-flex items-center gap-1 font-medium"
       style={{
-        borderRadius: '2px',
-        color: s.color,
-        backgroundColor: s.bg,
-        border: `1px solid ${s.border}`,
-        padding: size === 'sm' ? '1px 5px' : '2px 6px',
-        fontSize: size === 'sm' ? '11px' : '12px',
+        color,
+        fontSize,
         fontFamily: 'var(--font-sans)',
         whiteSpace: 'nowrap',
+        lineHeight: 1.4,
       }}
+      aria-label={`Status: ${label}`}
     >
-      <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-      {s.label}
+      {icon}
+      {label}
     </span>
   );
 }

@@ -10,7 +10,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useScopeStore } from '@/stores/scope';
 import { NoAccountsConnectedEmptyState } from '@/components/ui/no-accounts-empty-state';
-import policyAPI, { CompliancePosture, ComplianceControl } from '@/lib/api/policy';
+import apiClient from '@/lib/api/apiClient';
+import type { CompliancePosture, ComplianceControl } from '@/lib/api/policy';
 
 // ─── All 12 spec frameworks with provider scope mapping ──────────────────────
 
@@ -235,9 +236,11 @@ export default function CompliancePage() {
     setLoading(true);
     setError(null);
     try {
-      const summary = await policyAPI.getComplianceSummary();
+      // Use gateway /v1/compliance instead of calling policy service directly
+      const resp = await apiClient.compliance.list();
+      const frameworks = (resp?.data as any[]) ?? [];
       const map: Record<string, CompliancePosture> = {};
-      for (const p of summary.frameworks) {
+      for (const p of frameworks) {
         map[p.framework] = p;
       }
       setPostures(map);
@@ -255,8 +258,12 @@ export default function CompliancePage() {
     if (postures[key]?.controls?.length) return; // already loaded
     setLoadingFramework(true);
     try {
-      const posture = await policyAPI.getCompliancePosture(key);
-      setPostures(prev => ({ ...prev, [key]: posture }));
+      // Use gateway /v1/compliance/{framework} instead of calling policy service directly
+      const resp = await apiClient.compliance.list({ framework: key });
+      const posture = (resp?.data as any)?.[0] ?? resp?.data;
+      if (posture) {
+        setPostures(prev => ({ ...prev, [key]: posture }));
+      }
     } catch {
       // non-fatal — keep existing data
     } finally {

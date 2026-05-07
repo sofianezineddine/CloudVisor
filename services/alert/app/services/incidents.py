@@ -1,5 +1,11 @@
-"""Incident service - grouping findings into incidents."""
+"""Incident service - grouping findings into incidents.
 
+Emits Kafka events per spec §3.5:
+  - incident.created
+  - incident.updated
+"""
+
+import json
 import uuid
 import logging
 from datetime import datetime
@@ -15,8 +21,9 @@ logger = logging.getLogger(__name__)
 class IncidentService:
     """Service for managing incidents (grouped findings)."""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, kafka_producer: Any = None):
         self._db = db
+        self._producer = kafka_producer
 
     async def create_incident(
         self,
@@ -26,7 +33,7 @@ class IncidentService:
         severity: str = "MEDIUM",
         description: str | None = None,
     ) -> dict[str, Any]:
-        """Create an incident from multiple findings."""
+        """Create an incident from multiple findings and emit incident.created."""
         incident = IncidentModel(
             id=str(uuid.uuid4()),
             organization_id=organization_id,
@@ -43,9 +50,26 @@ class IncidentService:
         await self._db.commit()
         await self._db.refresh(incident)
 
-        logger.info(f"Created incident: {incident.id} with {len(finding_ids)} findings")
+        logger.info(
+            f"Created incident: {incident.id} with {len(finding_ids)} findings",
+            extra={"organization_id": organization_id},
+        )
 
-        return self._incident_to_dict(incident)
+        incident_dict = self._incident_to_dict(incident)
+
+        # ── Emit incident.created Kafka event (spec §3.5) ─────────────────────
+        await self._emit_kafka("incident.created", incident.id, {
+            "event_type": "incident.created",
+            "incident_id": incident.id,
+            "organization_id": organization_id,
+            "title": title,
+            "severity": severity,
+            "finding_ids": finding_ids,
+            "finding_count": len(finding_ids),
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+        return incident_dict
 
     async def group_findings(
         self,
@@ -106,7 +130,7 @@ class IncidentService:
         )
         findings = result.scalars().all()
 
-        grouped = {}
+        grouped: dict[str, list] = {}
         for f in findings:
             key = f"{f.rule_id}:{f.account_id}"
             if key not in grouped:
@@ -131,7 +155,7 @@ class IncidentService:
         )
         findings = result.scalars().all()
 
-        grouped = {}
+        grouped: dict[str, list] = {}
         for f in findings:
             if f.resource_id not in grouped:
                 grouped[f.resource_id] = []
@@ -157,7 +181,7 @@ class IncidentService:
         findings = result.scalars().all()
 
         # Group by resource within 1-hour windows
-        time_windows = {}
+        time_windows: dict[str, list] = {}
         for f in findings:
             window_key = f"{f.resource_id}:{f.first_seen_at.strftime('%Y-%m-%d-%H')}"
             if window_key not in time_windows:
@@ -186,8 +210,11 @@ class IncidentService:
         self,
         incident_id: str,
         new_status: str,
+        assignee_id: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
     ) -> dict[str, Any]:
-        """Update incident status."""
+        """Update incident and emit incident.updated Kafka event."""
         result = await self._db.execute(
             select(IncidentModel).where(IncidentModel.id == incident_id)
         )
@@ -196,11 +223,34 @@ class IncidentService:
         if not incident:
             raise ValueError("Incident not found")
 
-        incident.status = new_status
+        if new_status is not None:
+            incident.status = new_status
+            if new_status == "resolved" and not incident.resolved_at:
+                incident.resolved_at = datetime.utcnow()
+        if assignee_id is not None:
+            incident.assignee_id = assignee_id
+        if title is not None:
+            incident.title = title
+        if description is not None:
+            incident.description = description
+
         incident.updated_at = datetime.utcnow()
         await self._db.commit()
+        await self._db.refresh(incident)
 
-        return self._incident_to_dict(incident)
+        incident_dict = self._incident_to_dict(incident)
+
+        # ── Emit incident.updated Kafka event (spec §3.5) ─────────────────────
+        await self._emit_kafka("incident.updated", incident.id, {
+            "event_type": "incident.updated",
+            "incident_id": incident.id,
+            "organization_id": incident.organization_id,
+            "status": incident.status,
+            "severity": incident.severity,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+        return incident_dict
 
     async def list_incidents(
         self,
@@ -214,6 +264,19 @@ class IncidentService:
         result = await self._db.execute(query)
         return [self._incident_to_dict(i) for i in result.scalars().all()]
 
+    async def _emit_kafka(self, topic: str, key: str, event: dict[str, Any]) -> None:
+        """Emit event to Kafka. Non-fatal if producer unavailable."""
+        if not self._producer:
+            return
+        try:
+            await self._producer.send_and_wait(
+                topic,
+                key=key.encode("utf-8") if key else None,
+                value=json.dumps(event, default=str).encode("utf-8"),
+            )
+        except Exception as e:
+            logger.error(f"Failed to emit {topic}: {e}")
+
     def _incident_to_dict(self, incident: IncidentModel) -> dict[str, Any]:
         return {
             "id": incident.id,
@@ -226,4 +289,5 @@ class IncidentService:
             "assignee_id": incident.assignee_id,
             "created_at": incident.created_at.isoformat(),
             "updated_at": incident.updated_at.isoformat(),
+            "resolved_at": incident.resolved_at.isoformat() if incident.resolved_at else None,
         }

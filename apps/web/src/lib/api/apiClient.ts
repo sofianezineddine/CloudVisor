@@ -211,6 +211,13 @@ export const findingsAPI = {
     });
   },
 
+  async acceptRisk(findingId: string, justification: string): Promise<ApiEnvelope<Finding>> {
+    return apiFetch(`/v1/findings/${findingId}/accept-risk`, {
+      method: 'POST',
+      body: JSON.stringify({ justification }),
+    });
+  },
+
   async bulkUpdate(
     findingIds: string[],
     status: string,
@@ -383,7 +390,49 @@ export const complianceAPI = {
     if (params?.limit !== undefined) query.set('limit', String(params.limit));
     if (params?.offset !== undefined) query.set('offset', String(params.offset));
     const qs = query.toString();
+    // If a specific framework is requested, use the framework detail endpoint
+    if (params?.framework) {
+      return apiFetch(`/v1/compliance/${encodeURIComponent(params.framework)}${qs ? `?${qs.replace(`framework=${params.framework}&`, '').replace(`framework=${params.framework}`, '')}` : ''}`);
+    }
     return apiFetch(`/v1/compliance${qs ? `?${qs}` : ''}`);
+  },
+};
+
+// ─── Accounts ─────────────────────────────────────────────────────────────────
+
+export const accountsAPI = {
+  async list(params?: { limit?: number; offset?: number }): Promise<ApiEnvelope<any[]>> {
+    const query = new URLSearchParams();
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    const qs = query.toString();
+    return apiFetch(`/v1/accounts${qs ? `?${qs}` : ''}`);
+  },
+
+  async get(accountId: string): Promise<ApiEnvelope<any>> {
+    return apiFetch(`/v1/accounts/${accountId}`);
+  },
+
+  async create(data: {
+    provider: string;
+    name: string;
+    account_id: string;
+    region?: string;
+    credentials?: Record<string, unknown>;
+    polling_interval_minutes?: number;
+  }): Promise<ApiEnvelope<any>> {
+    return apiFetch('/v1/accounts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async delete(accountId: string): Promise<null> {
+    return apiFetch(`/v1/accounts/${accountId}`, { method: 'DELETE' });
+  },
+
+  async triggerScan(accountId: string): Promise<ApiEnvelope<any>> {
+    return apiFetch(`/v1/accounts/${accountId}/scan`, { method: 'POST', body: JSON.stringify({}) });
   },
 };
 
@@ -395,6 +444,7 @@ const apiClient = {
   notifications: notificationsAPI,
   assets: assetsAPI,
   compliance: complianceAPI,
+  accounts: accountsAPI,
 };
 
 export default apiClient;

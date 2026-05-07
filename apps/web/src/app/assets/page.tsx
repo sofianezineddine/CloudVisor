@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { connectorAPI, DiscoveredResource } from '@/lib/api/connector';
+import apiClient from '@/lib/api/apiClient';
 import { useScopeStore } from '@/stores/scope';
 import { NoAccountsConnectedEmptyState } from '@/components/ui/no-accounts-empty-state';
 import { NoScanDataEmptyState } from '@/components/ui/no-scan-empty-state';
@@ -518,14 +519,32 @@ export default function AssetsPage() {
   const fetchResources = React.useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const resp = await connectorAPI.listResources({
+      // Use the API gateway (/v1/assets) instead of calling the connector directly
+      const resp = await apiClient.assets.list({
         account_id: globalAccountId,
         provider: !globalAccountId ? globalProvider : undefined,
         search: debSearch || undefined,
         resource_type: typeFilter || undefined,
-        limit: 2000, offset: 0,
+        limit: 500, offset: 0,
       });
-      setResources(resp.resources);
+      // Gateway returns { data: [...], total, meta }; connector returned { resources: [...] }
+      const items = (resp?.data as any[]) ?? [];
+      // Map gateway asset shape to DiscoveredResource shape for compatibility
+      setResources(items.map((a: any) => ({
+        id: a.id,
+        cloud_resource_id: a.cloud_resource_id ?? a.id,
+        provider: a.provider,
+        account_id: a.account_id,
+        organization_id: a.organization_id ?? '',
+        region: a.region ?? 'global',
+        resource_type: a.resource_type,
+        name: a.name,
+        tags: a.tags ?? {},
+        is_public: a.is_public ?? false,
+        environment: a.environment ?? 'unknown',
+        first_seen_at: a.first_seen_at ?? null,
+        last_seen_at: a.last_seen_at ?? null,
+      })));
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setLoading(false); }
   }, [debSearch, typeFilter, globalAccountId, globalProvider]);

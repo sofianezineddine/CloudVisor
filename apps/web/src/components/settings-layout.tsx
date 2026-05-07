@@ -13,6 +13,8 @@ import {
   Bell,
   Users,
   Cloud,
+  ShieldOff,
+  Webhook,
 } from 'lucide-react';
 
 const settingsSections = [
@@ -33,6 +35,8 @@ const settingsSections = [
       { id: 'cloud-accounts', label: 'Cloud Accounts', href: '/settings/cloud-accounts', icon: Cloud },
       { id: 'team', label: 'Team', href: '/settings/team', icon: Users },
       { id: 'notifications', label: 'Notifications', href: '/settings/notifications', icon: Bell },
+      { id: 'webhooks', label: 'Webhooks', href: '/settings/webhooks', icon: Webhook },
+      { id: 'suppressions', label: 'Suppression Rules', href: '/settings/suppressions', icon: ShieldOff },
     ],
   },
 ];

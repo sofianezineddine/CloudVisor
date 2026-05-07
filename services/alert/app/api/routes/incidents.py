@@ -19,6 +19,26 @@ def get_org_id(x_org_id: str = Query(...)) -> str:
     return x_org_id
 
 
+# GAP 7: Incident lifecycle state machine
+# Spec: open → investigating → resolved, open → resolved (direct)
+_INCIDENT_VALID_TRANSITIONS: dict[str, list[str]] = {
+    "open": ["investigating", "resolved"],
+    "investigating": ["resolved", "open"],  # allow re-open from investigating
+    "resolved": ["open"],  # allow re-open on regression
+}
+
+
+def _validate_incident_transition(old_status: str, new_status: str) -> None:
+    """Raise HTTPException if the transition is not allowed by the incident lifecycle."""
+    allowed = _INCIDENT_VALID_TRANSITIONS.get(old_status, [])
+    if new_status not in allowed:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid incident status transition: {old_status} → {new_status}. "
+                   f"Allowed: {allowed}",
+        )
+
+
 class IncidentUpdateRequest(BaseModel):
     status: str | None = None
     title: str | None = None
@@ -38,6 +58,7 @@ def _incident_to_dict(incident: IncidentModel) -> dict[str, Any]:
         "assignee_id": incident.assignee_id,
         "created_at": incident.created_at.isoformat() if incident.created_at else None,
         "updated_at": incident.updated_at.isoformat() if incident.updated_at else None,
+        "resolved_at": incident.resolved_at.isoformat() if incident.resolved_at else None,  # GAP 12
     }
 
 
@@ -95,7 +116,11 @@ async def update_incident(
         raise HTTPException(status_code=404, detail="Incident not found")
 
     if data.status is not None:
+        # GAP 7: Enforce incident lifecycle state machine
+        _validate_incident_transition(incident.status, data.status)
         incident.status = data.status
+        if data.status == "resolved":
+            incident.resolved_at = datetime.utcnow()
     if data.title is not None:
         incident.title = data.title
     if data.description is not None:

@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "FindingUpdatedEvent",
+  "namespace": "cloudvisor.alert",
+  "doc": "Emitted when a finding status, assignee, or context changes",
+  "fields": [
+    {"name": "event_type", "type": "string", "default": "finding.updated"},
+    {"name": "finding_id", "type": "string"},
+    {"name": "organization_id", "type": "string"},
+    {"name": "old_status", "type": ["null", "string"], "default": null},
+    {"name": "new_status", "type": "string"},
+    {"name": "severity", "type": "string"},
+    {"name": "changed_by", "type": ["null", "string"], "default": null},
+    {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"}
+  ]
+}

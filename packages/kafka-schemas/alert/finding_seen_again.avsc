@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "FindingSeenAgainEvent",
+  "namespace": "cloudvisor.alert",
+  "doc": "Emitted when a duplicate finding is detected (last_seen_at updated)",
+  "fields": [
+    {"name": "event_type", "type": "string", "default": "finding.seen_again"},
+    {"name": "finding_id", "type": "string"},
+    {"name": "organization_id", "type": "string"},
+    {"name": "severity", "type": "string"},
+    {"name": "regression_count", "type": "int", "default": 0},
+    {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"}
+  ]
+}

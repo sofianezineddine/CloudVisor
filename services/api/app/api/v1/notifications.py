@@ -20,11 +20,24 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 class ChannelCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    channel_type: str = Field(..., description="slack|pagerduty|email|webhook|teams")
+    channel_type: str = Field(..., description="slack|pagerduty|email|webhook|teams|jira")
     config: dict[str, Any] = Field(..., description="Channel-specific configuration")
     severity_filter: list[str] = Field(
         default_factory=list,
         description="Only notify for these severities. Empty = all severities.",
+    )
+    # Routing filters per spec §3.5
+    module_filter: list[str] = Field(
+        default_factory=list,
+        description="Only notify for findings from these modules (cspm, cwpp, cdr, etc.).",
+    )
+    account_filter: list[str] = Field(
+        default_factory=list,
+        description="Only notify for findings from these cloud account IDs.",
+    )
+    tag_filter: dict[str, str] = Field(
+        default_factory=dict,
+        description="Only notify for findings on resources with these tags.",
     )
     is_active: bool = True
 
@@ -89,6 +102,26 @@ async def remove_channel(
             f"/internal/notifications/channels/{channel_id}",
             headers=user.auth_headers,
         )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Alert service unavailable: {e}")
+
+
+@router.put("/channels/{channel_id}")
+async def update_channel(
+    channel_id: str,
+    data: ChannelCreateRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Update an existing notification channel configuration."""
+    t0 = time.monotonic()
+    alert = get_alert_proxy()
+    try:
+        result = await alert.put(
+            f"/internal/notifications/channels/{channel_id}",
+            json=data.model_dump(),
+            headers=user.auth_headers,
+        )
+        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Alert service unavailable: {e}")
 
