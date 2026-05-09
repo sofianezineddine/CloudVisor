@@ -113,8 +113,8 @@ function ConversationsModal({
           </div>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded transition-colors"
-            style={{ color: 'var(--text-secondary)' }}
+            className="flex h-8 w-8 items-center justify-center transition-colors"
+            style={{ color: 'var(--text-secondary)', borderRadius: 'var(--radius-button)' }}
             onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
             onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
@@ -152,8 +152,8 @@ function ConversationsModal({
                 </div>
                 <button
                   onClick={e => handleDelete(e, session.id)}
-                  className="flex h-7 w-7 items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2"
-                  style={{ color: 'var(--text-secondary)' }}
+                  className="flex h-7 w-7 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2"
+                  style={{ color: 'var(--text-secondary)', borderRadius: 'var(--radius-button)' }}
                   onMouseEnter={e => {
                     e.currentTarget.style.backgroundColor = 'var(--danger-bg)';
                     e.currentTarget.style.color = 'var(--danger)';
@@ -205,7 +205,7 @@ function MessageBubble({ message }: { message: Message }) {
       <div className="flex justify-end py-2">
         <div
           className="max-w-[80%] px-4 py-2.5 rounded-2xl text-sm"
-          style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+          style={{ backgroundColor: 'var(--btn-primary-bg)', color: '#fff' }}
         >
           {message.content}
         </div>
@@ -365,6 +365,7 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
 
     try {
       const API_BASE = process.env.NEXT_PUBLIC_COPILOT_URL || 'http://localhost:8010';
+      const GW_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
 
       let orgId: string | null = null;
@@ -398,21 +399,40 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
 
       const history = messages.filter(m => !m.processing).map(m => ({ role: m.role, content: m.content }));
 
-      const res = await fetch(`${API_BASE}/v1/copilot/query`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Org-ID': orgId,
-          ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer dev-token' }),
-        },
-        body: JSON.stringify({
-          query: userMsg.content,
-          stream: false,
-          ui_context: context,
-          conversation_history: history,
-          ...(activeSessionId ? { session_id: activeSessionId } : {}),
-        }),
+      const requestBody = JSON.stringify({
+        query: userMsg.content,
+        stream: false,
+        ui_context: context,
+        conversation_history: history,
+        ...(activeSessionId ? { session_id: activeSessionId } : {}),
       });
+
+      const authHeaders = {
+        'Content-Type': 'application/json',
+        'X-Org-ID': orgId,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      // Try gateway first (POST /v1/copilot/query), fall back to direct copilot service
+      let res: Response | null = null;
+      try {
+        res = await fetch(`${GW_BASE}/v1/copilot/query`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: requestBody,
+        });
+        if (!res.ok) res = null; // fall through to direct
+      } catch {
+        res = null;
+      }
+
+      if (!res) {
+        res = await fetch(`${API_BASE}/v1/copilot/query`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: requestBody,
+        });
+      }
 
       if (!res.ok) { const err = await res.text().catch(() => ''); throw new Error(`CloudVisor Q returned ${res.status}: ${err}`); }
 
@@ -489,11 +509,12 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
       <button
         onClick={handleSendMessage}
         disabled={!inputValue.trim() || isProcessing}
-        className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded transition-colors"
+        className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center transition-colors"
         style={{
-          backgroundColor: inputValue.trim() && !isProcessing ? 'var(--accent)' : 'transparent',
+          backgroundColor: inputValue.trim() && !isProcessing ? 'var(--btn-primary-bg)' : 'transparent',
           color: inputValue.trim() && !isProcessing ? '#fff' : 'var(--text-tertiary)',
           cursor: inputValue.trim() && !isProcessing ? 'pointer' : 'not-allowed',
+          borderRadius: 'var(--radius-button)',
         }}
       >
         <Send className="h-3.5 w-3.5" />
@@ -604,11 +625,12 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
                   <button
                     onClick={handleSendMessage}
                     disabled={!inputValue.trim() || isProcessing}
-                    className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded transition-colors"
+                    className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center transition-colors"
                     style={{
-                      backgroundColor: inputValue.trim() && !isProcessing ? 'var(--accent)' : 'transparent',
+                      backgroundColor: inputValue.trim() && !isProcessing ? 'var(--btn-primary-bg)' : 'transparent',
                       color: inputValue.trim() && !isProcessing ? '#fff' : 'var(--text-tertiary)',
                       cursor: inputValue.trim() && !isProcessing ? 'pointer' : 'not-allowed',
+                      borderRadius: 'var(--radius-button)',
                     }}
                   >
                     <Send className="h-3.5 w-3.5" />
@@ -686,11 +708,12 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
                   <button
                     onClick={handleSendMessage}
                     disabled={!inputValue.trim() || isProcessing}
-                    className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded transition-colors"
+                    className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center transition-colors"
                     style={{
-                      backgroundColor: inputValue.trim() && !isProcessing ? 'var(--accent)' : 'transparent',
+                      backgroundColor: inputValue.trim() && !isProcessing ? 'var(--btn-primary-bg)' : 'transparent',
                       color: inputValue.trim() && !isProcessing ? '#fff' : 'var(--text-tertiary)',
                       cursor: inputValue.trim() && !isProcessing ? 'pointer' : 'not-allowed',
+                      borderRadius: 'var(--radius-button)',
                     }}
                   >
                     <Send className="h-3.5 w-3.5" />

@@ -68,7 +68,7 @@ function Widget({
       style={{
         height: FIXED_WIDGET_HEIGHT + 'px',
         backgroundColor: 'var(--bg-surface)',
-        border: isDragOver ? '2px dashed #0972d3' : '1px solid var(--border-default)',
+        border: isDragOver ? '2px dashed var(--accent)' : '1px solid var(--border-default)',
         borderRadius: '8px',
         transition: 'border-color 0.1s',
       }}
@@ -224,25 +224,25 @@ function ConsoleGrid() {
   });
 
   const services = [
-    { label: 'Findings', href: '/findings', color: '#d13212', iconComponent: <Shield size={16} /> },
-    { label: 'Assets', href: '/assets', color: '#1a6b3c', iconComponent: <Server size={16} /> },
-    { label: 'CSPM', href: '/cspm', color: '#0073bb', iconComponent: <Shield size={16} /> },
-    { label: 'CWPP', href: '/cwpp', color: '#d45b07', iconComponent: <Server size={16} /> },
+    { label: 'Findings', href: '/findings', color: 'var(--critical)', iconComponent: <Shield size={16} /> },
+    { label: 'Assets', href: '/assets', color: 'var(--success)', iconComponent: <Server size={16} /> },
+    { label: 'CSPM', href: '/cspm', color: 'var(--accent)', iconComponent: <Shield size={16} /> },
+    { label: 'CWPP', href: '/cwpp', color: 'var(--high)', iconComponent: <Server size={16} /> },
     { label: 'Identity (CIEM)', href: '/ciem', color: '#6b2fa0', iconComponent: <Key size={16} /> },
     { label: 'Kubernetes (KSPM)', href: '/kspm', color: '#326ce5', iconComponent: <Cloud size={16} /> },
-    { label: 'Data (DSPM)', href: '/dspm', color: '#1a6b3c', iconComponent: <Database size={16} /> },
-    { label: 'Detection (CDR)', href: '/cdr', color: '#d13212', iconComponent: <Activity size={16} /> },
+    { label: 'Data (DSPM)', href: '/dspm', color: 'var(--success)', iconComponent: <Database size={16} /> },
+    { label: 'Detection (CDR)', href: '/cdr', color: 'var(--critical)', iconComponent: <Activity size={16} /> },
   ];
 
   const modules = [
-    { label: 'CSPM', href: '/cspm', color: '#0073bb', icon: 'CSPM' },
-    { label: 'CWPP', href: '/cwpp', color: '#d45b07', icon: 'CWPP' },
+    { label: 'CSPM', href: '/cspm', color: 'var(--accent)', icon: 'CSPM' },
+    { label: 'CWPP', href: '/cwpp', color: 'var(--high)', icon: 'CWPP' },
     { label: 'CIEM', href: '/ciem', color: '#6b2fa0', icon: 'CIEM' },
     { label: 'KSPM', href: '/kspm', color: '#326ce5', icon: 'KSPM' },
-    { label: 'DSPM', href: '/dspm', color: '#1a6b3c', icon: 'DSPM' },
-    { label: 'CDR', href: '/cdr', color: '#d13212', icon: 'CDR' },
-    { label: 'CI/CD', href: '/cicd', color: '#8d6605', icon: 'CI/CD' },
-    { label: 'AIOps', href: '/aiops', color: '#0073bb', icon: 'AIOps' },
+    { label: 'DSPM', href: '/dspm', color: 'var(--success)', icon: 'DSPM' },
+    { label: 'CDR', href: '/cdr', color: 'var(--critical)', icon: 'CDR' },
+    { label: 'CI/CD', href: '/cicd', color: 'var(--warning)', icon: 'CI/CD' },
+    { label: 'AIOps', href: '/aiops', color: 'var(--accent)', icon: 'AIOps' },
   ];
 
   const widgetRefreshHandlers: Record<string, () => void> = {
@@ -509,9 +509,9 @@ function ConsoleGrid() {
             onClick={() => setShowAddWidgets(true)}
             disabled={removedWidgets.length === 0}
             className="flex items-center gap-1.5 text-xs sm:text-sm font-bold transition-colors disabled:opacity-50"
-            style={{ height: '30px', padding: '0 10px', backgroundColor: '#ff9900', color: '#ffffff', border: '1px solid #ff9900', borderRadius: '4px', cursor: removedWidgets.length === 0 ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
-            onMouseEnter={e => { if (removedWidgets.length > 0) (e.currentTarget.style.backgroundColor = '#ec7211'); }}
-            onMouseLeave={e => { if (removedWidgets.length > 0) (e.currentTarget.style.backgroundColor = '#ff9900'); }}
+            style={{ height: '30px', padding: '0 10px', backgroundColor: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)', border: '1px solid var(--btn-primary-bg)', borderRadius: '4px', cursor: removedWidgets.length === 0 ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
+            onMouseEnter={e => { if (removedWidgets.length > 0) (e.currentTarget.style.backgroundColor = 'var(--btn-primary-hover)'); }}
+            onMouseLeave={e => { if (removedWidgets.length > 0) (e.currentTarget.style.backgroundColor = 'var(--btn-primary-bg)'); }}
           >
             <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
             <span className="hidden sm:inline">Add widgets {removedWidgets.length > 0 && `(${removedWidgets.length})`}</span>

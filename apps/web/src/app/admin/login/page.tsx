@@ -45,14 +45,14 @@ export default function AdminLoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-[var(--bg-base)]">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent)]">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-[var(--radius-container)] bg-[var(--accent)]">
             <Shield className="h-6 w-6 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">CloudVisor Admin</h1>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">Platform administration dashboard</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Admin Access</h1>
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">Enter your credentials to manage the platform</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-6">
+        <form onSubmit={handleSubmit} className="rounded-[var(--radius-container)] border border-[var(--border-default)] bg-[var(--bg-surface)] p-6">
           {error && (
             <div className="mb-4 rounded-md bg-[var(--critical-dim)] p-3 text-sm text-[var(--critical)]">
               {error}
@@ -86,7 +86,7 @@ export default function AdminLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-50"
+            className="w-full rounded-[var(--radius-button)] bg-[var(--btn-primary-bg)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--btn-primary-hover)] disabled:opacity-50"
           >
             {loading ? 'Signing in...' : 'Sign in'}
           </button>

@@ -16,21 +16,27 @@ export default function OAuthCallbackPage() {
 
     if (!code) {
       setError('Missing authorization code');
-      setTimeout(() => router.push('/login'), 3000);
+      setTimeout(() => router.replace('/login'), 3000);
       return;
     }
 
-    // Redirect to backend callback to exchange code for tokens
+    // Redirect to backend to exchange the authorization code for tokens.
+    // This is an intentional external redirect — the backend will redirect back
+    // to /auth/callback/success with tokens in the URL hash.
     const provider = state || 'google';
-    window.location.href = `${API_BASE_URL}/auth/callback/${provider}?code=${code}&state=${provider}`;
+    window.location.href = `${API_BASE_URL}/auth/callback/${provider}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(provider)}`;
   }, [searchParams, router]);
 
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-base)]">
         <div className="text-center">
-          <div className="text-red-500 text-lg font-semibold">Error: {error}</div>
-          <p className="mt-2 text-[var(--text-secondary)]">Redirecting to login...</p>
+          <p className="text-lg font-semibold" style={{ color: 'var(--critical)' }}>
+            {error}
+          </p>
+          <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            Redirecting to login...
+          </p>
         </div>
       </div>
     );
@@ -40,7 +46,9 @@ export default function OAuthCallbackPage() {
     <div className="flex min-h-screen items-center justify-center bg-[var(--bg-base)]">
       <div className="text-center">
         <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-[var(--accent)] border-t-transparent" />
-        <p className="mt-4 text-[var(--text-secondary)]">Completing sign in with Google...</p>
+        <p className="mt-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Completing sign in with Google...
+        </p>
       </div>
     </div>
   );

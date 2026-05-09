@@ -114,7 +114,7 @@ export default function AIOpsPage() {
           {metrics.map(m => (
             <div key={m.label} className="cv-container p-4">
               <div
-                className="mb-3 flex h-8 w-8 items-center justify-center rounded-md"
+                className="mb-3 flex h-8 w-8 items-center justify-center rounded-[var(--radius-container)]"
                 style={{ backgroundColor: m.bg }}
               >
                 <m.icon className="h-4 w-4" style={{ color: m.color }} />
@@ -145,7 +145,7 @@ export default function AIOpsPage() {
               {insights.map((insight, i) => (
                 <div
                   key={i}
-                  className="rounded-lg border p-4"
+                  className="rounded-[var(--radius-container)] border p-4"
                   style={
                     insight.severity === 'high'
                       ? { borderColor: 'var(--critical-border)', backgroundColor: 'var(--critical-bg)' }

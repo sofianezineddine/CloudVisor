@@ -15,6 +15,8 @@ import {
   Monitor,
   Trash2,
   Loader2,
+  Smartphone,
+  CheckCircle2 as CheckCircle2Icon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -269,6 +271,14 @@ export default function ProfilePage() {
                     </Button>
                   </div>
                 </div>
+
+                {/* MFA Enrollment */}
+                <div className="mt-5 pt-4" style={{ borderTop: '1px solid var(--border-faint)' }}>
+                  <h5 className="mb-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    Two-Factor Authentication (MFA)
+                  </h5>
+                  <MfaSection mfaEnabled={profile.mfaEnabled} />
+                </div>
               </div>
             ) : (
               <div className="rounded-md border p-4" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-elevated)' }}>
@@ -315,6 +325,153 @@ export default function ProfilePage() {
       {/* Active Sessions */}
       <SessionsSection />
     </>
+  );
+}
+
+// ─── MFA section ──────────────────────────────────────────────────────────────
+
+function MfaSection({ mfaEnabled }: { mfaEnabled: boolean }) {
+  const [enrolling, setEnrolling] = React.useState(false);
+  const [qrCode, setQrCode] = React.useState<string | null>(null);
+  const [secret, setSecret] = React.useState<string | null>(null);
+  const [verifyCode, setVerifyCode] = React.useState('');
+  const [backupCodes, setBackupCodes] = React.useState<string[] | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const startEnrollment = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const resp = await authFetch('/auth/mfa/enroll', { method: 'POST' });
+      setQrCode(resp?.qr_code ?? null);
+      setSecret(resp?.secret ?? null);
+      setEnrolling(true);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyEnrollment = async () => {
+    if (!verifyCode || verifyCode.length !== 6) {
+      setError('Enter the 6-digit code from your authenticator app');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const resp = await authFetch('/auth/mfa/verify', {
+        method: 'POST',
+        body: JSON.stringify({ code: verifyCode }),
+      });
+      setBackupCodes(resp?.backup_codes ?? []);
+      setEnrolling(false);
+      toast.success('MFA enabled successfully');
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (mfaEnabled) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border p-3"
+        style={{ borderColor: 'var(--success)', backgroundColor: 'var(--success-bg)' }}>
+        <CheckCircle2Icon className="h-5 w-5 flex-shrink-0" style={{ color: 'var(--success)' }} />
+        <div>
+          <p className="text-sm font-medium" style={{ color: 'var(--success)' }}>MFA is enabled</p>
+          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+            Your account is protected with TOTP two-factor authentication.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (backupCodes) {
+    return (
+      <div className="rounded-md border p-4" style={{ borderColor: 'var(--success)', backgroundColor: 'var(--success-bg)' }}>
+        <p className="text-sm font-semibold mb-2" style={{ color: 'var(--success)' }}>
+          MFA enabled — save your backup codes
+        </p>
+        <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+          Store these codes securely. Each can be used once if you lose access to your authenticator.
+        </p>
+        <div className="grid grid-cols-2 gap-1">
+          {backupCodes.map((code, i) => (
+            <code key={i} className="rounded px-2 py-1 text-xs font-mono"
+              style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>
+              {code}
+            </code>
+          ))}
+        </div>
+        <Button className="mt-3 gap-1.5 text-xs" size="sm" onClick={() => setBackupCodes(null)}>
+          Done
+        </Button>
+      </div>
+    );
+  }
+
+  if (enrolling && qrCode) {
+    return (
+      <div className="space-y-3">
+        {error && (
+          <div className="rounded border p-2 text-xs" style={{ borderColor: 'var(--critical)', color: 'var(--critical)', backgroundColor: 'var(--critical-dim)' }}>
+            {error}
+          </div>
+        )}
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password):
+        </p>
+        <img src={qrCode} alt="MFA QR Code" className="rounded border"
+          style={{ width: 160, height: 160, borderColor: 'var(--border-default)' }} />
+        {secret && (
+          <p className="text-xs font-mono" style={{ color: 'var(--text-tertiary)' }}>
+            Manual key: {secret}
+          </p>
+        )}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={verifyCode}
+            onChange={e => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="6-digit code"
+            maxLength={6}
+            className="w-32 rounded-md border px-3 py-2 text-sm font-mono focus:outline-none"
+            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}
+          />
+          <Button onClick={verifyEnrollment} disabled={loading || verifyCode.length !== 6} className="gap-1.5 text-xs" size="sm">
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2Icon className="h-3.5 w-3.5" />}
+            Verify
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { setEnrolling(false); setQrCode(null); setSecret(null); }}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex h-8 w-8 items-center justify-center rounded-md" style={{ backgroundColor: 'var(--warning-dim)' }}>
+        <Smartphone className="h-4 w-4" style={{ color: 'var(--warning)' }} />
+      </div>
+      <div className="flex-1">
+        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>MFA not enabled</p>
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          Add an extra layer of security with TOTP authentication.
+        </p>
+      </div>
+      <Button onClick={startEnrollment} disabled={loading} variant="outline" size="sm" className="gap-1.5 text-xs">
+        {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Smartphone className="h-3.5 w-3.5" />}
+        Enable MFA
+      </Button>
+      {error && <p className="text-xs" style={{ color: 'var(--critical)' }}>{error}</p>}
+    </div>
   );
 }
 

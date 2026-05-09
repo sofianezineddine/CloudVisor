@@ -13,6 +13,9 @@ export const dashboardKeys = {
   recentFindings: () => [...dashboardKeys.all(), 'recent-findings'] as const,
   accounts:       () => [...dashboardKeys.all(), 'accounts'] as const,
   resources:      () => [...dashboardKeys.all(), 'resources'] as const,
+  topAssets:      () => [...dashboardKeys.all(), 'top-assets'] as const,
+  activity:       () => [...dashboardKeys.all(), 'activity'] as const,
+  modules:        () => [...dashboardKeys.all(), 'modules'] as const,
 };
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -85,7 +88,16 @@ export function useRecentFindings(limit = 8) {
 export function useDashboardAccounts() {
   return useQuery({
     queryKey: dashboardKeys.accounts(),
-    queryFn: () => connectorAPI.listAccounts(),
+    // Use gateway /v1/accounts
+    queryFn: async () => {
+      try {
+        const resp = await apiClient.accounts.list({ limit: 200 });
+        const accounts = (resp?.data as any[]) ?? [];
+        return { accounts, total: accounts.length };
+      } catch {
+        return connectorAPI.listAccounts();
+      }
+    },
     staleTime: 60_000,
   });
 }
@@ -97,6 +109,49 @@ export function useDashboardResources() {
   return useQuery({
     queryKey: [...dashboardKeys.resources(), accountIds],
     queryFn: () => connectorAPI.getResourcesSummary(accountId, provider),
+    staleTime: 60_000,
+    enabled: accountIds.length > 0,
+  });
+}
+
+/** GET /v1/risk/top-assets — top N riskiest assets by risk score */
+export function useTopRiskyAssets(limit = 10) {
+  const accountIds = useScopeStore(s => s.accountIds);
+  return useQuery({
+    queryKey: [...dashboardKeys.topAssets(), limit, accountIds],
+    queryFn: async () => {
+      const resp = await apiClient.risk.topAssets(limit);
+      return (resp?.data as any[]) ?? [];
+    },
+    staleTime: 60_000,
+    enabled: accountIds.length > 0,
+  });
+}
+
+/** GET /v1/activity — recent activity feed */
+export function useDashboardActivity(limit = 20) {
+  const accountIds = useScopeStore(s => s.accountIds);
+  return useQuery({
+    queryKey: [...dashboardKeys.activity(), limit, accountIds],
+    queryFn: async () => {
+      const resp = await apiClient.activity.list(limit);
+      return (resp?.data as any[]) ?? [];
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    enabled: accountIds.length > 0,
+  });
+}
+
+/** GET /v1/modules/summary — per-module finding counts */
+export function useModulesSummary() {
+  const accountIds = useScopeStore(s => s.accountIds);
+  return useQuery({
+    queryKey: [...dashboardKeys.modules(), accountIds],
+    queryFn: async () => {
+      const resp = await apiClient.modules.summary();
+      return (resp?.data as any[]) ?? [];
+    },
     staleTime: 60_000,
     enabled: accountIds.length > 0,
   });

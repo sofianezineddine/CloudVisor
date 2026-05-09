@@ -12,6 +12,7 @@ structlog>=24.1.0
 httpx>=0.26.0
 orjson>=3.9.0
 python-dateutil>=2.8.2
+typing_extensions>=4.9.0
 
 prometheus-client>=0.19.0
 

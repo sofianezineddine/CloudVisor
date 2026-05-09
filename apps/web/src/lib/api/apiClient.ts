@@ -369,6 +369,25 @@ export const assetsAPI = {
   async get(assetId: string): Promise<ApiEnvelope<Asset>> {
     return apiFetch(`/v1/assets/${assetId}`);
   },
+
+  async getHistory(assetId: string, params?: { start_time?: string; end_time?: string; limit?: number }): Promise<ApiEnvelope<any>> {
+    const query = new URLSearchParams();
+    if (params?.start_time) query.set('start_time', params.start_time);
+    if (params?.end_time) query.set('end_time', params.end_time);
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    // Proxied through graph service via gateway assets endpoint
+    return apiFetch(`/v1/assets/${assetId}/history${qs ? `?${qs}` : ''}`);
+  },
+
+  async search(q: string, params?: { provider?: string; region?: string; limit?: number }): Promise<ApiEnvelope<Asset[]>> {
+    const query = new URLSearchParams({ q });
+    if (params?.provider) query.set('provider', params.provider);
+    if (params?.region) query.set('region', params.region);
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    // Uses Elasticsearch-backed full-text search via graph service
+    return apiFetch(`/v1/assets/search?${query}`);
+  },
 };
 
 // ─── Compliance ───────────────────────────────────────────────────────────────
@@ -383,7 +402,6 @@ export const complianceAPI = {
     offset?: number;
   }): Promise<ApiEnvelope<ComplianceResult[]>> {
     const query = new URLSearchParams();
-    if (params?.framework) query.set('framework', params.framework);
     if (params?.status) query.set('status', params.status);
     if (params?.account_id) query.set('account_id', params.account_id);
     if (params?.provider) query.set('provider', params.provider);
@@ -392,9 +410,60 @@ export const complianceAPI = {
     const qs = query.toString();
     // If a specific framework is requested, use the framework detail endpoint
     if (params?.framework) {
-      return apiFetch(`/v1/compliance/${encodeURIComponent(params.framework)}${qs ? `?${qs.replace(`framework=${params.framework}&`, '').replace(`framework=${params.framework}`, '')}` : ''}`);
+      return apiFetch(`/v1/compliance/${encodeURIComponent(params.framework)}${qs ? `?${qs}` : ''}`);
     }
     return apiFetch(`/v1/compliance${qs ? `?${qs}` : ''}`);
+  },
+
+  async getEvidence(framework: string, controlId: string): Promise<ApiEnvelope<any>> {
+    return apiFetch(`/v1/compliance/${encodeURIComponent(framework)}/evidence?control_id=${encodeURIComponent(controlId)}`);
+  },
+};
+
+// ─── Copilot ──────────────────────────────────────────────────────────────────
+
+export const copilotAPI = {
+  async query(data: {
+    query: string;
+    stream?: boolean;
+    context?: Record<string, unknown>;
+    session_id?: string;
+  }): Promise<ApiEnvelope<any>> {
+    return apiFetch('/v1/copilot/query', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getHistory(limit = 10): Promise<ApiEnvelope<any[]>> {
+    return apiFetch(`/v1/copilot/history?limit=${limit}`);
+  },
+};
+
+// ─── Risk / AIOps ─────────────────────────────────────────────────────────────
+
+export const riskAPI = {
+  async topAssets(limit = 10): Promise<ApiEnvelope<Asset[]>> {
+    return apiFetch(`/v1/risk/top-assets?limit=${limit}`);
+  },
+  async attackPaths(maxHops = 6): Promise<ApiEnvelope<any[]>> {
+    return apiFetch(`/v1/risk/attack-paths?max_hops=${maxHops}`);
+  },
+};
+
+// ─── Activity feed ────────────────────────────────────────────────────────────
+
+export const activityAPI = {
+  async list(limit = 20): Promise<ApiEnvelope<any[]>> {
+    return apiFetch(`/v1/activity?limit=${limit}`);
+  },
+};
+
+// ─── Modules summary ──────────────────────────────────────────────────────────
+
+export const modulesAPI = {
+  async summary(): Promise<ApiEnvelope<any[]>> {
+    return apiFetch('/v1/modules/summary');
   },
 };
 
@@ -445,6 +514,10 @@ const apiClient = {
   assets: assetsAPI,
   compliance: complianceAPI,
   accounts: accountsAPI,
+  risk: riskAPI,
+  activity: activityAPI,
+  modules: modulesAPI,
+  copilot: copilotAPI,
 };
 
 export default apiClient;

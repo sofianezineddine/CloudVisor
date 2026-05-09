@@ -2,29 +2,63 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { ChevronDown, X, Search } from 'lucide-react';
 
-// ─── CSPM sub-tabs shown in sidebar when on /cspm ────────────────────────────
-const CSPM_TABS = [
-  { id: 'overview',          label: 'Overview' },
-  { id: 'misconfigurations', label: 'Misconfigurations' },
-  { id: 'compliance',        label: 'Compliance' },
-  { id: 'policies',          label: 'Policies' },
-  { id: 'inventory',         label: 'Inventory' },
-  { id: 'reports',           label: 'Reports' },
-  { id: 'scan-history',      label: 'Scan History' },
-];
+// ─── Service Hub Tab Structure (Sectioned) ────────────────────────────────────
 
-// ─── Navigation structure ─────────────────────────────────────────────────────
+interface ServiceTab {
+  id: string;
+  label: string;
+  count?: number;
+}
 
-const homeSidebarItems = [
-  { label: 'Services', href: '/services' },
-];
+interface ServiceSection {
+  label: string | null;
+  items: ServiceTab[];
+}
 
-const consoleSidebarItems = [
-  { label: 'Services', href: '/services' },
-];
+const SERVICE_TABS: Record<string, ServiceSection[]> = {
+  '/cspm': [
+    { label: null, items: [{ id: 'overview', label: 'Overview' }] },
+    { label: 'Findings & Response', items: [{ id: 'findings', label: 'Findings', count: 47 }, { id: 'incidents', label: 'Incidents', count: 2 }] },
+    { label: 'Resource Inventory', items: [{ id: 'assets', label: 'Assets' }, { id: 'risk-map', label: 'Risk Explorer' }] },
+    { label: 'Governance & Reports', items: [{ id: 'compliance', label: 'Compliance' }, { id: 'policies', label: 'Policies' }, { id: 'reports', label: 'Reports' }] },
+    { label: 'Operations', items: [{ id: 'scan-history', label: 'Scan History' }] }
+  ],
+  '/cwpp': [
+    { label: null, items: [{ id: 'overview', label: 'Overview' }] },
+    { label: 'Protection', items: [{ id: 'findings', label: 'Findings' }, { id: 'assets', label: 'Assets' }] },
+    { label: 'Governance', items: [{ id: 'policies', label: 'Policies' }, { id: 'reports', label: 'Reports' }] }
+  ],
+  '/ciem': [
+    { label: null, items: [{ id: 'overview', label: 'Overview' }] },
+    { label: 'Identity', items: [{ id: 'findings', label: 'Findings' }, { id: 'assets', label: 'Assets' }] },
+    { label: 'Governance', items: [{ id: 'policies', label: 'Policies' }, { id: 'reports', label: 'Reports' }] }
+  ],
+  '/kspm': [
+    { label: null, items: [{ id: 'overview', label: 'Overview' }] },
+    { label: 'Kubernetes', items: [{ id: 'findings', label: 'Findings' }, { id: 'assets', label: 'Assets' }] },
+    { label: 'Governance', items: [{ id: 'policies', label: 'Policies' }, { id: 'reports', label: 'Reports' }] }
+  ],
+  '/dspm': [
+    { label: null, items: [{ id: 'overview', label: 'Overview' }] },
+    { label: 'Data', items: [{ id: 'findings', label: 'Findings' }, { id: 'assets', label: 'Assets' }] },
+    { label: 'Governance', items: [{ id: 'policies', label: 'Policies' }, { id: 'reports', label: 'Reports' }] }
+  ],
+  '/cicd': [
+    { label: null, items: [{ id: 'overview', label: 'Overview' }] },
+    { label: 'Pipeline', items: [{ id: 'findings', label: 'Findings' }, { id: 'assets', label: 'Assets' }] },
+    { label: 'Governance', items: [{ id: 'policies', label: 'Policies' }, { id: 'reports', label: 'Reports' }] }
+  ],
+  '/cdr': [
+    { label: null, items: [{ id: 'overview', label: 'Overview' }] },
+    { label: 'Detection', items: [{ id: 'findings', label: 'Findings' }, { id: 'assets', label: 'Assets' }] },
+    { label: 'Governance', items: [{ id: 'policies', label: 'Policies' }, { id: 'reports', label: 'Reports' }] }
+  ],
+};
+
+// ─── Global Navigation Sections ───────────────────────────────────────────────
 
 const navSections = [
   {
@@ -32,24 +66,13 @@ const navSections = [
     label: 'Overview',
     items: [
       { label: 'Home Console', href: '/console' },
-      { label: 'Risk Explorer', href: '/risk-map' },
-    ],
-  },
-  {
-    id: 'security',
-    label: 'Security',
-    items: [
-      { label: 'Findings', href: '/findings', count: 47 },
-      { label: 'Incidents', href: '/incidents', count: 2 },
-      { label: 'Assets', href: '/assets' },
-      { label: 'Compliance', href: '/compliance' },
     ],
   },
   {
     id: 'protection',
-    label: 'Protection',
+    label: 'Security & Posture',
     items: [
-      { label: 'CSPM', href: '/cspm', hasTabs: true },
+      { label: 'CSPM', href: '/cspm' },
       { label: 'CWPP', href: '/cwpp', count: 12 },
       { label: 'Identity (CIEM)', href: '/ciem' },
       { label: 'Kubernetes (KSPM)', href: '/kspm' },
@@ -73,13 +96,10 @@ const navSections = [
       { label: 'Cloud Accounts', href: '/settings' },
       { label: 'Notifications', href: '/settings/notifications' },
       { label: 'Team', href: '/settings/team' },
-      { label: 'API Keys', href: '/settings/api-keys' },
-      { label: 'Billing', href: '/settings/billing' },
     ],
   },
 ];
 
-const HOME_PATHS = ['/console', '/services'];
 const CONSOLE_PATHS = ['/console'];
 
 interface SidebarProps {
@@ -87,7 +107,6 @@ interface SidebarProps {
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   onMobileClose?: () => void;
-  // Active CSPM tab — passed from CSPM page
   cspmActiveTab?: string;
   onCspmTabChange?: (tab: string) => void;
 }
@@ -95,41 +114,29 @@ interface SidebarProps {
 function CountBadge({ count }: { count: number }) {
   const isCritical = count > 10;
   return (
-    <span
-      className="ml-auto flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+    <span className="ml-auto flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none"
       style={{
         backgroundColor: isCritical ? 'var(--critical-bg)' : 'var(--bg-elevated)',
         color: isCritical ? 'var(--critical)' : 'var(--text-secondary)',
         border: `1px solid ${isCritical ? 'var(--critical-border)' : 'var(--border-default)'}`,
-      }}
-    >
+      }}>
       {count}
     </span>
   );
 }
 
-export function Sidebar({ onClose, onMobileClose, cspmActiveTab, onCspmTabChange }: SidebarProps) {
+export function Sidebar({ onClose, onMobileClose, cspmActiveTab: activeTab, onCspmTabChange: onTabChange }: SidebarProps) {
   const pathname = usePathname();
   const [collapsedSections, setCollapsedSections] = React.useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [collapsedHubSections, setCollapsedHubSections] = React.useState<Set<string>>(new Set());
   const handleClose = onClose ?? onMobileClose;
 
-  const isHome = HOME_PATHS.includes(pathname);
   const isConsole = CONSOLE_PATHS.includes(pathname);
-  const isOnCspm = pathname === '/cspm' || pathname.startsWith('/cspm/');
-
-  // Filter navigation items based on search query
-  const filteredSections = React.useMemo(() => {
-    if (!searchQuery.trim()) return navSections;
-    
-    const query = searchQuery.toLowerCase();
-    return navSections.map(section => ({
-      ...section,
-      items: section.items.filter(item => 
-        item.label.toLowerCase().includes(query)
-      )
-    })).filter(section => section.items.length > 0);
-  }, [searchQuery]);
+  
+  // Detect if we are in a service hub
+  const servicePath = Object.keys(SERVICE_TABS).find(path => pathname === path || pathname.startsWith(path + '/'));
+  const isOnServiceHub = !!servicePath;
+  const currentServiceTabs = servicePath ? SERVICE_TABS[servicePath] : [];
 
   const toggleSection = (id: string) => {
     setCollapsedSections(prev => {
@@ -139,176 +146,105 @@ export function Sidebar({ onClose, onMobileClose, cspmActiveTab, onCspmTabChange
     });
   };
 
-  React.useEffect(() => {
-    for (const section of navSections) {
-      const hasActive = section.items.some(
-        item => pathname === item.href || pathname.startsWith(item.href + '/')
-      );
-      if (hasActive) {
-        setCollapsedSections(prev => {
-          if (!prev.has(section.id)) return prev;
-          const next = new Set(prev);
-          next.delete(section.id);
-          return next;
-        });
-      }
-    }
-  }, [pathname]);
+  const toggleHubSection = (label: string) => {
+    setCollapsedHubSections(prev => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label); else next.add(label);
+      return next;
+    });
+  };
 
   return (
-    <aside
-      className="flex h-full w-full md:w-[220px] flex-col border-r"
-      style={{
-        backgroundColor: 'var(--sidebar-bg, #ffffff)',
-        borderColor: 'var(--sidebar-border, #d5dbdb)',
-      }}
-    >
-      {/* Header */}
-      <div
-        className="flex items-center justify-between border-b px-3"
-        style={{ borderColor: 'var(--sidebar-border, #d5dbdb)', minHeight: '44px' }}
-      >
-        <Link
-          href={isConsole ? "/services" : "/console"}
-          className="text-sm font-semibold transition-colors"
+    <aside className="flex h-full w-full md:w-[220px] flex-col border-r"
+      style={{ backgroundColor: 'var(--sidebar-bg, #ffffff)', borderColor: 'var(--sidebar-border, #d5dbdb)' }}>
+      
+      {/* Sidebar Header */}
+      <div className="flex items-center justify-between border-b px-3"
+        style={{ borderColor: 'var(--sidebar-border, #d5dbdb)', minHeight: '44px' }}>
+        <Link href={isConsole ? "/services" : "/console"}
+          className="text-sm font-bold transition-colors"
           style={{ color: 'var(--text-primary)' }}
           onMouseEnter={e => (e.currentTarget.style.color = '#0972d3')}
           onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-primary)')}
-          onClick={handleClose}
-        >
-          {isOnCspm ? 'CSPM' : isConsole ? 'Services' : 'Home Console'}
+          onClick={handleClose}>
+          {servicePath === '/cspm' ? 'CSPM' : 
+           servicePath === '/cwpp' ? 'CWPP' :
+           servicePath === '/ciem' ? 'CIEM' :
+           servicePath === '/kspm' ? 'KSPM' :
+           servicePath === '/dspm' ? 'DSPM' :
+           servicePath === '/cicd' ? 'CI/CD Security' :
+           servicePath === '/cdr'  ? 'CDR' :
+           isConsole ? 'Services' : 'Home Console'}
         </Link>
         {handleClose && (
-          <button
-            onClick={handleClose}
-            className="flex h-6 w-6 items-center justify-center rounded transition-colors ml-auto"
+          <button onClick={handleClose} className="flex h-6 w-6 items-center justify-center rounded transition-colors ml-auto"
             style={{ color: 'var(--text-tertiary)' }}
             onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-          >
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
             <X className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
 
-      {/* Search Bar - AWS Style */}
-      {!isOnCspm && !isConsole && !isHome && (
-        <div className="border-b px-3 py-2" style={{ borderColor: 'var(--sidebar-border, #d5dbdb)' }}>
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
-            <input
-              type="text"
-              placeholder="Search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded border px-7 py-1.5 text-sm focus:outline-none focus:ring-1"
-              style={{
-                backgroundColor: 'var(--bg-surface)',
-                borderColor: 'var(--border-default)',
-                color: 'var(--text-primary)',
-              }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
-              onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-default)')}
-            />
-          </div>
-        </div>
-      )}
-
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-1" style={{ scrollbarWidth: 'none' }}>
-        {isOnCspm ? (
-          <div>
-            {/* CSPM tabs — no back link, no section header */}
-            <ul className="pt-1">
-              {CSPM_TABS.map(tab => {
-                const isTabActive = cspmActiveTab === tab.id;
-                return (
-                  <li key={tab.id}>
-                    <button
-                      onClick={() => onCspmTabChange?.(tab.id)}
-                      className="flex h-8 w-full items-center pl-4 pr-3 text-sm transition-colors"
-                      style={{
-                        color: isTabActive ? 'var(--text-primary)' : '#0972d3',
-                        fontWeight: isTabActive ? 700 : 400,
-                        backgroundColor: isTabActive ? 'rgba(236,114,17,0.08)' : 'transparent',
-                        borderLeft: isTabActive ? '3px solid #ec7211' : '3px solid transparent',
-                      }}
-                      onMouseEnter={e => { if (!isTabActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-elevated)'; }}
-                      onMouseLeave={e => { if (!isTabActive) (e.currentTarget as HTMLElement).style.backgroundColor = isTabActive ? 'rgba(236,114,17,0.08)' : 'transparent'; }}
-                    >
-                      {tab.label}
+        {isOnServiceHub && pathname === servicePath ? (
+          /* Service-specific Sectioned Navigation (EC2 Pattern) with AIOps Style */
+          <div className="py-2">
+            {currentServiceTabs.map((section, sIdx) => {
+              const isCollapsed = section.label ? collapsedHubSections.has(section.label) : false;
+              return (
+                <div key={sIdx} className={sIdx > 0 ? 'mt-4' : ''}>
+                  {section.label && (
+                    <button onClick={() => toggleHubSection(section.label!)}
+                      className="flex w-full items-center gap-1 px-3 py-1 text-left transition-colors"
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                      <ChevronDown className={`h-3 w-3 transition-transform duration-150 ${isCollapsed ? '-rotate-90' : ''}`} style={{ color: 'var(--text-tertiary)' }} />
+                      <h3 className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
+                        {section.label}
+                      </h3>
                     </button>
-                  </li>
-                );
-              })}
-            </ul>
+                  )}
+                  {!isCollapsed && (
+                    <ul className="mt-0.5">
+                      {section.items.map(tab => {
+                        const isTabActive = activeTab === tab.id;
+                        return (
+                          <li key={tab.id}>
+                            <button onClick={() => onTabChange?.(tab.id)}
+                              className="group flex h-8 w-full items-center pl-4 pr-3 text-sm transition-colors"
+                              style={{
+                                color: isTabActive ? '#0972d3' : 'var(--text-secondary)',
+                                fontWeight: isTabActive ? 700 : 400,
+                                backgroundColor: 'transparent',
+                              }}
+                              onMouseEnter={e => { if (!isTabActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-elevated)'; }}
+                              onMouseLeave={e => { if (!isTabActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
+                              <span className="truncate flex-1 text-left">{tab.label}</span>
+                              {tab.count !== undefined && <CountBadge count={tab.count} />}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        ) : isConsole ? (
-          <ul className="py-1">
-            {consoleSidebarItems.map(item => {
-              const isActive = pathname === item.href;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={handleClose}
-                    className="flex h-8 items-center px-4 text-sm transition-colors"
-                    style={{
-                      color: '#0972d3',
-                      fontWeight: isActive ? 700 : 400,
-                      backgroundColor: isActive ? 'var(--bg-elevated)' : 'transparent',
-                      borderLeft: isActive ? '3px solid #ec7211' : '3px solid transparent',
-                    }}
-                    onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-elevated)'; }}
-                    onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        ) : isHome ? (
-          <ul className="py-1">
-            {homeSidebarItems.map(item => {
-              const isActive = pathname === item.href;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={handleClose}
-                    className="flex h-8 items-center px-4 text-sm transition-colors"
-                    style={{
-                      color: '#0972d3',
-                      fontWeight: isActive ? 700 : 400,
-                      backgroundColor: isActive ? 'var(--bg-elevated)' : 'transparent',
-                      borderLeft: isActive ? '3px solid #ec7211' : '3px solid transparent',
-                    }}
-                    onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-elevated)'; }}
-                    onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
         ) : (
-          filteredSections.map((section, idx) => {
+          /* Global Navigation */
+          navSections.map((section, idx) => {
             const isSectionCollapsed = collapsedSections.has(section.id);
             return (
               <div key={section.id} className={idx > 0 ? 'mt-0.5' : ''}>
-                <button
-                  onClick={() => toggleSection(section.id)}
+                <button onClick={() => toggleSection(section.id)}
                   className="flex w-full items-center gap-1 px-3 py-1 text-left transition-colors"
                   onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
-                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                >
-                  <ChevronDown
-                    className={`h-3 w-3 flex-shrink-0 transition-transform duration-150 ${isSectionCollapsed ? '-rotate-90' : ''}`}
-                    style={{ color: 'var(--text-tertiary)' }}
-                  />
-                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)', letterSpacing: '0.8px' }}>
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                  <ChevronDown className={`h-3 w-3 transition-transform duration-150 ${isSectionCollapsed ? '-rotate-90' : ''}`} style={{ color: 'var(--text-tertiary)' }} />
+                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)', letterSpacing: '0.8px' }}>
                     {section.label}
                   </span>
                 </button>
@@ -317,55 +253,22 @@ export function Sidebar({ onClose, onMobileClose, cspmActiveTab, onCspmTabChange
                   <ul className="pb-0.5">
                     {section.items.map(item => {
                       const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-                      const hasTabs = (item as any).hasTabs && isActive;
-
                       return (
-                        <React.Fragment key={item.href}>
-                          <li>
-                            <Link
-                              href={item.href}
-                              onClick={handleClose}
-                              className="flex h-8 items-center gap-2 pl-6 pr-3 text-sm transition-colors"
-                              style={{
-                                color: '#0972d3',
-                                fontWeight: isActive ? 700 : 400,
-                                backgroundColor: isActive ? 'var(--bg-elevated)' : 'transparent',
-                                borderLeft: isActive ? '3px solid #ec7211' : '3px solid transparent',
-                              }}
-                              onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-elevated)'; }}
-                              onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                            >
-                              <span className="truncate flex-1">{item.label}</span>
-                              {(item as any).isNew && (
-                                <span className="rounded px-1 py-0.5 text-[9px] font-bold uppercase" style={{ backgroundColor: '#ff9900', color: '#000' }}>New</span>
-                              )}
-                              {(item as any).count !== undefined && <CountBadge count={(item as any).count} />}
-                            </Link>
-                          </li>
-
-                          {/* CSPM sub-tabs — shown inline when on /cspm */}
-                          {hasTabs && CSPM_TABS.map(tab => {
-                            const isTabActive = cspmActiveTab === tab.id;
-                            return (
-                              <li key={tab.id}>
-                                <button
-                                  onClick={() => onCspmTabChange?.(tab.id)}
-                                  className="flex h-7 w-full items-center pl-10 pr-3 text-xs transition-colors"
-                                  style={{
-                                    color: isTabActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                                    fontWeight: isTabActive ? 700 : 400,
-                                    backgroundColor: isTabActive ? 'rgba(236,114,17,0.08)' : 'transparent',
-                                    borderLeft: isTabActive ? '3px solid #ec7211' : '3px solid transparent',
-                                  }}
-                                  onMouseEnter={e => { if (!isTabActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-elevated)'; }}
-                                  onMouseLeave={e => { if (!isTabActive) (e.currentTarget as HTMLElement).style.backgroundColor = isTabActive ? 'rgba(236,114,17,0.08)' : 'transparent'; }}
-                                >
-                                  {tab.label}
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </React.Fragment>
+                        <li key={item.href}>
+                          <Link href={item.href} onClick={handleClose}
+                            className="flex h-8 items-center gap-2 pl-6 pr-3 text-sm transition-colors"
+                            style={{
+                              color: isActive ? '#0972d3' : 'var(--text-secondary)',
+                              fontWeight: isActive ? 700 : 400,
+                              backgroundColor: 'transparent',
+                            }}
+                            onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-elevated)'; }}
+                            onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
+                            <span className="truncate flex-1">{item.label}</span>
+                            {(item as any).isNew && <span className="rounded px-1 py-0.5 text-[9px] font-bold uppercase" style={{ backgroundColor: '#ff9900', color: '#000' }}>New</span>}
+                            {(item as any).count !== undefined && <CountBadge count={(item as any).count} />}
+                          </Link>
+                        </li>
                       );
                     })}
                   </ul>

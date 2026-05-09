@@ -2,29 +2,54 @@ import { useCallback, useEffect, useState } from 'react';
 import { useCloudVisorQStore, ChatSession } from '@/stores/cloudvisor-q';
 
 const COPILOT_BASE_URL = process.env.NEXT_PUBLIC_COPILOT_URL || 'http://localhost:8010';
+// Gateway URL — used for session management endpoints proxied through the API gateway
+const GW_BASE_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
 
 function getAuthHeaders(): Record<string, string> {
   const token =
     typeof window !== 'undefined'
-      ? localStorage.getItem('access_token') ?? 'dev-token'
-      : 'dev-token';
+      ? localStorage.getItem('access_token')
+      : null;
+
+  // Never fall back to a hardcoded dev token — fail loudly if unauthenticated
+  if (!token) return {};
 
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
 
-  // Extract org ID from JWT token
-  if (token && token !== 'dev-token') {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const orgId = payload?.organization_id ?? payload?.org_id;
-      if (orgId) {
-        headers['X-Org-ID'] = orgId;
-      }
-    } catch (e) {
-      // Silently fail if token parsing fails
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const orgId = payload?.organization_id ?? payload?.org_id;
+    if (orgId) {
+      headers['X-Org-ID'] = orgId;
     }
+  } catch {
+    // Silently fail if token parsing fails
   }
 
   return headers;
+}
+
+// Helper: try gateway first, fall back to direct copilot URL
+async function copilotFetch(path: string, options: RequestInit = {}) {
+  // Try gateway first (preferred — goes through rate limiting + auth)
+  try {
+    const gwResp = await fetch(`${GW_BASE_URL}${path}`, {
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      ...options,
+    });
+    if (gwResp.ok || gwResp.status === 204) {
+      return gwResp.status === 204 ? null : gwResp.json();
+    }
+  } catch {
+    // Gateway unavailable — fall through to direct
+  }
+  // Fallback: direct copilot service
+  const resp = await fetch(`${COPILOT_BASE_URL}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    ...options,
+  });
+  if (!resp.ok) throw new Error(`${resp.status}: ${resp.statusText}`);
+  return resp.status === 204 ? null : resp.json();
 }
 
 export function useCopilotSessions() {
@@ -44,33 +69,12 @@ export function useCopilotSessions() {
     try {
       setLoading(true);
       setError(null);
-
-      const headers = getAuthHeaders();
-      const url = `${COPILOT_BASE_URL}/v1/copilot/sessions`;
-      
-      console.log('Loading sessions from:', url);
-      console.log('Headers:', headers);
-
-      const response = await fetch(url, {
-        headers,
-      });
-
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`Failed to load sessions: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('Sessions data:', data);
-      setSessions(data.sessions || []);
+      // Use gateway /v1/copilot/history (falls back to direct if unavailable)
+      const data = await copilotFetch('/v1/copilot/history');
+      setSessions(data?.sessions || data?.data || []);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load sessions';
       setError(message);
-      console.error('Error loading sessions:', err);
     } finally {
       setLoading(false);
     }
@@ -85,92 +89,45 @@ export function useCopilotSessions() {
     async (title: string, description?: string): Promise<ChatSession | null> => {
       try {
         setError(null);
-
-        const response = await fetch(`${COPILOT_BASE_URL}/v1/copilot/sessions`, {
+        const session = await copilotFetch('/v1/copilot/sessions', {
           method: 'POST',
-          headers: {
-            ...getAuthHeaders(),
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({ title, description }),
         });
-
-        if (!response.ok) {
-          throw new Error(`Failed to create session: ${response.statusText}`);
+        if (session) {
+          addSession(session);
+          setCurrentSessionId(session.id);
         }
-
-        const session = await response.json();
-        addSession(session);
-        setCurrentSessionId(session.id);
         return session;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create session';
-        setError(message);
-        console.error('Error creating session:', err);
+        setError(err instanceof Error ? err.message : 'Failed to create session');
         return null;
       }
     },
     [addSession, setCurrentSessionId]
   );
 
-  const getSession = useCallback(
-    async (sessionId: string) => {
-      try {
-        setError(null);
-
-        const response = await fetch(
-          `${COPILOT_BASE_URL}/v1/copilot/sessions/${sessionId}`,
-          {
-            headers: getAuthHeaders(),
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Failed to load session: ${response.statusText}`);
-        }
-
-        return await response.json();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load session';
-        setError(message);
-        console.error('Error loading session:', err);
-        return null;
-      }
-    },
-    []
-  );
+  const getSession = useCallback(async (sessionId: string) => {
+    try {
+      setError(null);
+      return await copilotFetch(`/v1/copilot/sessions/${sessionId}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load session');
+      return null;
+    }
+  }, []);
 
   const updateSession = useCallback(
-    async (
-      sessionId: string,
-      updates: { title?: string; description?: string; is_active?: boolean }
-    ): Promise<boolean> => {
+    async (sessionId: string, updates: { title?: string; description?: string; is_active?: boolean }): Promise<boolean> => {
       try {
         setError(null);
-
-        const response = await fetch(
-          `${COPILOT_BASE_URL}/v1/copilot/sessions/${sessionId}`,
-          {
-            method: 'PATCH',
-            headers: {
-              ...getAuthHeaders(),
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(updates),
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Failed to update session: ${response.statusText}`);
-        }
-
-        // Reload sessions to get updated data
+        await copilotFetch(`/v1/copilot/sessions/${sessionId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(updates),
+        });
         await loadSessions();
         return true;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to update session';
-        setError(message);
-        console.error('Error updating session:', err);
+        setError(err instanceof Error ? err.message : 'Failed to update session');
         return false;
       }
     },
@@ -181,28 +138,12 @@ export function useCopilotSessions() {
     async (sessionId: string): Promise<boolean> => {
       try {
         setError(null);
-
-        const response = await fetch(
-          `${COPILOT_BASE_URL}/v1/copilot/sessions/${sessionId}`,
-          {
-            method: 'DELETE',
-            headers: getAuthHeaders(),
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Failed to delete session: ${response.statusText}`);
-        }
-
+        await copilotFetch(`/v1/copilot/sessions/${sessionId}`, { method: 'DELETE' });
         removeSession(sessionId);
-        if (currentSessionId === sessionId) {
-          setCurrentSessionId(null);
-        }
+        if (currentSessionId === sessionId) setCurrentSessionId(null);
         return true;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to delete session';
-        setError(message);
-        console.error('Error deleting session:', err);
+        setError(err instanceof Error ? err.message : 'Failed to delete session');
         return false;
       }
     },

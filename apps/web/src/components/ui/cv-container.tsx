@@ -23,7 +23,7 @@ export function CvContainer({ header, footer, variant = 'default', children, cla
 
   return (
     <div
-      className={`cv-container ${isEmbedded ? 'border-0 rounded-none' : ''} ${className ?? ''}`}
+      className={`cv-container ${isEmbedded ? 'border-0 !rounded-none' : ''} ${className ?? ''}`}
     >
       {header && (
         <div

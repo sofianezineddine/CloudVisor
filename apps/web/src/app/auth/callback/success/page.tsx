@@ -8,35 +8,29 @@ export default function OAuthCallbackSuccessPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Extract tokens from URL hash
+    // Extract tokens from URL hash (set by backend OAuth callback)
     const hash = window.location.hash.substring(1);
-    console.log('OAuth callback hash:', hash);
     const params = new URLSearchParams(hash);
 
     const accessToken = params.get('access_token');
     const refreshToken = params.get('refresh_token');
 
-    console.log('Access token:', accessToken ? 'present' : 'missing');
-    console.log('Refresh token:', refreshToken ? 'present' : 'missing');
-
     if (accessToken && refreshToken) {
       setStatus('Login successful! Redirecting to dashboard...');
+
       // Store tokens
       localStorage.setItem('access_token', accessToken);
       localStorage.setItem('refresh_token', refreshToken);
 
-      // Clear the hash from URL
+      // Clear the hash from URL to avoid tokens appearing in browser history
       window.history.replaceState(null, '', window.location.pathname);
 
-      // Force a page reload to ensure AuthProvider picks up the new tokens
-      // This is more reliable than trying to sync the auth context
+      // Full reload so AuthProvider picks up the new tokens from localStorage
       window.location.href = '/console';
     } else {
-      setStatus('No tokens received. Redirecting to login...');
-      console.error('Missing tokens in redirect URL');
-      console.log('Full URL:', window.location.href);
+      setStatus('Authentication failed. Redirecting to login...');
       setTimeout(() => {
-        window.location.assign('/login?error=oauth_failed');
+        router.replace('/login?error=oauth_failed');
       }, 2000);
     }
   }, [router]);

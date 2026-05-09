@@ -123,9 +123,9 @@ export function FindingDetailDrawer({
     setLoading(true);
     setError(null);
     apiClient.findings.get(findingId)
-      .then(res => setFinding(res?.data as FindingDetail ?? null)
-      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load finding')
-      .finally(() => setLoading(false);
+      .then(res => setFinding(res?.data as FindingDetail ?? null))
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load finding'))
+      .finally(() => setLoading(false));
   }, [findingId]);
 
   const handleAction = async (targetStatus: string) => {
@@ -198,7 +198,7 @@ export function FindingDetailDrawer({
                   ) : null}
                   {ACTION_LABELS[target] ?? target}
                 </Button>
-              )}
+              ))}
             </div>
           )}
 
@@ -233,7 +233,7 @@ export function FindingDetailDrawer({
                     <span className="text-[var(--text-tertiary)]">{row.label}: </span>
                     <span className="font-mono text-[var(--text-secondary)]">{row.value}</span>
                   </div>
-                )}
+                ))}
               </div>
               {finding.tags && Object.keys(finding.tags).length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
@@ -242,7 +242,7 @@ export function FindingDetailDrawer({
                       <Tag className="h-2.5 w-2.5" />
                       {k}={v}
                     </span>
-                  )}
+                  ))}
                 </div>
               )}
             </div>
@@ -259,7 +259,7 @@ export function FindingDetailDrawer({
                     </span>
                     <span>{step}</span>
                   </li>
-                )}
+                ))}
               </ol>
             </Section>
           )}
@@ -316,7 +316,7 @@ export function FindingDetailDrawer({
                     )}
                   </div>
                 </div>
-              )}
+              ))}
 
               {/* Current status */}
               <div className="flex items-start gap-3">

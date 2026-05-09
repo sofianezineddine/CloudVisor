@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Shield, RefreshCw, CheckCircle2, XCircle, Clock, Plus, Trash2, AlertTriangle, Loader2, X, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { connectorAPI, CloudAccount, CreateAccountRequest } from '@/lib/api/connector';
-import { useCloudAccounts, useConnectAccount, useDeleteAccount, useTriggerAccountSync } from '@/hooks/use-connector';
+import { useCloudAccounts, useConnectAccount, useDeleteAccount, useTriggerAccountSync, useOnboardingInstructions } from '@/hooks/use-connector';
 
 const PROVIDER_LABELS: Record<string, string> = {
   aws: 'AWS',
@@ -72,6 +72,9 @@ export default function SettingsPage() {
   // ── Local UI state ─────────────────────────────────────────────────────────
   const [showConnectModal, setShowConnectModal] = React.useState(false);
   const [selectedProvider, setSelectedProvider] = React.useState<string | null>(null);
+  
+  // Prefetch onboarding instructions for the selected provider (covers OCI gap)
+  useOnboardingInstructions(selectedProvider);
   const [formData, setFormData] = React.useState<Record<string, string>>({});
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
@@ -206,7 +209,7 @@ export default function SettingsPage() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>Cloud Accounts</h1>
-          <Button className="gap-2" style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }} onClick={() => setShowConnectModal(true)}>
+          <Button className="gap-2" style={{ backgroundColor: 'var(--btn-primary-bg)', color: '#ffffff' }} onClick={() => setShowConnectModal(true)}>
             <Plus className="h-4 w-4" />
             Connect Account
           </Button>
@@ -242,7 +245,7 @@ export default function SettingsPage() {
               <p className="mb-4 max-w-sm text-sm" style={{ color: 'var(--text-secondary)' }}>
                 Connect your first cloud account to start discovering resources and monitoring your cloud security posture.
               </p>
-              <Button onClick={() => setShowConnectModal(true)} className="gap-2" style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}>
+              <Button onClick={() => setShowConnectModal(true)} className="gap-2" style={{ backgroundColor: 'var(--btn-primary-bg)', color: '#ffffff' }}>
                 <Plus className="h-4 w-4" />
                 Connect Account
               </Button>
@@ -362,7 +365,7 @@ export default function SettingsPage() {
                   setSelectedProvider(key);
                   setShowConnectModal(true);
                 }}
-                className="rounded-lg border p-4 text-left transition-all"
+                className="rounded-[var(--radius-button)] border p-4 text-left transition-all"
                 style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-elevated)' }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)';
@@ -414,7 +417,7 @@ export default function SettingsPage() {
                       <button
                         key={key}
                         onClick={() => setSelectedProvider(key)}
-                        className="rounded-lg border p-4 text-left transition-all"
+                        className="rounded-[var(--radius-button)] border p-4 text-left transition-all"
                         style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-elevated)' }}
                         onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                         onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-default)')}
@@ -513,7 +516,7 @@ export default function SettingsPage() {
                         type="submit"
                         disabled={submitting}
                         className="flex-1 gap-2"
-                        style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+                        style={{ backgroundColor: 'var(--btn-primary-bg)', color: '#ffffff' }}
                       >
                         {submitting ? (
                           <>

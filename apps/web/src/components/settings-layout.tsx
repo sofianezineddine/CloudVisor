@@ -15,6 +15,7 @@ import {
   Cloud,
   ShieldOff,
   Webhook,
+  BookOpen,
 } from 'lucide-react';
 
 const settingsSections = [
@@ -37,6 +38,7 @@ const settingsSections = [
       { id: 'notifications', label: 'Notifications', href: '/settings/notifications', icon: Bell },
       { id: 'webhooks', label: 'Webhooks', href: '/settings/webhooks', icon: Webhook },
       { id: 'suppressions', label: 'Suppression Rules', href: '/settings/suppressions', icon: ShieldOff },
+      { id: 'rules', label: 'Security Rules', href: '/settings/rules', icon: BookOpen },
     ],
   },
 ];

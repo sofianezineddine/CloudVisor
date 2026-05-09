@@ -47,7 +47,7 @@ export function FindingCard({
     <div
       onClick={onClick}
       className={cn(
-        'group relative rounded-container border bg-[var(--bg-surface)] p-4 transition-colors',
+        'group relative rounded-[var(--radius-container)] border bg-[var(--bg-surface)] p-4 transition-colors',
         isClickable && 'cursor-pointer hover:border-[var(--accent)]',
         className
       )}

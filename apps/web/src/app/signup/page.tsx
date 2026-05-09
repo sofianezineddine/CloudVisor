@@ -49,22 +49,22 @@ export default function SignupPage() {
     width: '100%',
     height: '32px',
     padding: '0 8px',
-    border: `1px solid ${hasError ? '#d13212' : '#aab7b8'}`,
+    border: `1px solid ${hasError ? 'var(--critical)' : 'var(--border-strong)'}`,
     borderRadius: '2px',
     fontSize: '14px',
-    color: '#16191f',
-    backgroundColor: '#ffffff',
+    color: 'var(--text-primary)',
+    backgroundColor: 'var(--bg-surface)',
     outline: 'none',
     fontFamily: "'Open Sans', sans-serif",
   });
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.currentTarget.style.border = '1px solid #0073bb';
-    e.currentTarget.style.boxShadow = '0 0 0 2px rgba(0,115,187,0.20)';
+    e.currentTarget.style.border = '1px solid var(--accent)';
+    e.currentTarget.style.boxShadow = '0 0 0 2px var(--accent-dim)';
   };
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.currentTarget.style.border = '1px solid #aab7b8';
+    e.currentTarget.style.border = '1px solid var(--border-strong)';
     e.currentTarget.style.boxShadow = 'none';
   };
 
@@ -72,7 +72,7 @@ export default function SignupPage() {
     <div
       style={{
         minHeight: '100vh',
-        backgroundColor: '#f8f8f5',
+        backgroundColor: 'var(--bg-base)',
         fontFamily: "'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         display: 'flex',
         flexDirection: 'column',
@@ -87,26 +87,26 @@ export default function SignupPage() {
           gap: '24px',
           padding: '10px 24px',
           fontSize: '13px',
-          color: '#16191f',
+          color: 'var(--text-primary)',
         }}
       >
-        <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#16191f' }}>
+        <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}>
           Provide feedback
         </button>
         <button
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#16191f', display: 'flex', alignItems: 'center', gap: '4px' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}
         >
           Multi-session disabled
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 4l4 4 4-4" stroke="#16191f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 4l4 4 4-4" stroke="var(--text-primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
         <button
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#16191f', display: 'flex', alignItems: 'center', gap: '4px' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}
         >
           English
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 4l4 4 4-4" stroke="#16191f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 4l4 4 4-4" stroke="var(--text-primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
       </div>
@@ -118,16 +118,16 @@ export default function SignupPage() {
             style={{
               width: '40px',
               height: '40px',
-              backgroundColor: '#0b1e3f',
+              backgroundColor: 'var(--aws-nav-bg)',
               borderRadius: '6px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Shield style={{ width: '22px', height: '22px', color: '#1a73e8' }} />
+            <Shield style={{ width: '22px', height: '22px', color: 'var(--accent)' }} />
           </div>
-          <span style={{ fontSize: '22px', fontWeight: '700', color: '#0b1e3f', letterSpacing: '-0.3px' }}>
+          <span style={{ fontSize: '22px', fontWeight: '700', color: 'var(--aws-nav-bg)', letterSpacing: '-0.3px' }}>
             CloudVisor
           </span>
         </div>
@@ -149,18 +149,18 @@ export default function SignupPage() {
           style={{
             width: '100%',
             maxWidth: '400px',
-            backgroundColor: '#ffffff',
-            border: '1px solid #d5dbdb',
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
             borderRadius: '4px',
             padding: '28px 32px 24px',
             boxShadow: '0 1px 4px rgba(0,28,36,0.10)',
             marginRight: '24px',
           }}
         >
-          <h1 style={{ fontSize: '20px', fontWeight: '700', color: '#16191f', marginBottom: '4px' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
             Create your account
           </h1>
-          <p style={{ fontSize: '14px', color: '#545b64', marginBottom: '20px' }}>
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
             Start your 14-day free trial. No credit card required.
           </p>
 
@@ -170,9 +170,9 @@ export default function SignupPage() {
               style={{
                 marginBottom: '16px',
                 padding: '10px 12px',
-                borderLeft: '4px solid #d13212',
-                backgroundColor: '#fdf3f1',
-                color: '#d13212',
+                borderLeft: '4px solid var(--critical)',
+                backgroundColor: 'var(--critical-bg)',
+                color: 'var(--critical)',
                 fontSize: '13px',
                 borderRadius: '2px',
               }}
@@ -189,9 +189,9 @@ export default function SignupPage() {
               style={{
                 width: '100%',
                 height: '34px',
-                backgroundColor: '#ffffff',
-                color: '#16191f',
-                border: '1px solid #aab7b8',
+                backgroundColor: 'var(--bg-surface)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border-strong)',
                 borderRadius: '2px',
                 fontSize: '14px',
                 fontWeight: '400',
@@ -202,8 +202,8 @@ export default function SignupPage() {
                 gap: '8px',
                 transition: 'background-color 0.1s',
               }}
-              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f2f3f3')}
-              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ffffff')}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-base)')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'var(--bg-surface)')}
             >
               <svg width="16" height="16" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -220,9 +220,9 @@ export default function SignupPage() {
               style={{
                 width: '100%',
                 height: '34px',
-                backgroundColor: '#ffffff',
-                color: '#16191f',
-                border: '1px solid #aab7b8',
+                backgroundColor: 'var(--bg-surface)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border-strong)',
                 borderRadius: '2px',
                 fontSize: '14px',
                 fontWeight: '400',
@@ -233,10 +233,10 @@ export default function SignupPage() {
                 gap: '8px',
                 transition: 'background-color 0.1s',
               }}
-              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f2f3f3')}
-              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ffffff')}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-base)')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'var(--bg-surface)')}
             >
-              <svg width="16" height="16" fill="#16191f" viewBox="0 0 24 24">
+              <svg width="16" height="16" fill="var(--text-primary)" viewBox="0 0 24 24">
                 <path d="M12.5.75C6.146.75 1 5.896 1 12.25c0 5.089 3.292 9.387 7.863 10.91.575.101.79-.244.79-.546 0-.273-.014-1.178-.014-2.142-2.889.532-3.636-.704-3.866-1.35-.13-.331-.69-1.352-1.18-1.625-.402-.216-.977-.748-.014-.762.906-.014 1.553.834 1.769 1.179 1.035 1.74 2.688 1.25 3.349.948.1-.747.402-1.25.733-1.538-2.559-.287-5.232-1.279-5.232-5.678 0-1.25.445-2.285 1.178-3.09-.115-.288-.517-1.467.115-3.048 0 0 .963-.302 3.163 1.179.92-.259 1.897-.388 2.875-.388.977 0 1.955.13 2.875.388 2.2-1.495 3.162-1.179 3.162-1.179.633 1.581.23 2.76.115 3.048.733.805 1.179 1.825 1.179 3.09 0 4.413-2.688 5.39-5.247 5.678.417.36.776 1.05.776 2.128 0 1.538-.014 2.774-.014 3.162 0 .302.216.662.79.547C20.709 21.637 24 17.324 24 12.25 24 5.896 18.854.75 12.5.75Z"/>
               </svg>
               Continue with GitHub
@@ -245,9 +245,9 @@ export default function SignupPage() {
 
           {/* OR divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <div style={{ flex: 1, height: '1px', backgroundColor: '#d5dbdb' }} />
-            <span style={{ fontSize: '13px', color: '#545b64' }}>OR</span>
-            <div style={{ flex: 1, height: '1px', backgroundColor: '#d5dbdb' }} />
+            <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-default)' }} />
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>OR</span>
+            <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-default)' }} />
           </div>
 
           {/* Registration form */}
@@ -255,7 +255,7 @@ export default function SignupPage() {
             {/* First + Last name row */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#16191f', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
                   First name
                 </label>
                 <input
@@ -271,7 +271,7 @@ export default function SignupPage() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#16191f', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
                   Last name
                 </label>
                 <input
@@ -290,7 +290,7 @@ export default function SignupPage() {
 
             {/* Work email */}
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#16191f', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
                 Work email
               </label>
               <input
@@ -308,7 +308,7 @@ export default function SignupPage() {
 
             {/* Company name */}
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#16191f', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
                 Company name
               </label>
               <input
@@ -326,7 +326,7 @@ export default function SignupPage() {
 
             {/* Password */}
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#16191f', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
                 Password
               </label>
               <input
@@ -344,7 +344,7 @@ export default function SignupPage() {
 
             {/* Confirm password */}
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#16191f', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
                 Confirm password
               </label>
               <input
@@ -359,7 +359,7 @@ export default function SignupPage() {
                 onBlur={handleBlur}
               />
               {confirmPassword && confirmPassword !== password && (
-                <p style={{ fontSize: '12px', color: '#d13212', marginTop: '4px' }}>
+                <p style={{ fontSize: '12px', color: 'var(--critical)', marginTop: '4px' }}>
                   Passwords do not match.
                 </p>
               )}
@@ -373,18 +373,18 @@ export default function SignupPage() {
                 checked={agreed}
                 onChange={e => setAgreed(e.target.checked)}
                 required
-                style={{ marginTop: '2px', accentColor: '#0073bb', width: '14px', height: '14px', flexShrink: 0 }}
+                style={{ marginTop: '2px', accentColor: 'var(--accent)', width: '14px', height: '14px', flexShrink: 0 }}
               />
-              <label htmlFor="terms" style={{ fontSize: '12px', color: '#545b64', lineHeight: '1.5' }}>
+              <label htmlFor="terms" style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                 I agree to the{' '}
-                <Link href="/terms" style={{ color: '#0073bb', textDecoration: 'none' }}
+                <Link href="/terms" style={{ color: 'var(--accent)', textDecoration: 'none' }}
                   onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
                   onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
                 >
                   Terms of Service
                 </Link>
                 {' '}and{' '}
-                <Link href="/privacy" style={{ color: '#0073bb', textDecoration: 'none' }}
+                <Link href="/privacy" style={{ color: 'var(--accent)', textDecoration: 'none' }}
                   onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
                   onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
                 >
@@ -400,9 +400,9 @@ export default function SignupPage() {
               style={{
                 width: '100%',
                 height: '34px',
-                backgroundColor: loading || !agreed ? '#f5a623' : '#ec7211',
-                color: '#ffffff',
-                border: '1px solid #ec7211',
+                backgroundColor: loading || !agreed ? 'var(--warning)' : 'var(--btn-primary-bg)',
+                color: 'var(--btn-primary-text)',
+                border: '1px solid var(--btn-primary-bg)',
                 borderRadius: '2px',
                 fontSize: '14px',
                 fontWeight: '700',
@@ -410,8 +410,8 @@ export default function SignupPage() {
                 opacity: loading || !agreed ? 0.75 : 1,
                 transition: 'background-color 0.1s',
               }}
-              onMouseEnter={e => { if (!loading && agreed) e.currentTarget.style.backgroundColor = '#eb5f07'; }}
-              onMouseLeave={e => { if (!loading && agreed) e.currentTarget.style.backgroundColor = '#ec7211'; }}
+              onMouseEnter={e => { if (!loading && agreed) e.currentTarget.style.backgroundColor = 'var(--btn-primary-hover)'; }}
+              onMouseLeave={e => { if (!loading && agreed) e.currentTarget.style.backgroundColor = 'var(--btn-primary-bg)'; }}
             >
               {loading ? 'Creating account…' : 'Create account'}
             </button>
@@ -419,9 +419,9 @@ export default function SignupPage() {
 
           {/* Sign in link */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '16px 0 12px' }}>
-            <div style={{ flex: 1, height: '1px', backgroundColor: '#d5dbdb' }} />
-            <span style={{ fontSize: '13px', color: '#545b64' }}>OR</span>
-            <div style={{ flex: 1, height: '1px', backgroundColor: '#d5dbdb' }} />
+            <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-default)' }} />
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>OR</span>
+            <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-default)' }} />
           </div>
 
           <button
@@ -430,29 +430,29 @@ export default function SignupPage() {
             style={{
               width: '100%',
               height: '34px',
-              backgroundColor: '#ffffff',
-              color: '#16191f',
-              border: '1px solid #aab7b8',
+              backgroundColor: 'var(--bg-surface)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-strong)',
               borderRadius: '2px',
               fontSize: '14px',
               fontWeight: '400',
               cursor: 'pointer',
               transition: 'background-color 0.1s',
             }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f2f3f3')}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ffffff')}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-base)')}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'var(--bg-surface)')}
           >
             Already have an account? Sign in
           </button>
 
           {/* Legal footer */}
-          <p style={{ marginTop: '20px', fontSize: '11px', color: '#545b64', textAlign: 'center', lineHeight: '1.6' }}>
+          <p style={{ marginTop: '20px', fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center', lineHeight: '1.6' }}>
             By continuing, you agree to{' '}
-            <a href="#" style={{ color: '#0073bb' }}>CloudVisor Terms of Service</a>
+            <a href="#" style={{ color: 'var(--accent)' }}>CloudVisor Terms of Service</a>
             {' '}and the{' '}
-            <a href="#" style={{ color: '#0073bb' }}>Privacy Notice</a>.
+            <a href="#" style={{ color: 'var(--accent)' }}>Privacy Notice</a>.
             This site uses essential cookies. See our{' '}
-            <a href="#" style={{ color: '#0073bb' }}>Cookie Notice</a>
+            <a href="#" style={{ color: 'var(--accent)' }}>Cookie Notice</a>
             {' '}for more information.
           </p>
         </div>
@@ -464,7 +464,7 @@ export default function SignupPage() {
             height: '480px',
             borderRadius: '4px',
             overflow: 'hidden',
-            background: 'linear-gradient(135deg, #0b1e3f 0%, #1a3a6b 40%, #1a73e8 100%)',
+            background: 'linear-gradient(135deg, #0b1e3f 0%, #1a3a6b 40%, var(--accent) 100%)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-start',
@@ -492,13 +492,13 @@ export default function SignupPage() {
             ))}
             {/* Shield watermark */}
             <div style={{ position: 'absolute', top: '75%', left: '50%', transform: 'translate(-50%, -50%)', opacity: 0.10 }}>
-              <Shield style={{ width: '100px', height: '100px', color: '#ffffff' }} />
+              <Shield style={{ width: '100px', height: '100px', color: 'var(--bg-surface)' }} />
             </div>
           </div>
 
           {/* Feature list */}
           <div style={{ position: 'relative', zIndex: 1 }}>
-            <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#ffffff', marginBottom: '12px', lineHeight: '1.3' }}>
+            <h2 style={{ fontSize: '22px', fontWeight: '700', color: 'var(--bg-surface)', marginBottom: '12px', lineHeight: '1.3' }}>
               CloudVisor Security Agent
             </h2>
             <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.85)', lineHeight: '1.6', marginBottom: '20px' }}>
@@ -528,7 +528,7 @@ export default function SignupPage() {
                     }}
                   >
                     <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                      <path d="M1 4l2 2 4-4" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M1 4l2 2 4-4" stroke="var(--bg-surface)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   </div>
                   <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.90)' }}>{feature}</span>
@@ -538,13 +538,13 @@ export default function SignupPage() {
 
             <a
               href="#"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: '600', color: '#ffffff', textDecoration: 'none' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: '600', color: 'var(--bg-surface)', textDecoration: 'none' }}
               onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
               onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
             >
               Learn more about CloudVisor
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8h10M9 4l4 4-4 4" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="var(--bg-surface)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </a>
           </div>
@@ -557,9 +557,9 @@ export default function SignupPage() {
           textAlign: 'center',
           padding: '16px',
           fontSize: '12px',
-          color: '#545b64',
-          borderTop: '1px solid #d5dbdb',
-          backgroundColor: '#f8f8f5',
+          color: 'var(--text-secondary)',
+          borderTop: '1px solid var(--border-default)',
+          backgroundColor: 'var(--bg-base)',
         }}
       >
         © 2026 CloudVisor, Inc. or its affiliates. All rights reserved.

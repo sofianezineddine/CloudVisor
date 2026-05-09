@@ -25,10 +25,9 @@ export function SeverityBadge({ severity, size = 'md', dot = false, className }:
     <span
       className={`inline-flex items-center gap-1 font-semibold ${className ?? ''}`}
       style={{
-        borderRadius: '2px',
+        borderRadius: 'var(--radius-badge)',
         color: s.color,
         backgroundColor: s.bg,
-        border: `1px solid ${s.border}`,
         padding,
         fontSize,
         fontFamily: 'var(--font-sans)',

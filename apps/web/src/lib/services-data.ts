@@ -18,29 +18,15 @@ export interface ServiceCategory {
 
 export const SERVICE_CATEGORIES: ServiceCategory[] = [
   {
-    id: 'cloud-security',
-    label: 'Cloud Security',
-    color: '#d13212',
-    bg: '#fdf3f1',
-    iconText: 'CS',
-    services: [
-      { name: 'Findings',      href: '/findings',   desc: 'Security findings across your cloud environment' },
-      { name: 'Incidents',     href: '/incidents',  desc: 'Security incident management and response' },
-      { name: 'Assets',        href: '/assets',     desc: 'Cloud resource inventory and discovery' },
-      { name: 'Compliance',    href: '/compliance', desc: 'Compliance posture across frameworks' },
-      { name: 'Risk Explorer', href: '/risk-map',   desc: 'Attack path analysis and risk visualization' },
-    ],
-  },
-  {
     id: 'posture',
-    label: 'Posture Management',
+    label: 'Security & Posture',
     color: '#0073bb',
     bg: '#f0f8ff',
-    iconText: 'PM',
+    iconText: 'SP',
     services: [
-      { name: 'CSPM', href: '/cspm', desc: 'Cloud Security Posture Management' },
-      { name: 'CWPP', href: '/cwpp', desc: 'Cloud Workload Protection Platform' },
-      { name: 'KSPM', href: '/kspm', desc: 'Kubernetes Security Posture Management' },
+      { name: 'CSPM', href: '/cspm', desc: 'Unified security hub: Findings, Assets, Compliance, and Risk' },
+      { name: 'CWPP', href: '/cwpp', desc: 'Workload and runtime protection for VMs and containers' },
+      { name: 'KSPM', href: '/kspm', desc: 'Kubernetes and container security posture' },
     ],
   },
   {
@@ -50,7 +36,7 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
     bg: '#f8f0ff',
     iconText: 'IA',
     services: [
-      { name: 'Identity (CIEM)', href: '/ciem', desc: 'Cloud Infrastructure Entitlement Management' },
+      { name: 'Identity (CIEM)', href: '/ciem', desc: 'Identity entitlements and access analysis' },
     ],
   },
   {
@@ -60,7 +46,7 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
     bg: '#f2f8f5',
     iconText: 'DS',
     services: [
-      { name: 'Data (DSPM)', href: '/dspm', desc: 'Data Security Posture Management' },
+      { name: 'Data (DSPM)', href: '/dspm', desc: 'Data security posture and discovery' },
     ],
   },
   {
@@ -70,7 +56,7 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
     bg: '#fefaec',
     iconText: 'DO',
     services: [
-      { name: 'CI/CD Security', href: '/cicd', desc: 'Shift-left security for development pipelines' },
+      { name: 'CI/CD Security', href: '/cicd', desc: 'Pipeline security and shift-left' },
     ],
   },
   {
@@ -80,7 +66,7 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
     bg: '#fdf3f1',
     iconText: 'DR',
     services: [
-      { name: 'Detection (CDR)', href: '/cdr', desc: 'Cloud Detection and Response' },
+      { name: 'Detection (CDR)', href: '/cdr', desc: 'Cloud threat detection and response' },
     ],
   },
   {
@@ -90,8 +76,8 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
     bg: '#f0f8ff',
     iconText: 'AI',
     services: [
-      { name: 'AIOps',      href: '/aiops',   desc: 'ML-powered noise reduction and risk prioritization' },
-      { name: 'AI Copilot', href: '/copilot', desc: 'Natural language security queries powered by LLMs' },
+      { name: 'AIOps',      href: '/aiops',   desc: 'ML-powered noise reduction' },
+      { name: 'AI Copilot', href: '/copilot', desc: 'GenAI security assistant' },
     ],
   },
   {
@@ -101,11 +87,9 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
     bg: '#f8f8f8',
     iconText: 'AD',
     services: [
-      { name: 'Cloud Accounts', href: '/settings',               desc: 'Connect and manage cloud environments' },
+      { name: 'Cloud Accounts', href: '/settings',               desc: 'Manage cloud environments' },
       { name: 'Notifications',  href: '/settings/notifications', desc: 'Configure alert channels' },
-      { name: 'Team',           href: '/settings/team',          desc: 'Manage team members and permissions' },
-      { name: 'API Keys',       href: '/settings/api-keys',      desc: 'Programmatic access management' },
-      { name: 'Billing',        href: '/settings/billing',       desc: 'Plan and usage management' },
+      { name: 'Team',           href: '/settings/team',          desc: 'Team members and RBAC' },
     ],
   },
 ];

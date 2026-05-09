@@ -11,6 +11,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { connectorAPI, CloudAccount, CreateAccountRequest, UpdateAccountRequest } from '@/lib/api/connector';
+import apiClient from '@/lib/api/apiClient';
 import { useScopeStore } from '@/stores/scope';
 
 // ─── Query key factory ────────────────────────────────────────────────────────
@@ -35,7 +36,17 @@ export const connectorKeys = {
 export function useCloudAccounts() {
   return useQuery({
     queryKey: connectorKeys.accounts(),
-    queryFn: () => connectorAPI.listAccounts(),
+    // Use gateway /v1/accounts instead of connector directly
+    queryFn: async () => {
+      try {
+        const resp = await apiClient.accounts.list({ limit: 200 });
+        const accounts = (resp?.data as any[]) ?? [];
+        return { accounts, total: accounts.length };
+      } catch {
+        // Fallback to connector direct if gateway unavailable
+        return connectorAPI.listAccounts();
+      }
+    },
     staleTime: 15_000,
     refetchInterval: 30_000,
     select: (data) => data.accounts ?? [],
@@ -152,15 +163,13 @@ export function useConnectAccount() {
   const setAccounts = useScopeStore(s => s.setAccounts);
 
   return useMutation({
-    mutationFn: (data: CreateAccountRequest) => connectorAPI.createAccount(data),
+    // Use gateway /v1/accounts instead of connector directly
+    mutationFn: (data: CreateAccountRequest) => apiClient.accounts.create(data as any),
     onSuccess: async () => {
-      // Invalidate account list so it refetches
       await queryClient.invalidateQueries({ queryKey: connectorKeys.accounts() });
-
-      // Refresh scope store with updated account list
       try {
-        const result = await connectorAPI.listAccounts();
-        const accounts = (result.accounts ?? []).map((a: CloudAccount) => ({
+        const resp = await apiClient.accounts.list({ limit: 200 });
+        const accounts = ((resp?.data as any[]) ?? []).map((a: any) => ({
           account_id: a.account_id,
           provider: a.provider,
           name: a.name || a.account_id,
@@ -171,7 +180,7 @@ export function useConnectAccount() {
         }));
         if (accounts.length > 0) setAccounts(accounts);
       } catch {
-        // Non-fatal — scope store will update on next header render
+        // Non-fatal
       }
     },
   });
@@ -201,14 +210,13 @@ export function useDeleteAccount() {
   const setAccounts = useScopeStore(s => s.setAccounts);
 
   return useMutation({
-    mutationFn: (accountId: string) => connectorAPI.deleteAccount(accountId),
+    // Use gateway /v1/accounts/{id} instead of connector directly
+    mutationFn: (accountId: string) => apiClient.accounts.delete(accountId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: connectorKeys.accounts() });
-
-      // Refresh scope store
       try {
-        const result = await connectorAPI.listAccounts();
-        const accounts = (result.accounts ?? []).map((a: CloudAccount) => ({
+        const resp = await apiClient.accounts.list({ limit: 200 });
+        const accounts = ((resp?.data as any[]) ?? []).map((a: any) => ({
           account_id: a.account_id,
           provider: a.provider,
           name: a.name || a.account_id,
@@ -231,10 +239,10 @@ export function useDeleteAccount() {
 export function useTriggerAccountSync() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ accountId, correlationId }: { accountId: string; correlationId?: string }) =>
-      connectorAPI.triggerSync(accountId, correlationId),
+    // Use gateway /v1/accounts/{id}/scan instead of connector directly
+    mutationFn: ({ accountId }: { accountId: string; correlationId?: string }) =>
+      apiClient.accounts.triggerScan(accountId),
     onSuccess: (_, { accountId }) => {
-      // Refetch account status after a short delay to pick up sync_status change
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: connectorKeys.account(accountId) });
         queryClient.invalidateQueries({ queryKey: connectorKeys.accounts() });

@@ -74,7 +74,12 @@ async def list_assets(
     # Decode cursor → offset for upstream (upstream uses offset internally)
     offset, _limit = cursor_to_offset(cursor, limit)
 
+    # Ensure org_id is always included and not None
+    if not user.organization_id:
+        raise HTTPException(status_code=401, detail="Missing organization ID in token")
+
     params: dict[str, Any] = {
+        "org_id": user.organization_id,  # Add org_id parameter for graph service
         "limit": limit,
         "offset": offset,
         **filters,

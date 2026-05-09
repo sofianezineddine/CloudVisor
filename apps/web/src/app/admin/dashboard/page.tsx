@@ -101,7 +101,7 @@ export default function AdminDashboardPage() {
               { label: 'Analytics', href: '/admin/analytics', icon: Activity },
             ].map((item) => (
               <li key={item.href}>
-                <Link href={item.href} className="flex items-center gap-3 rounded-md bg-[var(--admin-sidebar-active)] px-3 py-2 text-sm text-white">
+                <Link href={item.href} className="flex items-center gap-3 rounded-[var(--radius-button)] bg-[var(--admin-sidebar-active)] px-3 py-2 text-sm text-white">
                   <item.icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
                   <span>{item.label}</span>
                 </Link>
@@ -111,11 +111,11 @@ export default function AdminDashboardPage() {
         </nav>
 
         <div className="border-t border-[rgba(255,255,255,0.08)] px-2 py-4">
-          <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-[var(--text-on-sidebar)] transition-colors hover:bg-[var(--bg-sidebar-hover)] hover:text-white">
+          <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-[var(--radius-button)] px-3 py-2 text-sm text-[var(--text-on-sidebar)] transition-colors hover:bg-[var(--bg-sidebar-hover)] hover:text-white">
             <LogOut className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
             <span>Sign out</span>
           </button>
-          <Link href="/" className="mt-2 flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-[var(--text-on-sidebar)] transition-colors hover:bg-[var(--bg-sidebar-hover)] hover:text-white">
+          <Link href="/" className="mt-2 flex w-full items-center gap-3 rounded-[var(--radius-button)] px-3 py-2 text-sm text-[var(--text-on-sidebar)] transition-colors hover:bg-[var(--bg-sidebar-hover)] hover:text-white">
             <ChevronRight className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
             <span>Tenant Dashboard →</span>
           </Link>
@@ -155,9 +155,9 @@ export default function AdminDashboardPage() {
               { title: 'Security Events (24h)', value: '23', icon: AlertTriangle, color: 'critical' },
               { title: 'Platform Uptime', value: '99.97%', icon: Activity, color: 'success' },
             ].map((metric, i) => (
-              <div key={i} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-6">
+              <div key={i} className="rounded-[var(--radius-container)] border border-[var(--border-default)] bg-[var(--bg-surface)] p-6">
                 <div className="mb-4 flex items-center justify-between">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-md bg-[var(--${metric.color}-dim)]`}>
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-[var(--radius-container)] bg-[var(--${metric.color}-dim)]`}>
                     <metric.icon className={`h-5 w-5 text-[var(--${metric.color})]`} />
                   </div>
                   {metric.trend && (
@@ -174,7 +174,7 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* Clients Table */}
-          <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)]">
+          <div className="rounded-[var(--radius-container)] border border-[var(--border-default)] bg-[var(--bg-surface)]">
             <div className="border-b border-[var(--border-default)] px-6 py-4">
               <h2 className="text-sm font-semibold text-[var(--text-primary)]">Recent Clients</h2>
             </div>
