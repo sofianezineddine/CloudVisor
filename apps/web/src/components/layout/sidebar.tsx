@@ -62,13 +62,6 @@ const SERVICE_TABS: Record<string, ServiceSection[]> = {
 
 const navSections = [
   {
-    id: 'overview',
-    label: 'Overview',
-    items: [
-      { label: 'Home Console', href: '/console' },
-    ],
-  },
-  {
     id: 'protection',
     label: 'Security & Posture',
     items: [
@@ -96,6 +89,8 @@ const navSections = [
       { label: 'Cloud Accounts', href: '/settings' },
       { label: 'Notifications', href: '/settings/notifications' },
       { label: 'Team', href: '/settings/team' },
+      { label: 'API Keys', href: '/settings/api-keys' },
+      { label: 'Billing', href: '/settings/billing' },
     ],
   },
 ];
@@ -132,6 +127,7 @@ export function Sidebar({ onClose, onMobileClose, cspmActiveTab: activeTab, onCs
   const handleClose = onClose ?? onMobileClose;
 
   const isConsole = CONSOLE_PATHS.includes(pathname);
+  const isServices = pathname === '/services';
   
   // Detect if we are in a service hub
   const servicePath = Object.keys(SERVICE_TABS).find(path => pathname === path || pathname.startsWith(path + '/'));
@@ -174,7 +170,7 @@ export function Sidebar({ onClose, onMobileClose, cspmActiveTab: activeTab, onCs
            servicePath === '/dspm' ? 'DSPM' :
            servicePath === '/cicd' ? 'CI/CD Security' :
            servicePath === '/cdr'  ? 'CDR' :
-           isConsole ? 'Services' : 'Home Console'}
+           isConsole || isServices ? 'Services' : 'Home Console'}
         </Link>
         {handleClose && (
           <button onClick={handleClose} className="flex h-6 w-6 items-center justify-center rounded transition-colors ml-auto"
@@ -188,7 +184,24 @@ export function Sidebar({ onClose, onMobileClose, cspmActiveTab: activeTab, onCs
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-1" style={{ scrollbarWidth: 'none' }}>
-        {isOnServiceHub && pathname === servicePath ? (
+        {(isConsole || isServices) ? (
+           /* Console/Services Sidebar: only "Services" link */
+           <ul className="py-1">
+             <li>
+               <Link href="/services" onClick={handleClose}
+                 className="flex h-8 items-center px-4 text-sm transition-colors"
+                 style={{
+                   color: '#0972d3',
+                   fontWeight: isServices ? 700 : 400,
+                   backgroundColor: 'transparent',
+                 }}
+                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-elevated)'; }}
+                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
+                 Services
+               </Link>
+             </li>
+           </ul>
+        ) : isOnServiceHub && pathname === servicePath ? (
           /* Service-specific Sectioned Navigation (EC2 Pattern) with AIOps Style */
           <div className="py-2">
             {currentServiceTabs.map((section, sIdx) => {

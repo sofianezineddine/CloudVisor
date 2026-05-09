@@ -512,9 +512,9 @@ services:
       COPILOT_LLM_PROVIDER: nvidia
       COPILOT_NVIDIA_API_KEY: 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
       COPILOT_NVIDIA_BASE_URL: https://integrate.api.nvidia.com/v1
-      COPILOT_NVIDIA_MODEL: meta/llama-3.1-405b-instruct
-      COPILOT_NVIDIA_MAX_TOKENS: "4096"
-      COPILOT_NVIDIA_TEMPERATURE: "0.2"
+      COPILOT_NVIDIA_MODEL: meta/llama-3.1-70b-instruct
+      COPILOT_NVIDIA_MAX_TOKENS: "1024"
+      COPILOT_NVIDIA_TEMPERATURE: "0.7"
       COPILOT_GRAPH_SERVICE_URL: http://cv-graph:8001
       COPILOT_POLICY_SERVICE_URL: http://cv-policy:8003
       COPILOT_ELASTICSEARCH_URL: http://cv-elasticsearch:9200

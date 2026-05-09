@@ -85,7 +85,10 @@ export const useCloudVisorQStore = create<CloudVisorQState>()(
       currentSessionId: null,
       setCurrentSessionId: (id) => set({ currentSessionId: id }),
       sessions: [],
-      setSessions: (sessions) => set({ sessions }),
+      setSessions: (sessions) => {
+        console.log('CloudVisor Q Store - setSessions called with:', sessions, 'isArray:', Array.isArray(sessions));
+        set({ sessions: Array.isArray(sessions) ? sessions : [] });
+      },
       addSession: (session) => set((state) => ({
         sessions: [session, ...state.sessions],
       })),

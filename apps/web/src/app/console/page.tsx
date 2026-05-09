@@ -11,6 +11,11 @@ import { useRouter } from 'next/navigation';
 import { NoAccountsConnectedEmptyState } from '@/components/ui/no-accounts-empty-state';
 import { useScopeStore } from '@/stores/scope';
 import { useUserSettings, DEFAULT_WIDGET_ORDER } from '@/stores/user-settings';
+import { useDashboardStats, useRecentFindings, useDashboardAccounts, useDashboardResources, useTopRiskyAssets, useDashboardActivity, useModulesSummary } from '@/hooks/use-dashboard';
+import { useRecentlyVisited } from '@/hooks/use-recently-visited';
+import { useServiceHealth } from '@/hooks/use-service-health';
+import { MetricCard } from '@/components/ui/metric-card';
+import { RiskScore } from '@/components/ui/risk-score';
 
 function Sk({ w = 'w-full', h = 'h-4' }: { w?: string; h?: string }) {
   return <div className={w + ' ' + h + ' rounded animate-pulse'} style={{ backgroundColor: 'var(--bg-elevated)' }} />;
@@ -165,8 +170,6 @@ function ServiceTile({ label, href, icon, color, iconComponent }: { label: strin
 }
 
 export default function ConsolePage() {
-  const accountIds = useScopeStore(s => s.accountIds);
-
   // Set browser tab title
   React.useEffect(() => {
     document.title = 'Home Console - CloudVisor';
@@ -174,12 +177,8 @@ export default function ConsolePage() {
 
   return (
     <ProtectedRoute>
-      <AppLayout breadcrumbs={[{ text: 'Home Console' }]}>
-        {accountIds.length === 0 ? (
-          <NoAccountsConnectedEmptyState />
-        ) : (
-          <ConsoleGrid />
-        )}
+      <AppLayout>
+        <ConsoleGrid />
       </AppLayout>
     </ProtectedRoute>
   );
@@ -195,6 +194,15 @@ function ConsoleGrid() {
   const removeWidget = useUserSettings(s => s.removeWidget);
   const restoreWidget = useUserSettings(s => s.restoreWidget);
   const resetLayout = useUserSettings(s => s.resetLayout);
+  
+  // Real data hooks
+  const { data: dashboardStats, isLoading: statsLoading, refetch: refetchStats } = useDashboardStats();
+  const { data: modulesSummary, isLoading: modulesLoading, refetch: refetchModules } = useModulesSummary();
+  const { data: recentActivity, isLoading: activityLoading, refetch: refetchActivity } = useDashboardActivity(5);
+  const { data: accountsData, isLoading: accountsLoading } = useDashboardAccounts();
+  const { data: resourcesData, isLoading: resourcesLoading } = useDashboardResources();
+  const { items: recentlyVisitedItems, clearRecentlyVisited, manualTrackVisit } = useRecentlyVisited();
+  const { services: serviceHealthData, isLoading: healthLoading, refetch: refetchHealth } = useServiceHealth();
   
   const [dragId, setDragId] = React.useState<string | null>(null);
   const [overId, setOverId] = React.useState<string | null>(null);
@@ -246,13 +254,13 @@ function ConsoleGrid() {
   ];
 
   const widgetRefreshHandlers: Record<string, () => void> = {
-    'recently-visited': () => {},
-    'cloudvisor-health': () => {},
+    'recently-visited': () => {}, // Recently visited is automatically updated
+    'cloudvisor-health': () => refetchHealth(),
     'cost-usage': () => {},
     'welcome': () => {},
     'solutions': () => {},
     'explore': () => {},
-    'announcements': () => {},
+    'announcements': () => refetchActivity(),
   };
 
   const widgetDetailRoutes: Record<string, string> = {
@@ -276,10 +284,103 @@ function ConsoleGrid() {
         onRefresh={widgetRefreshHandlers['recently-visited']}
         onRemove={() => removeWidget('recently-visited')}
       >
-        <div className="grid grid-cols-2 gap-x-6 h-full">
-          <div className="overflow-auto">{services.slice(0, 4).map((s: any) => <ServiceTile key={s.href} {...s} />)}</div>
-          <div className="overflow-auto">{services.slice(4).map((s: any) => <ServiceTile key={s.href} {...s} />)}</div>
-        </div>
+        {(() => {
+          console.log('Recently visited items in render:', recentlyVisitedItems);
+          console.log('Current pathname:', typeof window !== 'undefined' ? window.location.pathname : 'SSR');
+          
+          return recentlyVisitedItems.length > 0 ? (
+            <div className="grid grid-cols-2 gap-x-6 h-full">
+              <div className="overflow-auto">
+                {recentlyVisitedItems.slice(0, 4).map((item) => (
+                  <ServiceTile 
+                    key={item.href} 
+                    label={item.label}
+                    href={item.href}
+                    color={item.color || 'var(--accent)'}
+                    iconComponent={
+                      <Shield size={16} style={{ color: item.color || 'var(--accent)' }} />
+                    }
+                  />
+                ))}
+              </div>
+              <div className="overflow-auto">
+                {recentlyVisitedItems.slice(4, 8).map((item) => (
+                  <ServiceTile 
+                    key={item.href} 
+                    label={item.label}
+                    href={item.href}
+                    color={item.color || 'var(--accent)'}
+                    iconComponent={
+                      <Shield size={16} style={{ color: item.color || 'var(--accent)' }} />
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center p-4">
+                <BookOpen className="h-12 w-12 mx-auto mb-2" style={{ color: 'var(--text-tertiary)' }} />
+                <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>No recent visits</p>
+                <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+                  Visit CloudVisor services to see them here
+                </p>
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => {
+                      console.log('Manual test: Adding CSPM to recently visited');
+                      manualTrackVisit('/cspm');
+                    }}
+                    className="px-2 py-1 text-xs rounded"
+                    style={{ backgroundColor: 'var(--accent)', color: 'white' }}
+                  >
+                    Test CSPM
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.log('Manual test: Tracking current page');
+                      const currentPath = window.location.pathname;
+                      console.log('Current path:', currentPath);
+                      manualTrackVisit(currentPath);
+                    }}
+                    className="px-2 py-1 text-xs rounded"
+                    style={{ backgroundColor: 'var(--success)', color: 'white' }}
+                  >
+                    Track This Page
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.log('Clearing recently visited');
+                      clearRecentlyVisited();
+                    }}
+                    className="px-2 py-1 text-xs rounded"
+                    style={{ backgroundColor: 'var(--critical)', color: 'white' }}
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {services.slice(0, 4).map((s: any) => (
+                    <Link 
+                      key={s.href} 
+                      href={s.href} 
+                      className="p-2 rounded transition-colors text-center"
+                      style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-link)' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-surface)')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
+                      onClick={() => {
+                        console.log('Clicking service link:', s.href);
+                        setTimeout(() => manualTrackVisit(s.href), 100);
+                      }}
+                    >
+                      {s.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </Widget>
     ),
     'cloudvisor-health': (
@@ -293,22 +394,77 @@ function ConsoleGrid() {
         onRemove={() => removeWidget('cloudvisor-health')}
       >
         <div className="space-y-3 h-full overflow-auto">
-          {modules.map(m => (
-            <div key={m.label} className="flex items-center justify-between text-sm p-2 rounded transition-colors"
-              style={{ backgroundColor: 'var(--bg-elevated)' }}
-            >
-              <div className="flex items-center gap-2">
-                <span style={{ color: m.color }}>
-                  <ModuleIcon module={m.icon} size={18} />
-                </span>
-                <span style={{ color: 'var(--text-primary)' }}>{m.label}</span>
+          {healthLoading ? (
+            // Loading skeleton
+            Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between text-sm p-2 rounded" style={{ backgroundColor: 'var(--bg-elevated)' }}>
+                <div className="flex items-center gap-2">
+                  <Sk w="w-5" h="h-5" />
+                  <Sk w="w-16" h="h-4" />
+                </div>
+                <Sk w="w-20" h="h-4" />
               </div>
-              <span className="flex items-center gap-1.5" style={{ color: 'var(--success)' }}>
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--success)' }} />
-                <span className="text-xs">Operational</span>
-              </span>
-            </div>
-          ))}
+            ))
+          ) : serviceHealthData && serviceHealthData.length > 0 ? (
+            // Real service health data
+            serviceHealthData.map((service) => {
+              const getStatusColor = (status: string) => {
+                switch (status) {
+                  case 'healthy': return 'var(--success)';
+                  case 'degraded': return 'var(--warning)';
+                  case 'down': return 'var(--critical)';
+                  default: return 'var(--text-tertiary)';
+                }
+              };
+              
+              const getStatusText = (status: string, responseTime?: number) => {
+                switch (status) {
+                  case 'healthy': return 'Operational';
+                  case 'degraded': return `Slow (${responseTime}ms)`;
+                  case 'down': return 'Offline';
+                  default: return 'Unknown';
+                }
+              };
+              
+              const statusColor = getStatusColor(service.status);
+              const statusText = getStatusText(service.status, service.responseTime);
+              
+              return (
+                <div key={service.name} className="flex items-center justify-between text-sm p-2 rounded transition-colors"
+                  style={{ backgroundColor: 'var(--bg-elevated)' }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span style={{ color: service.color }}>
+                      <ModuleIcon module={service.icon} size={18} />
+                    </span>
+                    <span style={{ color: 'var(--text-primary)' }}>{service.label}</span>
+                  </div>
+                  <span className="flex items-center gap-1.5" style={{ color: statusColor }}>
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: statusColor }} />
+                    <span className="text-xs">{statusText}</span>
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            // Fallback to static data when health check fails
+            modules.map(m => (
+              <div key={m.label} className="flex items-center justify-between text-sm p-2 rounded transition-colors"
+                style={{ backgroundColor: 'var(--bg-elevated)' }}
+              >
+                <div className="flex items-center gap-2">
+                  <span style={{ color: m.color }}>
+                    <ModuleIcon module={m.icon} size={18} />
+                  </span>
+                  <span style={{ color: 'var(--text-primary)' }}>{m.label}</span>
+                </div>
+                <span className="flex items-center gap-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--text-tertiary)' }} />
+                  <span className="text-xs">Unknown</span>
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </Widget>
     ),
@@ -325,14 +481,42 @@ function ConsoleGrid() {
         <div className="h-full flex flex-col">
           <div className="mb-4">
             <div className="text-3xl font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-              $0.00
+              {resourcesLoading ? (
+                <Sk w="w-20" h="h-8" />
+              ) : resourcesData?.total_resources ? (
+                `${resourcesData.total_resources.toLocaleString()} resources`
+              ) : (
+                '$0.00'
+              )}
             </div>
-            <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Current month</div>
+            <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {resourcesData?.total_resources ? 'Total resources monitored' : 'Current month'}
+            </div>
           </div>
           <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: 'var(--bg-elevated)', borderRadius: '8px' }}>
             <div className="text-center p-4">
-              <DollarSign className="h-12 w-12 mx-auto mb-2" style={{ color: 'var(--text-tertiary)' }} />
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No cost data available</p>
+              {resourcesLoading ? (
+                <div className="space-y-2">
+                  <Sk w="w-12 h-12 mx-auto" h="h-12" />
+                  <Sk w="w-32" h="h-4" />
+                </div>
+              ) : resourcesData?.accounts && resourcesData.accounts.length > 0 ? (
+                <div className="space-y-2">
+                  <Cloud className="h-12 w-12 mx-auto mb-2" style={{ color: 'var(--accent)' }} />
+                  <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {resourcesData.accounts.length} account{resourcesData.accounts.length !== 1 ? 's' : ''} connected
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {resourcesData.total_resources?.toLocaleString() || 0} resources across {resourcesData.providers?.join(', ') || 'cloud providers'}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <DollarSign className="h-12 w-12 mx-auto mb-2" style={{ color: 'var(--text-tertiary)' }} />
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No cost data available</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Connect cloud accounts to see usage metrics</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -356,16 +540,45 @@ function ConsoleGrid() {
             <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
               Secure your cloud infrastructure with comprehensive security posture management
             </p>
+            {accountsLoading ? (
+              <div className="space-y-2">
+                <Sk w="w-full" h="h-4" />
+                <Sk w="w-3/4" h="h-3" />
+              </div>
+            ) : accountsData?.accounts && accountsData.accounts.length > 0 ? (
+              <div className="mb-4 p-3 rounded" style={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--success)' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--success)' }} />
+                  <span className="text-sm font-semibold" style={{ color: 'var(--success)' }}>
+                    {accountsData.accounts.length} account{accountsData.accounts.length !== 1 ? 's' : ''} connected
+                  </span>
+                </div>
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  Your cloud infrastructure is being monitored
+                </p>
+              </div>
+            ) : null}
           </div>
           <div className="space-y-2">
-            <Link href="/settings" className="block p-3 rounded border transition-colors"
-              style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
-              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
-              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'var(--bg-surface)')}
-            >
-              <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Connect your cloud accounts</div>
-              <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Start monitoring your infrastructure</div>
-            </Link>
+            {!accountsData?.accounts || accountsData.accounts.length === 0 ? (
+              <Link href="/settings" className="block p-3 rounded border transition-colors"
+                style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'var(--bg-surface)')}
+              >
+                <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Connect your cloud accounts</div>
+                <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Start monitoring your infrastructure</div>
+              </Link>
+            ) : (
+              <Link href="/findings" className="block p-3 rounded border transition-colors"
+                style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'var(--bg-surface)')}
+              >
+                <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>View security findings</div>
+                <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Review and remediate security issues</div>
+              </Link>
+            )}
           </div>
         </div>
       </Widget>
@@ -443,23 +656,60 @@ function ConsoleGrid() {
         onRemove={() => removeWidget('announcements')}
       >
         <div className="h-full overflow-auto space-y-3">
-          {[
-            { date: 'Apr 26', title: 'New CSPM features released', desc: 'Enhanced compliance monitoring' },
-            { date: 'Apr 24', title: 'CloudVisor 2.0 is here', desc: 'Major platform update' },
-            { date: 'Apr 22', title: 'Security best practices guide', desc: 'New documentation available' },
-          ].map((item, i) => (
-            <div key={i} className="p-3 rounded border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 text-center" style={{ width: '40px' }}>
-                  <div className="text-xs font-bold" style={{ color: 'var(--text-tertiary)' }}>{item.date}</div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{item.title}</div>
-                  <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{item.desc}</div>
+          {activityLoading ? (
+            // Loading skeleton
+            Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="p-3 rounded border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+                <div className="flex items-start gap-3">
+                  <Sk w="w-10" h="h-4" />
+                  <div className="flex-1 space-y-2">
+                    <Sk w="w-3/4" h="h-4" />
+                    <Sk w="w-full" h="h-3" />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : recentActivity && Array.isArray(recentActivity) && recentActivity.length > 0 ? (
+            // Real activity data
+            recentActivity.slice(0, 3).map((activity: any, i: number) => {
+              const date = activity.created_at ? new Date(activity.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Recent';
+              const title = activity.title || activity.description || activity.event_type || 'System Activity';
+              const description = activity.details || activity.message || 'CloudVisor system activity';
+              
+              return (
+                <div key={activity.id || i} className="p-3 rounded border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 text-center" style={{ width: '40px' }}>
+                      <div className="text-xs font-bold" style={{ color: 'var(--text-tertiary)' }}>{date}</div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{title}</div>
+                      <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{description}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            // Fallback to static announcements when no real data
+            [
+              { date: 'May 9', title: 'CloudVisor Q AI Assistant', desc: 'New AI-powered security assistant available' },
+              { date: 'May 7', title: 'Enhanced CSPM features', desc: 'Improved compliance monitoring and reporting' },
+              { date: 'May 5', title: 'Multi-cloud support expanded', desc: 'Added support for additional cloud providers' },
+            ].map((item, i) => (
+              <div key={i} className="p-3 rounded border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 text-center" style={{ width: '40px' }}>
+                    <div className="text-xs font-bold" style={{ color: 'var(--text-tertiary)' }}>{item.date}</div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{item.title}</div>
+                    <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{item.desc}</div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </Widget>
     ),

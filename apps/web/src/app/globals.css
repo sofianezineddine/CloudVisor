@@ -14,8 +14,8 @@
     --aws-nav-border:       #3a4a5c;
     --aws-nav-text:         #d5dbdb;
     --aws-nav-text-dim:     #8a9ba8;
-    --aws-orange:           #ff9900;
-    --aws-orange-hover:     #ec7211;
+    --aws-orange:           #FF9900;
+    --aws-orange-hover:     #e6890a;
 
     /* ── Sub-header (white bar below top nav) ── */
     --subheader-bg:         #ffffff;
@@ -33,7 +33,7 @@
     --sidebar-border:       #d5dbdb;
     --sidebar-hover:        #f2f3f3;
     --sidebar-active-bg:    #f2f3f3;
-    --sidebar-active-border:#ec7211;
+    --sidebar-active-border:#FF9900;
     --sidebar-text:         #16191f;
     --sidebar-text-dim:     #545b64;
     --sidebar-section:      #879596;
@@ -58,8 +58,8 @@
     --accent-light:         #e8f4fb;
 
     /* ── Buttons ── */
-    --btn-primary-bg:       #ff9900;
-    --btn-primary-hover:    #ec7211;
+    --btn-primary-bg:       #FF9900;
+    --btn-primary-hover:    #e6890a;
     --btn-primary-text:     #ffffff;
     --btn-normal-bg:        #ffffff;
     --btn-normal-border:    #aab7b8;
@@ -104,7 +104,7 @@
     --danger-dim:           rgba(209,50,18,0.08);
 
     /* ── Cloud providers ── */
-    --aws:                  #ff9900;
+    --aws:                  #FF9900;
     --aws-bg:               rgba(255,153,0,0.10);
     --azure:                #0078d4;
     --azure-bg:             rgba(0,120,212,0.10);
@@ -170,36 +170,78 @@
     --sidebar-border:       rgba(255,255,255,0.10);
     --sidebar-hover:        #1c2433;
     --sidebar-active-bg:    #1c2433;
-    --sidebar-text:         #d5dbdb;
-    --sidebar-text-dim:     #8a9ba8;
-    --border-faint:         rgba(255,255,255,0.06);
-    --border-default:       rgba(255,255,255,0.12);
-    --border-strong:        rgba(255,255,255,0.22);
-    --text-primary:         #e2e8f0;
-    --text-secondary:       #8899b4;
-    --text-tertiary:        #4a5568;
-    --text-link:            #4db8ff;
+    --sidebar-text:         #e2e8f0;
+    --sidebar-text-dim:     #94a3b8;
+    --border-faint:         rgba(255,255,255,0.08);
+    --border-default:       rgba(255,255,255,0.15);
+    --border-strong:        rgba(255,255,255,0.25);
+    --text-primary:         #f1f5f9;
+    --text-secondary:       #cbd5e1;
+    --text-tertiary:        #94a3b8;
+    --text-link:            #60a5fa;
     --btn-normal-bg:        #1c2433;
     --btn-normal-border:    rgba(255,255,255,0.20);
     --btn-normal-hover:     #243040;
-    --btn-normal-text:      #d5dbdb;
+    --btn-normal-text:      #e2e8f0;
     --bg-topnav:            #161e2d;
     --bg-sidenav:           #161b22;
     --bg-sidenav-hover:     #1c2433;
     --bg-sidenav-active:    rgba(0,115,187,0.15);
-    --critical-bg:          rgba(209,50,18,0.12);
-    --critical-border:      rgba(209,50,18,0.30);
-    --high-bg:              rgba(212,91,7,0.12);
-    --high-border:          rgba(212,91,7,0.30);
-    --medium-bg:            rgba(141,102,5,0.12);
-    --medium-border:        rgba(141,102,5,0.30);
-    --low-bg:               rgba(26,107,60,0.12);
-    --low-border:           rgba(26,107,60,0.30);
-    --info-bg:              rgba(0,115,187,0.12);
-    --info-border:          rgba(0,115,187,0.30);
-    --success-bg:           rgba(26,107,60,0.12);
-    --warning-bg:           rgba(141,102,5,0.12);
-    --danger-bg:            rgba(209,50,18,0.12);
+    --critical-bg:          rgba(209,50,18,0.15);
+    --critical-border:      rgba(209,50,18,0.35);
+    --high-bg:              rgba(212,91,7,0.15);
+    --high-border:          rgba(212,91,7,0.35);
+    --medium-bg:            rgba(141,102,5,0.15);
+    --medium-border:        rgba(141,102,5,0.35);
+    --low-bg:               rgba(26,107,60,0.15);
+    --low-border:           rgba(26,107,60,0.35);
+    --info-bg:              rgba(0,115,187,0.15);
+    --info-border:          rgba(0,115,187,0.35);
+    --success-bg:           rgba(26,107,60,0.15);
+    --warning-bg:           rgba(141,102,5,0.15);
+    --danger-bg:            rgba(209,50,18,0.15);
+  }
+
+  /* ── Dark mode scrollbars ── */
+  [data-theme="dark"] * {
+    scrollbar-color: #8B8B8B #1a202c;
+  }
+  [data-theme="dark"] *::-webkit-scrollbar-track { 
+    background: #1a202c; 
+  }
+  [data-theme="dark"] *::-webkit-scrollbar-thumb { 
+    background-color: #8B8B8B; 
+    border: 2px solid #1a202c;
+  }
+  [data-theme="dark"] *::-webkit-scrollbar-thumb:hover { 
+    background-color: #A5A5A5; 
+  }
+  [data-theme="dark"] *::-webkit-scrollbar-thumb:active { 
+    background-color: #BBBBBB; 
+  }
+  [data-theme="dark"] *::-webkit-scrollbar-corner {
+    background: #1a202c;
+  }
+
+  /* ── Dark mode main viewport scrollbar — Same Custom Colors ── */
+  [data-theme="dark"] html {
+    scrollbar-color: #9F9F9F #2C2C2C !important;
+  }
+  [data-theme="dark"] html::-webkit-scrollbar-track { 
+    background: #2C2C2C !important; 
+  }
+  [data-theme="dark"] html::-webkit-scrollbar-thumb { 
+    background-color: #9F9F9F !important; 
+    border: 2px solid #2C2C2C !important;
+  }
+  [data-theme="dark"] html::-webkit-scrollbar-thumb:hover { 
+    background-color: #B5B5B5 !important; 
+  }
+  [data-theme="dark"] html::-webkit-scrollbar-thumb:active { 
+    background-color: #CCCCCC !important; 
+  }
+  [data-theme="dark"] html::-webkit-scrollbar-corner {
+    background: #2C2C2C !important;
   }
 
   * { box-sizing: border-box; }
@@ -215,35 +257,168 @@
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--border-default) transparent;
+    scrollbar-color: #8B8B8B #eaeded;
   }
-  *::-webkit-scrollbar { width: 6px; height: 6px; }
-  *::-webkit-scrollbar-track { background: transparent; }
-  *::-webkit-scrollbar-thumb { background-color: var(--border-default); border-radius: 3px; }
-  *::-webkit-scrollbar-thumb:hover { background-color: var(--border-strong); }
+  *::-webkit-scrollbar { 
+    width: 12px; 
+    height: 12px; 
+  }
+  *::-webkit-scrollbar-track { 
+    background: #eaeded; 
+    border-radius: 0;
+  }
+  *::-webkit-scrollbar-thumb { 
+    background-color: #8B8B8B; 
+    border-radius: 6px; 
+    border: 2px solid #eaeded;
+    min-height: 20px;
+  }
+  *::-webkit-scrollbar-thumb:hover { 
+    background-color: #707070; 
+  }
+  *::-webkit-scrollbar-thumb:active { 
+    background-color: #555555; 
+  }
+  *::-webkit-scrollbar-corner {
+    background: #eaeded;
+  }
 
-  /* ── Main viewport scrollbar (right side) — AWS Style with #eee background ── */
+  /* ── Main viewport scrollbar (right side) — Custom Colors ── */
   html {
-    scrollbar-color: #7d8998 #eee !important;
+    scrollbar-color: #9F9F9F #2C2C2C !important;
   }
   html::-webkit-scrollbar { 
     width: 12px !important; 
+    height: 12px !important;
   }
   html::-webkit-scrollbar-track { 
-    background: #eee !important; 
+    background: #2C2C2C !important; 
+    border-radius: 0 !important;
   }
   html::-webkit-scrollbar-thumb { 
-    background-color: #7d8998 !important; 
-    border-radius: 10px !important; 
-    border: 3px solid #eee !important; /* Authentic AWS "floating pill" */
+    background-color: #9F9F9F !important; 
+    border-radius: 6px !important; 
+    border: 2px solid #2C2C2C !important;
+    min-height: 20px !important;
   }
   html::-webkit-scrollbar-thumb:hover { 
-    background-color: #545b64 !important; 
+    background-color: #B5B5B5 !important; 
+  }
+  html::-webkit-scrollbar-thumb:active { 
+    background-color: #CCCCCC !important; 
+  }
+  html::-webkit-scrollbar-corner {
+    background: #2C2C2C !important;
+  }
+
+  /* ── Body scrollbar (same as html for consistency) ── */
+  body::-webkit-scrollbar { 
+    width: 12px; 
+    height: 12px; 
+  }
+  body::-webkit-scrollbar-track { 
+    background: #2C2C2C; 
+    border-radius: 0;
+  }
+  body::-webkit-scrollbar-thumb { 
+    background-color: #9F9F9F; 
+    border-radius: 6px; 
+    border: 2px solid #2C2C2C;
+    min-height: 20px;
+  }
+  body::-webkit-scrollbar-thumb:hover { 
+    background-color: #B5B5B5; 
+  }
+  body::-webkit-scrollbar-thumb:active { 
+    background-color: #CCCCCC; 
   }
 
   ::selection { background-color: var(--accent-dim); color: var(--text-primary); }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   html { scroll-behavior: smooth; }
+
+  /* ── Scope Selector Dropdown Fixes ── */
+  .scope-selector-dropdown {
+    background-color: #1a2332 !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+  }
+  
+  .scope-selector-dropdown .scope-item {
+    color: rgba(255,255,255,0.95) !important;
+  }
+  
+  .scope-selector-dropdown .scope-item:hover {
+    background-color: #1c2433 !important;
+  }
+  
+  .scope-selector-dropdown .scope-item-secondary {
+    color: rgba(255,255,255,0.6) !important;
+  }
+
+  /* ── AWS Console Style Scrollbars for specific containers ── */
+  .overflow-auto::-webkit-scrollbar,
+  .overflow-y-auto::-webkit-scrollbar,
+  .overflow-x-auto::-webkit-scrollbar,
+  div[style*="overflow"]::-webkit-scrollbar,
+  .scrollable::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  
+  .overflow-auto::-webkit-scrollbar-track,
+  .overflow-y-auto::-webkit-scrollbar-track,
+  .overflow-x-auto::-webkit-scrollbar-track,
+  div[style*="overflow"]::-webkit-scrollbar-track,
+  .scrollable::-webkit-scrollbar-track {
+    background: #eaeded;
+    border-radius: 0;
+  }
+  
+  .overflow-auto::-webkit-scrollbar-thumb,
+  .overflow-y-auto::-webkit-scrollbar-thumb,
+  .overflow-x-auto::-webkit-scrollbar-thumb,
+  div[style*="overflow"]::-webkit-scrollbar-thumb,
+  .scrollable::-webkit-scrollbar-thumb {
+    background-color: #8B8B8B;
+    border-radius: 6px;
+    border: 2px solid #eaeded;
+    min-height: 20px;
+  }
+  
+  .overflow-auto::-webkit-scrollbar-thumb:hover,
+  .overflow-y-auto::-webkit-scrollbar-thumb:hover,
+  .overflow-x-auto::-webkit-scrollbar-thumb:hover,
+  div[style*="overflow"]::-webkit-scrollbar-thumb:hover,
+  .scrollable::-webkit-scrollbar-thumb:hover {
+    background-color: #707070;
+  }
+
+  /* ── Dark mode scrollbars for containers ── */
+  [data-theme="dark"] .overflow-auto::-webkit-scrollbar-track,
+  [data-theme="dark"] .overflow-y-auto::-webkit-scrollbar-track,
+  [data-theme="dark"] .overflow-x-auto::-webkit-scrollbar-track,
+  [data-theme="dark"] div[style*="overflow"]::-webkit-scrollbar-track,
+  [data-theme="dark"] .scrollable::-webkit-scrollbar-track {
+    background: #1a202c;
+  }
+  
+  [data-theme="dark"] .overflow-auto::-webkit-scrollbar-thumb,
+  [data-theme="dark"] .overflow-y-auto::-webkit-scrollbar-thumb,
+  [data-theme="dark"] .overflow-x-auto::-webkit-scrollbar-thumb,
+  [data-theme="dark"] div[style*="overflow"]::-webkit-scrollbar-thumb,
+  [data-theme="dark"] .scrollable::-webkit-scrollbar-thumb {
+    background-color: #8B8B8B;
+    border: 2px solid #1a202c;
+  }
+  
+  [data-theme="dark"] .overflow-auto::-webkit-scrollbar-thumb:hover,
+  [data-theme="dark"] .overflow-y-auto::-webkit-scrollbar-thumb:hover,
+  [data-theme="dark"] .overflow-x-auto::-webkit-scrollbar-thumb:hover,
+  [data-theme="dark"] div[style*="overflow"]::-webkit-scrollbar-thumb:hover,
+  [data-theme="dark"] .scrollable::-webkit-scrollbar-thumb:hover {
+    background-color: #A5A5A5;
+  }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -427,6 +602,73 @@
     --tw-prose-td-borders: var(--border-faint);
   }
 
+  /* ── Finding Detail Drawer Styles ─────────────────────────────────────────── */
+  .finding-detail-drawer {
+    /* Ensure proper rendering */
+    isolation: isolate;
+  }
+
+  /* ── AWS Console Style Overlay ────────────────────────────────────────────── */
+  .aws-console-overlay {
+    backdrop-filter: blur(2px);
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .aws-console-overlay-content {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { 
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* ── AWS Console Style Selection ──────────────────────────────────────────── */
+  .aws-console-selected {
+    background-color: rgba(59, 130, 246, 0.05) !important;
+    border-color: #3b82f6 !important;
+  }
+
+  .aws-console-selected:hover {
+    background-color: rgba(59, 130, 246, 0.08) !important;
+  }
+
+  /* ── AWS Console Style Tabs ───────────────────────────────────────────────── */
+  .aws-console-tab {
+    position: relative;
+    transition: all 0.2s ease;
+  }
+
+  .aws-console-tab:hover {
+    color: #1d4ed8 !important;
+  }
+
+  .aws-console-tab.active {
+    color: #2563eb !important;
+    border-bottom-color: #3b82f6 !important;
+  }
+
+  .aws-console-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: #3b82f6;
+  }
+
   .markdown-content table {
     width: 100%;
     border-collapse: collapse;
@@ -574,4 +816,224 @@
     min-width: 0;
     overflow: hidden;
   }
+}
+
+/* ── Additional AWS Console Style Scrollbars for all elements ── */
+
+/* Tables and data containers */
+table::-webkit-scrollbar,
+.table-container::-webkit-scrollbar,
+.data-table::-webkit-scrollbar,
+.table-wrapper::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+table::-webkit-scrollbar-track,
+.table-container::-webkit-scrollbar-track,
+.data-table::-webkit-scrollbar-track,
+.table-wrapper::-webkit-scrollbar-track {
+  background: #eaeded;
+  border-radius: 0;
+}
+
+table::-webkit-scrollbar-thumb,
+.table-container::-webkit-scrollbar-thumb,
+.data-table::-webkit-scrollbar-thumb,
+.table-wrapper::-webkit-scrollbar-thumb {
+  background-color: #8B8B8B;
+  border-radius: 6px;
+  border: 2px solid #eaeded;
+  min-height: 20px;
+}
+
+table::-webkit-scrollbar-thumb:hover,
+.table-container::-webkit-scrollbar-thumb:hover,
+.data-table::-webkit-scrollbar-thumb:hover,
+.table-wrapper::-webkit-scrollbar-thumb:hover {
+  background-color: #707070;
+}
+
+/* Sidebar and navigation scrollbars */
+nav::-webkit-scrollbar,
+.sidebar::-webkit-scrollbar,
+.navigation::-webkit-scrollbar,
+aside::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+nav::-webkit-scrollbar-track,
+.sidebar::-webkit-scrollbar-track,
+.navigation::-webkit-scrollbar-track,
+aside::-webkit-scrollbar-track {
+  background: #eaeded;
+  border-radius: 0;
+}
+
+nav::-webkit-scrollbar-thumb,
+.sidebar::-webkit-scrollbar-thumb,
+.navigation::-webkit-scrollbar-thumb,
+aside::-webkit-scrollbar-thumb {
+  background-color: #8B8B8B;
+  border-radius: 6px;
+  border: 2px solid #eaeded;
+  min-height: 20px;
+}
+
+nav::-webkit-scrollbar-thumb:hover,
+.sidebar::-webkit-scrollbar-thumb:hover,
+.navigation::-webkit-scrollbar-thumb:hover,
+aside::-webkit-scrollbar-thumb:hover {
+  background-color: #707070;
+}
+
+/* Modal, dropdown, and popover scrollbars */
+.modal::-webkit-scrollbar,
+.dropdown::-webkit-scrollbar,
+.popover::-webkit-scrollbar,
+.tooltip::-webkit-scrollbar,
+.menu::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.modal::-webkit-scrollbar-track,
+.dropdown::-webkit-scrollbar-track,
+.popover::-webkit-scrollbar-track,
+.tooltip::-webkit-scrollbar-track,
+.menu::-webkit-scrollbar-track {
+  background: #eaeded;
+  border-radius: 0;
+}
+
+.modal::-webkit-scrollbar-thumb,
+.dropdown::-webkit-scrollbar-thumb,
+.popover::-webkit-scrollbar-thumb,
+.tooltip::-webkit-scrollbar-thumb,
+.menu::-webkit-scrollbar-thumb {
+  background-color: #8B8B8B;
+  border-radius: 6px;
+  border: 2px solid #eaeded;
+  min-height: 20px;
+}
+
+.modal::-webkit-scrollbar-thumb:hover,
+.dropdown::-webkit-scrollbar-thumb:hover,
+.popover::-webkit-scrollbar-thumb:hover,
+.tooltip::-webkit-scrollbar-thumb:hover,
+.menu::-webkit-scrollbar-thumb:hover {
+  background-color: #707070;
+}
+
+/* Content areas and main containers */
+main::-webkit-scrollbar,
+section::-webkit-scrollbar,
+article::-webkit-scrollbar,
+.content::-webkit-scrollbar,
+.container::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+main::-webkit-scrollbar-track,
+section::-webkit-scrollbar-track,
+article::-webkit-scrollbar-track,
+.content::-webkit-scrollbar-track,
+.container::-webkit-scrollbar-track {
+  background: #eaeded;
+  border-radius: 0;
+}
+
+main::-webkit-scrollbar-thumb,
+section::-webkit-scrollbar-thumb,
+article::-webkit-scrollbar-thumb,
+.content::-webkit-scrollbar-thumb,
+.container::-webkit-scrollbar-thumb {
+  background-color: #8B8B8B;
+  border-radius: 6px;
+  border: 2px solid #eaeded;
+  min-height: 20px;
+}
+
+main::-webkit-scrollbar-thumb:hover,
+section::-webkit-scrollbar-thumb:hover,
+article::-webkit-scrollbar-thumb:hover,
+.content::-webkit-scrollbar-thumb:hover,
+.container::-webkit-scrollbar-thumb:hover {
+  background-color: #707070;
+}
+
+/* Dark mode for all additional containers */
+[data-theme="dark"] table::-webkit-scrollbar-track,
+[data-theme="dark"] .table-container::-webkit-scrollbar-track,
+[data-theme="dark"] .data-table::-webkit-scrollbar-track,
+[data-theme="dark"] .table-wrapper::-webkit-scrollbar-track,
+[data-theme="dark"] nav::-webkit-scrollbar-track,
+[data-theme="dark"] .sidebar::-webkit-scrollbar-track,
+[data-theme="dark"] .navigation::-webkit-scrollbar-track,
+[data-theme="dark"] aside::-webkit-scrollbar-track,
+[data-theme="dark"] .modal::-webkit-scrollbar-track,
+[data-theme="dark"] .dropdown::-webkit-scrollbar-track,
+[data-theme="dark"] .popover::-webkit-scrollbar-track,
+[data-theme="dark"] .tooltip::-webkit-scrollbar-track,
+[data-theme="dark"] .menu::-webkit-scrollbar-track,
+[data-theme="dark"] main::-webkit-scrollbar-track,
+[data-theme="dark"] section::-webkit-scrollbar-track,
+[data-theme="dark"] article::-webkit-scrollbar-track,
+[data-theme="dark"] .content::-webkit-scrollbar-track,
+[data-theme="dark"] .container::-webkit-scrollbar-track {
+  background: #1a202c;
+}
+
+[data-theme="dark"] table::-webkit-scrollbar-thumb,
+[data-theme="dark"] .table-container::-webkit-scrollbar-thumb,
+[data-theme="dark"] .data-table::-webkit-scrollbar-thumb,
+[data-theme="dark"] .table-wrapper::-webkit-scrollbar-thumb,
+[data-theme="dark"] nav::-webkit-scrollbar-thumb,
+[data-theme="dark"] .sidebar::-webkit-scrollbar-thumb,
+[data-theme="dark"] .navigation::-webkit-scrollbar-thumb,
+[data-theme="dark"] aside::-webkit-scrollbar-thumb,
+[data-theme="dark"] .modal::-webkit-scrollbar-thumb,
+[data-theme="dark"] .dropdown::-webkit-scrollbar-thumb,
+[data-theme="dark"] .popover::-webkit-scrollbar-thumb,
+[data-theme="dark"] .tooltip::-webkit-scrollbar-thumb,
+[data-theme="dark"] .menu::-webkit-scrollbar-thumb,
+[data-theme="dark"] main::-webkit-scrollbar-thumb,
+[data-theme="dark"] section::-webkit-scrollbar-thumb,
+[data-theme="dark"] article::-webkit-scrollbar-thumb,
+[data-theme="dark"] .content::-webkit-scrollbar-thumb,
+[data-theme="dark"] .container::-webkit-scrollbar-thumb {
+  background-color: #8B8B8B;
+  border: 2px solid #1a202c;
+}
+
+[data-theme="dark"] table::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .table-container::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .data-table::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .table-wrapper::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] nav::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .sidebar::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .navigation::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] aside::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .modal::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .dropdown::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .popover::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .tooltip::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .menu::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] main::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] section::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] article::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .content::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .container::-webkit-scrollbar-thumb:hover {
+  background-color: #A5A5A5;
+}
+
+/* Ensure scrollbar corners match */
+*::-webkit-scrollbar-corner {
+  background: #eaeded;
+}
+
+[data-theme="dark"] *::-webkit-scrollbar-corner {
+  background: #1a202c;
 }

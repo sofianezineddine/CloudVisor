@@ -63,6 +63,9 @@ function ConversationsModal({
   onSelect: (sessionId: string, title: string) => void;
 }) {
   const { sessions, loading, deleteSession } = useCopilotSessions();
+  
+  // Debug logging to understand what sessions contains
+  console.log('CloudVisor Q Panel - sessions:', sessions, 'type:', typeof sessions, 'isArray:', Array.isArray(sessions));
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -108,7 +111,7 @@ function ConversationsModal({
               CloudVisor Q
             </h2>
             <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--text-primary)' }}>
-              Conversations {sessions.length > 0 && `(${sessions.length})`}
+              Conversations {sessions && Array.isArray(sessions) && sessions.length > 0 && `(${sessions.length})`}
             </p>
           </div>
           <button
@@ -128,12 +131,12 @@ function ConversationsModal({
             <div className="px-6 py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
               Loading conversations...
             </div>
-          ) : sessions.length === 0 ? (
+          ) : !sessions || !Array.isArray(sessions) || sessions.length === 0 ? (
             <div className="px-6 py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
               No conversations yet.
             </div>
           ) : (
-            sessions.map(session => (
+            (Array.isArray(sessions) ? sessions : []).map(session => (
               <div
                 key={session.id}
                 className="flex items-center justify-between px-6 py-3 cursor-pointer group border-b"

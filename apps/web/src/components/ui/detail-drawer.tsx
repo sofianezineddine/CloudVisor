@@ -82,13 +82,20 @@ export function DetailDrawer({
   // Prevent body scroll when open
   React.useEffect(() => {
     if (isOpen) {
+      // Store original overflow values
+      const originalBodyOverflow = document.body.style.overflow;
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      
+      // Prevent scrolling
       document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
+      document.documentElement.style.overflow = 'hidden';
+      
+      return () => {
+        // Restore original overflow values
+        document.body.style.overflow = originalBodyOverflow;
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
     }
-    return () => {
-      document.body.style.overflow = '';
-    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -97,7 +104,13 @@ export function DetailDrawer({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity"
+        className={cn(
+          'fixed inset-0 z-[60] transition-all duration-300 ease-out',
+          isOpen ? 'opacity-100' : 'opacity-0'
+        )}
+        style={{
+          backgroundColor: 'rgba(0, 0, 0, 0.6)'
+        }}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -106,35 +119,61 @@ export function DetailDrawer({
       <div
         ref={drawerRef}
         className={cn(
-          'fixed right-0 top-0 z-50 h-full bg-[hsl(var(--bg-surface))] shadow-2xl transition-transform duration-200 ease-out flex flex-col',
+          'fixed right-0 top-0 z-[70] h-full flex flex-col',
+          'transition-transform duration-300 ease-out',
           isOpen ? 'translate-x-0' : 'translate-x-full',
           width === 480 && 'w-[480px] max-w-[90vw]',
           width === 640 && 'w-[640px] max-w-[90vw]',
           width === 800 && 'w-[800px] max-w-[90vw]',
           className
         )}
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          boxShadow: '0 4px 24px rgba(0, 0, 0, 0.25)',
+          border: '1px solid var(--border-default)'
+        }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="drawer-title"
       >
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-[hsl(var(--border-default))] px-6 py-4">
+        <div 
+          className="flex items-start justify-between px-6 py-4"
+          style={{ 
+            borderBottom: '1px solid var(--border-default)'
+          }}
+        >
           <div className="flex-1 min-w-0">
             <h2
               id="drawer-title"
-              className="text-lg font-semibold text-[hsl(var(--text-primary))] truncate"
+              className="text-lg font-semibold truncate"
+              style={{ color: 'var(--text-primary)' }}
             >
               {title}
             </h2>
             {subtitle && (
-              <p className="mt-1 text-sm text-[hsl(var(--text-secondary))] truncate">
+              <p 
+                className="mt-1 text-sm truncate"
+                style={{ color: 'var(--text-secondary)' }}
+              >
                 {subtitle}
               </p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="ml-4 rounded-md p-1.5 text-[hsl(var(--text-tertiary))] hover:bg-[hsl(var(--bg-elevated))] hover:text-[hsl(var(--text-primary))] transition-colors"
+            className="ml-4 rounded-md p-1.5 transition-colors"
+            style={{ 
+              color: 'var(--text-tertiary)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--bg-elevated)';
+              e.currentTarget.style.color = 'var(--text-primary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = 'var(--text-tertiary)';
+            }}
             aria-label="Close drawer"
           >
             <X className="h-5 w-5" />
@@ -142,13 +181,23 @@ export function DetailDrawer({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div 
+          className="flex-1 overflow-y-auto px-6 py-6"
+          style={{
+            backgroundColor: 'var(--bg-surface)'
+          }}
+        >
           {children}
         </div>
 
         {/* Footer (actions) */}
         {actions && (
-          <div className="border-t border-[hsl(var(--border-default))] px-6 py-4">
+          <div 
+            className="px-6 py-4"
+            style={{ 
+              borderTop: '1px solid var(--border-default)'
+            }}
+          >
             {actions}
           </div>
         )}

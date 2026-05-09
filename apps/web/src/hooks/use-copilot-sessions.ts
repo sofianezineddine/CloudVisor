@@ -71,10 +71,16 @@ export function useCopilotSessions() {
       setError(null);
       // Use gateway /v1/copilot/history (falls back to direct if unavailable)
       const data = await copilotFetch('/v1/copilot/history');
-      setSessions(data?.sessions || data?.data || []);
+      console.log('useCopilotSessions - API response:', data);
+      const sessionsData = data?.sessions || data?.data || [];
+      console.log('useCopilotSessions - extracted sessions:', sessionsData, 'isArray:', Array.isArray(sessionsData));
+      setSessions(sessionsData);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load sessions';
+      console.error('useCopilotSessions - error:', err);
       setError(message);
+      // Ensure sessions is always an array even on error
+      setSessions([]);
     } finally {
       setLoading(false);
     }

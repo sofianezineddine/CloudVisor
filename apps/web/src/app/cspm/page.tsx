@@ -70,9 +70,6 @@ export default function CSPMPage() {
   const triggerScan = useTriggerScan();
   const [flashbarDismissed, setFlashbarDismissed] = React.useState(false);
 
-  // Read account filter from global scope store
-  const accountIds = useScopeStore(s => s.accountIds);
-
   React.useEffect(() => {
     document.title = 'CSPM - CloudVisor';
   }, []);
@@ -92,15 +89,6 @@ export default function CSPMPage() {
         cspmActiveTab={activeTab}
         onCspmTabChange={setActiveTab}
       >
-        {accountIds.length === 0 ? (
-          <NoAccountsConnectedEmptyState />
-        ) : !statsLoading && stats && stats.total_resources === 0 && scans.length === 0 ? (
-          <NoScanDataEmptyState
-            title="No scan data for this account"
-            description="This account hasn't been scanned yet. Run a scan to discover resources and security findings."
-          />
-        ) : (
-          <>
         {/* Scan progress Flashbar */}
         {scanRunning && !flashbarDismissed && (
           <div className="mb-4 flex items-center gap-3 px-4 py-3"
@@ -161,8 +149,6 @@ export default function CSPMPage() {
           {activeTab === 'reports' && <ReportsTab />}
           {activeTab === 'scan-history' && <ScanHistoryTab />}
         </div>
-          </>
-        )}
       </AppLayout>
     </ProtectedRoute>
   );

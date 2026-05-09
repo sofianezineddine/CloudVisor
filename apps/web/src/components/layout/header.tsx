@@ -20,8 +20,8 @@ import {
 import { useCloudVisorQStore } from '@/stores/cloudvisor-q';
 
 // ─── Heights (exported so layout can use them) ────────────────────────────────
-export const BAR1_H = 40;  // dark top bar
-export const BAR2_H = 28;  // dark favorites bar
+export const BAR1_H = 48;  // dark top bar (increased from 40 for extra padding)
+export const BAR2_H = 32;  // dark favorites bar (minimized padding)
 export const BAR3_H = 36;  // white/dark content bar (hamburger + breadcrumbs) - NOW PART OF CONTENT
 export const STICKY_HEADER_H = BAR1_H + BAR2_H; // 68px - only bars 1 and 2 are sticky
 export const TOTAL_HEADER_H = BAR1_H + BAR2_H + BAR3_H; // 104px - for calculations
@@ -604,7 +604,7 @@ export function Header({
       {/* BAR 1 — dark #232f3e — logo, search, icons, account              */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       <div
-        className="sticky top-0 z-50 flex w-full items-center gap-1 px-3 py-2"
+        className="sticky top-0 z-50 flex w-full items-center gap-1 px-3 py-3"
         style={{ height: `${BAR1_H}px`, backgroundColor: '#131920', borderBottom: '1px solid rgba(255,255,255,0.2)' }}
       >
         {/* Logo: "Cloud" white + "Visor" orange, no icon */}
@@ -616,7 +616,7 @@ export function Header({
         >
           <span className="text-sm font-bold tracking-tight select-none">
             <span style={{ color: '#ffffff' }}>Cloud</span>
-            <span style={{ color: '#ff9900' }}>Visor</span>
+            <span style={{ color: '#FF9900' }}>Visor</span>
           </span>
         </Link>
 

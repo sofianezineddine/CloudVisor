@@ -8,12 +8,13 @@ import { CvContainer } from '@/components/ui/cv-container';
 import { FindingDetailDrawer } from '@/components/ui/finding-detail-drawer';
 import {
   Search, Download, ChevronLeft, ChevronRight,
-  MoreHorizontal, RefreshCw, Loader2, X, CheckCircle2, SlidersHorizontal,
+  MoreHorizontal, RefreshCw, Loader2, X, CheckCircle2, SlidersHorizontal, Shield,
 } from 'lucide-react';
 import { Finding } from '@/lib/api/apiClient';
 import { useFindings, useFindingStats, useBulkUpdateFindings, useUpdateFinding, useAcceptRisk, useSuppressFinding } from '@/hooks/use-findings';
 import { useQueryClient } from '@tanstack/react-query';
 import { useScopeStore } from '@/stores/scope';
+import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
 const SEVERITY_OPTIONS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] as const;
@@ -137,6 +138,8 @@ export function FindingsTab() {
   const [selectedRows, setSelectedRows] = React.useState<Set<string>>(new Set());
   const [offset, setOffset] = React.useState(0);
   const [selectedFindingId, setSelectedFindingId] = React.useState<string | null>(null);
+  const [showDetailPanel, setShowDetailPanel] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState('details');
   const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -145,6 +148,18 @@ export function FindingsTab() {
   }, [searchQuery]);
 
   React.useEffect(() => { setOffset(0); }, [selectedSeverities, selectedStatuses, debouncedSearch]);
+
+  // Close detail panel with Escape key
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showDetailPanel) {
+        setShowDetailPanel(false);
+        setSelectedFindingId(null);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [showDetailPanel]);
 
   const queryParams = React.useMemo(() => {
     const params: Record<string, any> = { limit: PAGE_SIZE, offset };
@@ -405,9 +420,18 @@ export function FindingsTab() {
                 filteredFindings.map(finding => (
                   <tr
                     key={finding.id}
-                    onClick={() => setSelectedFindingId(finding.id)}
-                    className="cursor-pointer border-b transition-colors"
-                    style={{ borderColor: 'var(--border-faint)', backgroundColor: selectedRows.has(finding.id) ? 'var(--accent-dim)' : 'transparent' }}
+                    onClick={() => {
+                      setSelectedFindingId(finding.id);
+                      setShowDetailPanel(true);
+                      setActiveTab('details');
+                    }}
+                    className={cn(
+                      "cursor-pointer border-b transition-colors",
+                      selectedFindingId === finding.id ? "aws-console-selected" : "hover:bg-gray-50"
+                    )}
+                    style={{ 
+                      borderColor: selectedFindingId === finding.id ? '#3b82f6' : 'var(--border-faint)'
+                    }}
                   >
                     <td className="px-4 py-3">
                       <input type="checkbox" checked={selectedRows.has(finding.id)} onChange={() => toggleRow(finding.id)} onClick={e => e.stopPropagation()} className="h-3.5 w-3.5 rounded" />
@@ -465,11 +489,284 @@ export function FindingsTab() {
         </div>
       </CvContainer>
 
-      <FindingDetailDrawer
-        findingId={selectedFindingId}
-        onClose={() => setSelectedFindingId(null)}
-        onStatusChange={() => queryClient.invalidateQueries({ queryKey: ['findings'] })}
-      />
+      {/* AWS Console Style Overlay Detail Panel */}
+      {showDetailPanel && selectedFindingId && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 aws-console-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowDetailPanel(false);
+              setSelectedFindingId(null);
+            }
+          }}
+        >
+          <div 
+            className="w-full max-w-6xl rounded-lg shadow-2xl overflow-hidden aws-console-overlay-content"
+            style={{ 
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-default)',
+              maxHeight: '80vh'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header with finding title and close button */}
+            <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-elevated)' }}>
+              <div>
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Finding: {filteredFindings.find(f => f.id === selectedFindingId)?.title}
+                </h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <SeverityBadge severity={filteredFindings.find(f => f.id === selectedFindingId)?.severity || 'INFO'} />
+                  <StatusBadge status={filteredFindings.find(f => f.id === selectedFindingId)?.status as any} />
+                  <span className="text-xs font-mono" style={{ color: 'var(--text-tertiary)' }}>
+                    ID: {selectedFindingId}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDetailPanel(false);
+                  setSelectedFindingId(null);
+                }}
+                className="p-2 rounded-md transition-colors"
+                style={{ color: 'var(--text-tertiary)' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--bg-elevated)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = 'var(--text-tertiary)';
+                }}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Tab Navigation */}
+            <div className="border-b" style={{ borderColor: 'var(--border-faint)' }}>
+              <nav className="flex px-6">
+                {[
+                  { id: 'details', label: 'Details' },
+                  { id: 'resource', label: 'Resource' },
+                  { id: 'remediation', label: 'Remediation' },
+                  { id: 'compliance', label: 'Compliance' },
+                  { id: 'timeline', label: 'Timeline' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+                      "aws-console-tab px-4 py-3 text-sm font-medium border-b-2 transition-colors",
+                      activeTab === tab.id ? "active" : "border-transparent hover:border-gray-300"
+                    )}
+                    style={{
+                      color: activeTab === tab.id ? '#2563eb' : 'var(--text-secondary)',
+                      borderBottomColor: activeTab === tab.id ? '#3b82f6' : 'transparent'
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {/* Scrollable Tab Content */}
+            <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(80vh - 140px)' }}>
+              <FindingDetailContent 
+                finding={filteredFindings.find(f => f.id === selectedFindingId)} 
+                activeTab={activeTab}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Keep the original drawer for compatibility but hidden */}
+      <div style={{ display: 'none' }}>
+        <FindingDetailDrawer
+          findingId={null}
+          onClose={() => {}}
+          onStatusChange={() => queryClient.invalidateQueries({ queryKey: ['findings'] })}
+        />
+      </div>
     </div>
   );
+}
+
+// AWS Console Style Detail Content Component
+function FindingDetailContent({ finding, activeTab }: { finding?: Finding; activeTab: string }) {
+  if (!finding) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin" style={{ color: 'var(--accent)' }} />
+      </div>
+    );
+  }
+
+  const renderDetailsTab = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div>
+        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Finding Information</h4>
+        <div className="space-y-3">
+          <div className="flex">
+            <span className="w-32 text-sm" style={{ color: 'var(--text-tertiary)' }}>Finding ID</span>
+            <span className="font-mono text-sm" style={{ color: 'var(--text-primary)' }}>{finding.id}</span>
+          </div>
+          <div className="flex">
+            <span className="w-32 text-sm" style={{ color: 'var(--text-tertiary)' }}>Severity</span>
+            <SeverityBadge severity={finding.severity} />
+          </div>
+          <div className="flex">
+            <span className="w-32 text-sm" style={{ color: 'var(--text-tertiary)' }}>Status</span>
+            <StatusBadge status={finding.status as any} />
+          </div>
+          <div className="flex">
+            <span className="w-32 text-sm" style={{ color: 'var(--text-tertiary)' }}>First seen</span>
+            <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{new Date(finding.first_seen_at).toLocaleString()}</span>
+          </div>
+          <div className="flex">
+            <span className="w-32 text-sm" style={{ color: 'var(--text-tertiary)' }}>Last seen</span>
+            <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{new Date(finding.last_seen_at).toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Description</h4>
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+          {finding.description || 'No description available.'}
+        </p>
+      </div>
+    </div>
+  );
+
+  const renderResourceTab = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div>
+        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Resource Details</h4>
+        <div className="space-y-3">
+          <div className="flex">
+            <span className="w-32 text-sm" style={{ color: 'var(--text-tertiary)' }}>Resource name</span>
+            <span className="font-mono text-sm" style={{ color: 'var(--text-primary)' }}>{finding.resource_name || finding.resource_id}</span>
+          </div>
+          <div className="flex">
+            <span className="w-32 text-sm" style={{ color: 'var(--text-tertiary)' }}>Resource type</span>
+            <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{finding.resource_type}</span>
+          </div>
+          <div className="flex">
+            <span className="w-32 text-sm" style={{ color: 'var(--text-tertiary)' }}>Provider</span>
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{finding.provider?.toUpperCase()}</span>
+          </div>
+          <div className="flex">
+            <span className="w-32 text-sm" style={{ color: 'var(--text-tertiary)' }}>Account ID</span>
+            <span className="font-mono text-sm" style={{ color: 'var(--text-primary)' }}>{finding.account_id}</span>
+          </div>
+          <div className="flex">
+            <span className="w-32 text-sm" style={{ color: 'var(--text-tertiary)' }}>Region</span>
+            <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{finding.region}</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Resource Tags</h4>
+        {finding.tags && Object.keys(finding.tags).length > 0 ? (
+          <div className="space-y-2">
+            {Object.entries(finding.tags).map(([key, value]) => (
+              <div key={key} className="flex">
+                <span className="w-32 text-sm font-mono" style={{ color: 'var(--text-tertiary)' }}>{key}</span>
+                <span className="text-sm font-mono" style={{ color: 'var(--text-primary)' }}>{value}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>No tags available</p>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderRemediationTab = () => (
+    <div>
+      <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Remediation Steps</h4>
+      {finding.remediation ? (
+        <div className="prose prose-sm max-w-none">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <pre className="whitespace-pre-wrap text-sm" style={{ color: 'var(--text-primary)' }}>
+              {finding.remediation}
+            </pre>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>No remediation steps available.</p>
+      )}
+    </div>
+  );
+
+  const renderComplianceTab = () => (
+    <div>
+      <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Compliance Mappings</h4>
+      {finding.compliance_mapping && finding.compliance_mapping.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {finding.compliance_mapping.map((mapping, index) => (
+            <div key={index} className="border rounded-lg p-4" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-elevated)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Shield className="h-4 w-4" style={{ color: 'var(--accent)' }} />
+                <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  {typeof mapping === 'string' ? mapping : (mapping as any).framework}
+                </span>
+              </div>
+              {typeof mapping !== 'string' && (mapping as any).control && (
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  Control: {(mapping as any).control}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>No compliance mappings available.</p>
+      )}
+    </div>
+  );
+
+  const renderTimelineTab = () => (
+    <div>
+      <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Finding Timeline</h4>
+      <div className="space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="w-2 h-2 rounded-full mt-2" style={{ backgroundColor: 'var(--success)' }}></div>
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Finding detected</p>
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{new Date(finding.first_seen_at).toLocaleString()}</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3">
+          <div className="w-2 h-2 rounded-full mt-2" style={{ backgroundColor: 'var(--accent)' }}></div>
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Last observed</p>
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{new Date(finding.last_seen_at).toLocaleString()}</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3">
+          <div className="w-2 h-2 rounded-full mt-2" style={{ 
+            backgroundColor: finding.status === 'resolved' ? 'var(--success)' : 
+                           finding.status === 'open' ? 'var(--critical)' : 'var(--medium)'
+          }}></div>
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Current status</p>
+            <p className="text-xs capitalize" style={{ color: 'var(--text-tertiary)' }}>{finding.status.replace('_', ' ')}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  switch (activeTab) {
+    case 'details': return renderDetailsTab();
+    case 'resource': return renderResourceTab();
+    case 'remediation': return renderRemediationTab();
+    case 'compliance': return renderComplianceTab();
+    case 'timeline': return renderTimelineTab();
+    default: return renderDetailsTab();
+  }
 }

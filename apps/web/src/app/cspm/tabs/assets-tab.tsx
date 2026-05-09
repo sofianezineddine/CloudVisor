@@ -392,31 +392,80 @@ export function AssetsTab() {
     setLoading(true); setError(null);
     try {
       let items: any[] = [];
+      
       if (debSearch && debSearch.length >= 2) {
         try {
-          const searchResp = await apiClient.assets.search(debSearch, { provider: globalProvider || undefined, limit: 500 });
+          // For search, use a high limit to get all matching results
+          const searchResp = await apiClient.assets.search(debSearch, { 
+            provider: globalProvider || undefined, 
+            limit: 5000 // Increased limit for search
+          });
           items = (searchResp?.data as any[]) ?? [];
         } catch {
-          const resp = await connectorAPI.listResources({ account_id: globalAccountId, provider: !globalAccountId ? globalProvider : undefined, resource_type: typeFilter || undefined, search: debSearch, limit: 500, offset: 0 });
+          const resp = await connectorAPI.listResources({ 
+            account_id: globalAccountId, 
+            provider: !globalAccountId ? globalProvider : undefined, 
+            resource_type: typeFilter || undefined, 
+            search: debSearch, 
+            limit: 5000, // Increased limit
+            offset: 0 
+          });
           items = (resp?.resources as any[]) ?? [];
         }
         if (globalAccountId) items = items.filter((a: any) => a.account_id === globalAccountId);
       } else {
         try {
-          const resp = await connectorAPI.listResources({ account_id: globalAccountId, provider: !globalAccountId ? globalProvider : undefined, resource_type: typeFilter || undefined, limit: 500, offset: 0 });
-          items = (resp?.resources as any[]) ?? [];
+          // For regular listing, try to get all resources by using a very high limit
+          // or multiple API calls if needed
+          let allItems: any[] = [];
+          let offset = 0;
+          const batchSize = 1000;
+          let hasMore = true;
+          
+          while (hasMore && allItems.length < 10000) { // Safety limit
+            const resp = await connectorAPI.listResources({ 
+              account_id: globalAccountId, 
+              provider: !globalAccountId ? globalProvider : undefined, 
+              resource_type: typeFilter || undefined, 
+              limit: batchSize, 
+              offset: offset 
+            });
+            const batch = (resp?.resources as any[]) ?? [];
+            allItems = [...allItems, ...batch];
+            
+            // Check if we got fewer results than requested (indicates end of data)
+            hasMore = batch.length === batchSize;
+            offset += batchSize;
+            
+            console.log(`Fetched batch: ${batch.length} resources, total so far: ${allItems.length}`);
+          }
+          
+          items = allItems;
         } catch {
-          const resp = await apiClient.assets.list({ account_id: globalAccountId, provider: !globalAccountId ? globalProvider : undefined, resource_type: typeFilter || undefined, limit: 500, offset: 0 });
+          // Fallback to assets API with high limit
+          const resp = await apiClient.assets.list({ 
+            account_id: globalAccountId, 
+            provider: !globalAccountId ? globalProvider : undefined, 
+            resource_type: typeFilter || undefined, 
+            limit: 5000, // High limit
+            offset: 0 
+          });
           items = (resp?.data as any[]) ?? [];
         }
       }
+      
+      console.log(`Total resources fetched: ${items.length}`);
+      
       setResources(items.map((a: any) => ({
         id: a.id, cloud_resource_id: a.cloud_resource_id ?? a.id, provider: a.provider, account_id: a.account_id,
         organization_id: a.organization_id ?? '', region: a.region ?? 'global', resource_type: a.resource_type,
         name: a.name, tags: a.tags ?? {}, is_public: a.is_public ?? false, environment: a.environment ?? 'unknown',
         first_seen_at: a.first_seen_at ?? null, last_seen_at: a.last_seen_at ?? null,
       })));
-    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    } catch (e) { 
+      console.error('Error fetching resources:', e);
+      setError(e instanceof Error ? e.message : 'Failed to load'); 
+    }
     finally { setLoading(false); }
   }, [debSearch, typeFilter, globalAccountId, globalProvider]);
 

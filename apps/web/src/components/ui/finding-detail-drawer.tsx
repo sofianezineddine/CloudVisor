@@ -154,6 +154,7 @@ export function FindingDetailDrawer({
       title={finding?.title ?? 'Finding Detail'}
       subtitle={finding ? `${finding.provider?.toUpperCase() ?? ''} · ${finding.resource_type ?? ''}` : undefined}
       width={640}
+      className="finding-detail-drawer"
     >
       {loading && (
         <div className="flex h-48 items-center justify-center">
