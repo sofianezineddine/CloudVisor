@@ -13,12 +13,14 @@ All events include the mandatory envelope fields required by the spec:
 import json
 import logging
 import uuid
-from datetime import datetime
 from typing import Any
 
 from aiokafka import AIOKafkaProducer
 
 from cloudvisor_types.models import CloudProvider, CloudResource
+
+from ..core.time_utils import utcnow
+from ..metrics.prometheus import ConnectorMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +135,7 @@ class ResourceEventProducer:
             "tags": {str(k): str(v) for k, v in (resource.tags or {}).items()},
             "is_public": bool(resource.is_public),
             "environment": resource.environment.value if hasattr(resource.environment, "value") else str(resource.environment),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow().isoformat(),
             "correlation_id": correlation_id or str(uuid.uuid4()),
         }
         await self._send_event("discovered", resource.cloud_resource_id, event)
@@ -156,7 +158,7 @@ class ResourceEventProducer:
             "tags": {str(k): str(v) for k, v in (resource.tags or {}).items()},
             "is_public": bool(resource.is_public),
             "environment": resource.environment.value if hasattr(resource.environment, "value") else str(resource.environment),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow().isoformat(),
             "correlation_id": correlation_id or str(uuid.uuid4()),
         }
         await self._send_event("updated", resource.cloud_resource_id, event)
@@ -178,7 +180,7 @@ class ResourceEventProducer:
             "provider": provider,
             "region": region,
             "cloud_resource_id": cloud_resource_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow().isoformat(),
             "correlation_id": correlation_id or str(uuid.uuid4()),
         }
         await self._send_event("deleted", cloud_resource_id, event)
@@ -203,7 +205,7 @@ class ResourceEventProducer:
             "deleted": 0,
             "errors": 0,
             "duration_seconds": 0.0,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
         await self._send_event("sync_started", account_id, event)
 
@@ -232,7 +234,7 @@ class ResourceEventProducer:
             "deleted": int(deleted),
             "errors": int(errors),
             "duration_seconds": float(duration_seconds),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
         await self._send_event("sync_finished", account_id, event)
 
@@ -256,7 +258,7 @@ class ResourceEventProducer:
             "new_status": new_status,
             "error_message": error_message,
             "resource_count": int(resource_count),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
         await self._send_event("health_changed", account_id, event)
 
@@ -305,6 +307,15 @@ class ResourceEventProducer:
                 key=key,
                 value=payload,
             )
+            # Record metric for spec observability requirement (§2.1)
+            try:
+                ConnectorMetrics.record_event_published(
+                    event_type=event.get("event_type", topic_suffix),
+                    provider=str(event.get("provider", "unknown")),
+                )
+            except Exception:
+                # Never let metrics fail a publish
+                pass
             logger.debug(
                 f"Published {event.get('event_type')} to {topic} "
                 f"({len(payload)} bytes, "

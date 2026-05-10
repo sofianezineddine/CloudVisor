@@ -16,6 +16,7 @@ opentelemetry-instrumentation-fastapi>=0.43b0
 opentelemetry-instrumentation-sqlalchemy>=0.43b0
 fastavro>=1.9.0
 httpx>=0.26.0
+cryptography>=42.0.0
 
 # AWS
 aiobotocore[boto3]>=2.11.0

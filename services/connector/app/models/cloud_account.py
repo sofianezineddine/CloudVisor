@@ -62,6 +62,10 @@ class CloudAccountModel(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+    # Soft-delete tombstone — set when an account is disconnected.
+    # Spec §3.3: audit logs retained for 365 days minimum; keeping the account
+    # row (with credentials wiped) lets audit queries resolve the account name.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Constraints
     __table_args__ = (
@@ -92,6 +96,7 @@ class CloudAccountModel(Base):
             "vault_secret_path": self.vault_secret_path,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
         }
 
 
@@ -167,51 +172,75 @@ class DiscoveredResourceModel(Base):
 
 
 async def create_connector_tables(engine: Any) -> None:
-    """Create all connector tables if they don't exist."""
+    """Create all connector tables and ensure RLS policies exist.
+
+    Postgres does NOT support `CREATE POLICY IF NOT EXISTS`, so we wrap each
+    `CREATE POLICY` in a DO block that checks `pg_policies` first. This is
+    fully idempotent across restarts.
+    """
     import logging
+    from sqlalchemy import text
     logger = logging.getLogger(__name__)
-    
+
     # Create tables using the engine directly (not in a transaction)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     logger.info("Connector tables created successfully")
-    
-    # Apply RLS policies separately (ignore errors if they already exist)
+
+    # ── Column migrations (idempotent) ────────────────────────────────────────
     try:
         async with engine.begin() as conn:
-            # Add credentials_enc column if it doesn't exist (migration for existing tables)
-            try:
-                from sqlalchemy import text
-                await conn.execute(text(
-                    "ALTER TABLE connector_cloud_accounts "
-                    "ADD COLUMN IF NOT EXISTS credentials_enc JSONB"
-                ))
-                logger.info("credentials_enc column ensured on connector_cloud_accounts")
-            except Exception as e:
-                logger.debug(f"credentials_enc column migration: {e}")
-
-            rls_policies = [
-                """
-                ALTER TABLE connector_cloud_accounts ENABLE ROW LEVEL SECURITY;
-                CREATE POLICY IF NOT EXISTS connector_accounts_tenant_isolation ON connector_cloud_accounts
-                    AS PERMISSIVE FOR ALL
-                    USING (organization_id::text = current_setting('app.current_org_id', true)::text)
-                    WITH CHECK (organization_id::text = current_setting('app.current_org_id', true)::text);
-                """,
-                """
-                ALTER TABLE connector_discovered_resources ENABLE ROW LEVEL SECURITY;
-                CREATE POLICY IF NOT EXISTS connector_resources_tenant_isolation ON connector_discovered_resources
-                    AS PERMISSIVE FOR ALL
-                    USING (organization_id::text = current_setting('app.current_org_id', true)::text)
-                    WITH CHECK (organization_id::text = current_setting('app.current_org_id', true)::text);
-                """,
-            ]
-            for policy in rls_policies:
-                try:
-                    from sqlalchemy import text
-                    await conn.execute(text(policy))
-                except Exception as e:
-                    logger.debug(f"RLS policy skipped: {e}")
+            await conn.execute(text(
+                "ALTER TABLE connector_cloud_accounts "
+                "ADD COLUMN IF NOT EXISTS credentials_enc JSONB"
+            ))
+            # Soft-delete column for accounts (tombstone pattern for audit retention)
+            await conn.execute(text(
+                "ALTER TABLE connector_cloud_accounts "
+                "ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"
+            ))
+            logger.debug("Connector account column migrations applied")
     except Exception as e:
-        logger.debug(f"RLS policy creation failed (tables still created): {e}")
+        logger.warning(f"Column migration failed: {e}")
+
+    # ── RLS policies (idempotent via pg_policies existence check) ─────────────
+    _policies = [
+        ("connector_cloud_accounts", "connector_accounts_tenant_isolation"),
+        ("connector_discovered_resources", "connector_resources_tenant_isolation"),
+    ]
+
+    policy_sql_template = """
+    DO $$
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+              AND tablename = '{table}'
+              AND policyname = '{policy}'
+        ) THEN
+            EXECUTE format(
+                'CREATE POLICY %I ON %I AS PERMISSIVE FOR ALL '
+                'USING (organization_id::text = current_setting(''app.current_org_id'', true)::text) '
+                'WITH CHECK (organization_id::text = current_setting(''app.current_org_id'', true)::text)',
+                '{policy}', '{table}'
+            );
+        END IF;
+    END $$;
+    """
+
+    for table, policy in _policies:
+        try:
+            async with engine.begin() as conn:
+                # Enable RLS — safe to re-run
+                await conn.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
+                # Create policy if missing
+                await conn.execute(text(policy_sql_template.format(table=table, policy=policy)))
+            logger.info(f"RLS policy ensured: {policy} on {table}")
+        except Exception as e:
+            # This is a HARD failure — log at ERROR because tenant isolation is
+            # compromised if the policy doesn't exist.
+            logger.error(
+                f"Failed to apply RLS policy {policy} on {table}: {e}. "
+                "Tenant isolation may be incomplete — investigate immediately."
+            )

@@ -10,11 +10,18 @@ this service automatically:
 The role uses a trust policy that allows the connector to assume it via STS.
 The original access key is only used once — for role creation — and is never
 used for resource discovery. All discovery uses the assumed role session.
+
+Trust policy:
+  - In production (SaaS): trusts the CloudVisor AWS account root
+    (``CLOUDVISOR_AWS_ACCOUNT_ID`` env var), so customer IAM user rotation
+    doesn't break discovery. Spec §3.1 requires this.
+  - In self-hosted / dev: falls back to the caller's ARN when
+    ``CLOUDVISOR_AWS_ACCOUNT_ID`` is unset. The original keys must stay valid.
 """
 
 import json
 import logging
-import secrets
+import os
 from typing import Any
 
 import aiobotocore.session
@@ -86,7 +93,8 @@ class AWSRoleSetupService:
                 "role_arn": "arn:aws:iam::123456789012:role/CloudVisorReadOnly",
                 "external_id": "cv-abc123...",
                 "account_id": "123456789012",
-                "already_existed": True/False
+                "already_existed": True/False,
+                "trust_principal": "arn:aws:iam::<cloudvisor-account>:root" | caller ARN
             }
 
         Raises:
@@ -100,23 +108,38 @@ class AWSRoleSetupService:
         # Use account_id as seed so it's deterministic (same account → same external_id)
         external_id = f"cv-{account_id}"
 
-        # Step 3: Build trust policy — allow the caller (this IAM user/role) to assume
+        # Step 3: Pick the trust principal.
+        # Production SaaS: trust the CloudVisor AWS account root so customer IAM
+        # user rotation never breaks discovery.
+        # Self-hosted / dev: trust the caller (same account) so no separate
+        # CloudVisor account is needed.
+        cloudvisor_account_id = os.getenv("CLOUDVISOR_AWS_ACCOUNT_ID", "").strip()
+        if cloudvisor_account_id:
+            trust_principal = f"arn:aws:iam::{cloudvisor_account_id}:root"
+            logger.info(
+                f"Using CloudVisor production trust principal: {trust_principal}"
+            )
+        else:
+            trust_principal = caller_arn
+            logger.info(
+                f"CLOUDVISOR_AWS_ACCOUNT_ID not set — using caller ARN as trust "
+                f"principal ({caller_arn}). This is OK for self-hosted/dev but "
+                f"breaks if the IAM user's credentials rotate. Set "
+                f"CLOUDVISOR_AWS_ACCOUNT_ID in production."
+            )
+
         trust_policy = json.dumps({
             "Version": "2012-10-17",
             "Statement": [
                 {
                     "Effect": "Allow",
-                    "Principal": {
-                        "AWS": caller_arn
-                    },
+                    "Principal": {"AWS": trust_principal},
                     "Action": "sts:AssumeRole",
                     "Condition": {
-                        "StringEquals": {
-                            "sts:ExternalId": external_id
-                        }
-                    }
+                        "StringEquals": {"sts:ExternalId": external_id},
+                    },
                 }
-            ]
+            ],
         })
 
         # Step 4: Create or update the role
@@ -138,6 +161,7 @@ class AWSRoleSetupService:
             "external_id": external_id,
             "account_id": account_id,
             "already_existed": already_existed,
+            "trust_principal": trust_principal,
         }
 
     async def _verify_credentials(self) -> tuple[str, str]:

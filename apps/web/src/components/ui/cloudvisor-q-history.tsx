@@ -19,7 +19,13 @@ export function CloudVisorQHistory({ onSelectSession, onClose }: CloudVisorQHist
     loading,
     error,
     deleteSession,
+    loadSessions,
   } = useCopilotSessions();
+
+  // Load sessions when component mounts
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   const handleSelectSession = (sessionId: string) => {
     setCurrentSessionId(sessionId);
@@ -98,9 +104,17 @@ export function CloudVisorQHistory({ onSelectSession, onClose }: CloudVisorQHist
           <div className="px-3 py-4 text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>
             Loading sessions...
           </div>
+        ) : loading ? (
+          <div className="px-3 py-4 text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>
+            Loading conversations...
+          </div>
+        ) : error ? (
+          <div className="px-3 py-4 text-xs text-center" style={{ color: 'var(--text-critical)' }}>
+            Failed to load conversations: {error}
+          </div>
         ) : sessions.length === 0 ? (
           <div className="px-3 py-4 text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>
-            No chat sessions yet. Create one to get started.
+            No conversations yet.
           </div>
         ) : (
           <div className="space-y-1 p-2">

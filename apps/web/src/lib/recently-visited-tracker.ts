@@ -35,24 +35,36 @@ const SERVICE_DEFINITIONS: Record<string, Omit<RecentlyVisitedItem, 'href' | 'vi
 let currentItems: RecentlyVisitedItem[] = [];
 let listeners: Array<(items: RecentlyVisitedItem[]) => void> = [];
 
-// Load from localStorage
+// Load from localStorage with better error handling
 function loadFromStorage(): RecentlyVisitedItem[] {
   if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
+    if (!stored) return [];
+    
+    const parsed = JSON.parse(stored);
+    // Validate the structure
+    if (!Array.isArray(parsed)) return [];
+    
+    return parsed.filter(item => 
+      item && 
+      typeof item.href === 'string' && 
+      typeof item.label === 'string' && 
+      typeof item.visitedAt === 'number'
+    );
+  } catch (error) {
+    console.warn('Failed to load recently visited items from localStorage:', error);
     return [];
   }
 }
 
-// Save to localStorage
+// Save to localStorage with better error handling
 function saveToStorage(items: RecentlyVisitedItem[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    // Ignore storage errors
+  } catch (error) {
+    console.warn('Failed to save recently visited items to localStorage:', error);
   }
 }
 
@@ -65,13 +77,10 @@ function notifyListeners(): void {
 function initialize(): void {
   if (typeof window === 'undefined') return;
   currentItems = loadFromStorage();
-  console.log('RecentlyVisitedTracker: Initialized with items:', currentItems);
 }
 
 // Add a visit
 export function trackVisit(pathname: string): void {
-  console.log('RecentlyVisitedTracker: trackVisit called with:', pathname);
-  
   if (typeof window === 'undefined') return;
   
   // Find matching service definition
@@ -92,11 +101,7 @@ export function trackVisit(pathname: string): void {
     }
   }
   
-  console.log('RecentlyVisitedTracker: Service definition:', serviceDefinition);
-  console.log('RecentlyVisitedTracker: Base route:', baseRoute);
-  
   if (!serviceDefinition) {
-    console.log('RecentlyVisitedTracker: No service definition found, skipping');
     return;
   }
   
@@ -106,15 +111,11 @@ export function trackVisit(pathname: string): void {
     visitedAt: Date.now(),
   };
   
-  console.log('RecentlyVisitedTracker: Adding item:', newItem);
-  
   // Remove existing entry for this route
   currentItems = currentItems.filter(item => item.href !== baseRoute);
   
   // Add new entry at the beginning
   currentItems = [newItem, ...currentItems].slice(0, MAX_ITEMS);
-  
-  console.log('RecentlyVisitedTracker: Updated items:', currentItems);
   
   // Save and notify
   saveToStorage(currentItems);
@@ -136,6 +137,12 @@ export function clearRecentlyVisited(): void {
 // Subscribe to changes
 export function subscribeToChanges(listener: (items: RecentlyVisitedItem[]) => void): () => void {
   listeners.push(listener);
+  
+  // Ensure we have loaded from storage
+  if (currentItems.length === 0 && typeof window !== 'undefined') {
+    currentItems = loadFromStorage();
+  }
+  
   // Immediately call with current items
   listener([...currentItems]);
   
@@ -149,8 +156,6 @@ export function subscribeToChanges(listener: (items: RecentlyVisitedItem[]) => v
 function setupAutoTracking(): void {
   if (typeof window === 'undefined') return;
   
-  console.log('RecentlyVisitedTracker: Setting up auto-tracking');
-  
   // Track initial page
   trackVisit(window.location.pathname);
   
@@ -161,7 +166,6 @@ function setupAutoTracking(): void {
   window.history.pushState = function(...args) {
     originalPushState.apply(window.history, args);
     setTimeout(() => {
-      console.log('RecentlyVisitedTracker: pushState detected, tracking:', window.location.pathname);
       trackVisit(window.location.pathname);
     }, 0);
   };
@@ -169,25 +173,37 @@ function setupAutoTracking(): void {
   window.history.replaceState = function(...args) {
     originalReplaceState.apply(window.history, args);
     setTimeout(() => {
-      console.log('RecentlyVisitedTracker: replaceState detected, tracking:', window.location.pathname);
       trackVisit(window.location.pathname);
     }, 0);
   };
   
   window.addEventListener('popstate', () => {
-    console.log('RecentlyVisitedTracker: popstate detected, tracking:', window.location.pathname);
     trackVisit(window.location.pathname);
   });
   
   // Also track on focus (when user returns to tab)
   window.addEventListener('focus', () => {
-    console.log('RecentlyVisitedTracker: focus detected, tracking:', window.location.pathname);
     trackVisit(window.location.pathname);
   });
 }
 
 // Initialize when this module loads
 if (typeof window !== 'undefined') {
+  // Load initial data
   initialize();
+  
+  // Setup auto-tracking
   setupAutoTracking();
+  
+  // Periodic backup to ensure data persistence
+  setInterval(() => {
+    if (currentItems.length > 0) {
+      saveToStorage(currentItems);
+    }
+  }, 30000); // Save every 30 seconds if there are items
+  
+  // Save on page unload
+  window.addEventListener('beforeunload', () => {
+    saveToStorage(currentItems);
+  });
 }

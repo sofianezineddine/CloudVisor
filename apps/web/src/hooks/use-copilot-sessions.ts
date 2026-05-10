@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useCloudVisorQStore, ChatSession } from '@/stores/cloudvisor-q';
 
 const COPILOT_BASE_URL = process.env.NEXT_PUBLIC_COPILOT_URL || 'http://localhost:8010';
@@ -53,43 +53,49 @@ async function copilotFetch(path: string, options: RequestInit = {}) {
 }
 
 export function useCopilotSessions() {
-  const {
-    currentSessionId,
-    setCurrentSessionId,
-    sessions,
-    setSessions,
-    addSession,
-    removeSession,
-  } = useCloudVisorQStore();
+  const currentSessionId = useCloudVisorQStore(s => s.currentSessionId);
+  const setCurrentSessionId = useCloudVisorQStore(s => s.setCurrentSessionId);
+  const sessions = useCloudVisorQStore(s => s.sessions);
+  const setSessions = useCloudVisorQStore(s => s.setSessions);
+  const addSession = useCloudVisorQStore(s => s.addSession);
+  const removeSession = useCloudVisorQStore(s => s.removeSession);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadSessions = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      // Use gateway /v1/copilot/history (falls back to direct if unavailable)
-      const data = await copilotFetch('/v1/copilot/history');
-      console.log('useCopilotSessions - API response:', data);
-      const sessionsData = data?.sessions || data?.data || [];
-      console.log('useCopilotSessions - extracted sessions:', sessionsData, 'isArray:', Array.isArray(sessionsData));
+      // Sessions live directly on the copilot service at /v1/copilot/sessions
+      // The gateway wraps responses as { data: { sessions: [...] }, meta: {} }
+      // The direct copilot service returns { sessions: [...] } directly
+      const data = await copilotFetch('/v1/copilot/sessions');
+
+      // Unwrap all possible response shapes:
+      // 1. Gateway envelope:  { data: { sessions: [...] } }
+      // 2. Direct copilot:    { sessions: [...] }
+      // 3. Flat array:        [...]
+      let sessionsData: ChatSession[] = [];
+      if (Array.isArray(data)) {
+        sessionsData = data;
+      } else if (Array.isArray(data?.data?.sessions)) {
+        sessionsData = data.data.sessions;
+      } else if (Array.isArray(data?.sessions)) {
+        sessionsData = data.sessions;
+      } else if (Array.isArray(data?.data)) {
+        sessionsData = data.data;
+      }
       setSessions(sessionsData);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load sessions';
-      console.error('useCopilotSessions - error:', err);
       setError(message);
-      // Ensure sessions is always an array even on error
       setSessions([]);
     } finally {
       setLoading(false);
     }
-  }, [setSessions]);
-
-  // Load sessions on mount
-  useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const createSession = useCallback(
     async (title: string, description?: string): Promise<ChatSession | null> => {

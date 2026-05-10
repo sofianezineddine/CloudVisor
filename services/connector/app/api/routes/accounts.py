@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import uuid
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -12,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, get_redis
 from app.core.auth import require_org_id
+from app.core.time_utils import utcnow
 from app.schemas import (
     CloudAccountCreate,
     CloudAccountUpdate,
@@ -24,6 +24,10 @@ from app.schemas import (
     ErrorResponse,
 )
 from app.models import CloudAccountModel
+from app.services.credential_crypto import (
+    decrypt_credentials,
+    encrypt_credentials,
+)
 from app.services.vault_client import VaultClient
 from app.core.config import get_connector_settings
 
@@ -31,6 +35,83 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
+
+
+async def _load_account_credentials(
+    account: CloudAccountModel,
+    connector_settings: Any,
+) -> dict[str, Any]:
+    """Load and decrypt credentials for an account.
+
+    Tries Vault first, then falls back to ``credentials_enc``. Handles both
+    the new envelope-encrypted payload and legacy plaintext transparently.
+    """
+    # Try Vault
+    if account.vault_secret_path and connector_settings.vault_enabled:
+        try:
+            vault = VaultClient(
+                vault_url=connector_settings.vault_url,
+                vault_token=connector_settings.vault_token,
+                mount_point=connector_settings.vault_mount_point,
+            )
+            if await vault.initialize():
+                raw = await vault.retrieve_credentials(account.vault_secret_path)
+                if raw:
+                    try:
+                        return decrypt_credentials(raw, account.organization_id)
+                    except Exception as e:
+                        logger.warning(
+                            f"Credential decryption failed for {account.id}: {e}. "
+                            "Treating Vault payload as plaintext (legacy)."
+                        )
+                        return dict(raw)
+        except Exception as e:
+            logger.warning(f"Could not retrieve Vault credentials for {account.id}: {e}")
+
+    # Fall back to DB
+    if account.credentials_enc:
+        try:
+            return decrypt_credentials(account.credentials_enc, account.organization_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to decrypt DB credentials for {account.id}: {e}. "
+                "Check CONNECTOR_CREDENTIAL_MASTER_KEY."
+            )
+            return {}
+
+    return {}
+
+
+async def _emit_health_change_if_needed(
+    account: CloudAccountModel,
+    previous_status: str,
+    new_status: str,
+    error_message: str | None = None,
+) -> None:
+    """Emit connector.health_changed when status transitions."""
+    if previous_status == new_status:
+        return
+    try:
+        from app.core.dependencies import _sync_scheduler
+        producer = getattr(_sync_scheduler, "_producer", None) if _sync_scheduler else None
+        if producer is None:
+            return
+        await producer.emit_health_changed(
+            account_id=account.id,
+            organization_id=account.organization_id,
+            provider=account.provider,
+            previous_status=previous_status,
+            new_status=new_status,
+            error_message=error_message,
+            resource_count=account.resource_count,
+        )
+        logger.info(
+            f"Emitted connector.health_changed: {account.id} "
+            f"{previous_status} → {new_status}"
+        )
+    except Exception as e:
+        # Never block on telemetry
+        logger.warning(f"Failed to emit health_changed for {account.id}: {e}")
 
 
 @router.post("", response_model=CloudAccountResponse, status_code=status.HTTP_201_CREATED)
@@ -101,9 +182,12 @@ async def create_account(
             logger.warning(f"Role auto-setup failed, falling back to direct key usage: {e}")
             # Non-fatal: fall back to using the access key directly
 
-    # Store credentials in Vault (preferred) or directly in DB (dev/fallback)
+    # Store credentials in Vault (preferred) or directly in DB (dev/fallback).
+    # In BOTH paths, the credentials are envelope-encrypted with a per-org DEK
+    # derived from CONNECTOR_CREDENTIAL_MASTER_KEY before persistence (spec §8).
     connector_settings = get_connector_settings()
     if credentials_to_store:
+        encrypted_payload = encrypt_credentials(credentials_to_store, organization_id)
         vault_stored = False
 
         # Try Vault only if it's enabled
@@ -120,11 +204,11 @@ async def create_account(
                         account_id=account.id,
                         organization_id=organization_id,
                         provider=account.provider,
-                        credentials=credentials_to_store,
+                        credentials=encrypted_payload,
                     )
                     account.vault_secret_path = vault_path
                     vault_stored = True
-                    logger.info(f"Credentials stored in Vault for account {account.id}")
+                    logger.info(f"Encrypted credentials stored in Vault for account {account.id}")
                 else:
                     logger.warning("Vault unavailable/sealed — falling back to DB credential storage")
             except Exception as e:
@@ -134,22 +218,24 @@ async def create_account(
                 )
 
         if not vault_stored:
-            # Vault disabled, sealed, or unreachable — store directly in DB.
-            # Safe for dev/local. In production, fix Vault or keep it enabled.
-            account.credentials_enc = credentials_to_store
-            logger.info(f"Credentials stored in DB for account {account.id}")
+            # Vault disabled, sealed, or unreachable — store encrypted blob in DB.
+            account.credentials_enc = encrypted_payload
+            logger.info(f"Encrypted credentials stored in DB for account {account.id}")
 
     # ── Validate connectivity before marking active (spec requirement) ─────────
     connectivity_ok = False
     if credentials_to_store:
         try:
             from app.clients import ClientFactory
-            test_client = ClientFactory.create(
+            test_client = ClientFactory.create_client(
                 provider=account_data.provider,
                 credentials=credentials_to_store,
-                account_id=account_data.account_id,
             )
             connectivity_ok = await test_client.connect()
+            try:
+                await test_client.disconnect()
+            except Exception:
+                pass
             if not connectivity_ok:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -163,11 +249,19 @@ async def create_account(
             logger.warning(f"Connectivity check failed: {e} — proceeding with pending status")
             connectivity_ok = False
 
+    previous_status = account.status
     account.status = "active" if connectivity_ok else "pending"
 
     db.add(account)
     await db.commit()
     await db.refresh(account)
+
+    # Emit connector.health_changed for the initial status transition
+    await _emit_health_change_if_needed(
+        account=account,
+        previous_status=previous_status,
+        new_status=account.status,
+    )
 
     # Schedule + trigger initial sync
     from app.core.dependencies import _sync_scheduler, get_realtime_manager
@@ -200,12 +294,20 @@ async def create_account(
 @router.get("", response_model=CloudAccountListResponse)
 async def list_accounts(
     organization_id: str = Depends(require_org_id),
+    include_deleted: bool = False,
     db: AsyncSession = Depends(get_db),
 ) -> CloudAccountListResponse:
-    """List cloud accounts belonging to the authenticated organization only."""
+    """List cloud accounts belonging to the authenticated organization only.
+
+    Soft-deleted accounts are excluded by default. Pass ``include_deleted=true``
+    to see them (audit / compliance use).
+    """
     stmt = select(CloudAccountModel).where(
         CloudAccountModel.organization_id == organization_id
-    ).order_by(CloudAccountModel.created_at.desc())
+    )
+    if not include_deleted:
+        stmt = stmt.where(CloudAccountModel.deleted_at.is_(None))
+    stmt = stmt.order_by(CloudAccountModel.created_at.desc())
     result = await db.execute(stmt)
     accounts = result.scalars().all()
 
@@ -224,7 +326,8 @@ async def get_account(
     """Get a cloud account — must belong to the authenticated organization."""
     stmt = select(CloudAccountModel).where(
         CloudAccountModel.id == account_id,
-        CloudAccountModel.organization_id == organization_id,   # ← tenant check
+        CloudAccountModel.organization_id == organization_id,
+        CloudAccountModel.deleted_at.is_(None),
     )
     result = await db.execute(stmt)
     account = result.scalar_one_or_none()
@@ -246,6 +349,7 @@ async def update_account(
     stmt = select(CloudAccountModel).where(
         CloudAccountModel.id == account_id,
         CloudAccountModel.organization_id == organization_id,
+        CloudAccountModel.deleted_at.is_(None),
     )
     result = await db.execute(stmt)
     account = result.scalar_one_or_none()
@@ -258,9 +362,25 @@ async def update_account(
     if account_data.region is not None:
         account.region = account_data.region
     if account_data.polling_interval_minutes is not None:
+        # Re-validate against allowed options
+        allowed = get_connector_settings().polling_interval_options
+        if account_data.polling_interval_minutes not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"polling_interval_minutes must be one of {allowed}",
+            )
         account.polling_interval_minutes = account_data.polling_interval_minutes
+        # Reschedule with new interval
+        from app.core.dependencies import _sync_scheduler
+        if _sync_scheduler is not None:
+            await _sync_scheduler.schedule_account(
+                account_id=account.id,
+                organization_id=organization_id,
+                provider=account.provider,
+                interval_minutes=account.polling_interval_minutes,
+            )
 
-    account.updated_at = datetime.utcnow()
+    account.updated_at = utcnow()
     await db.commit()
     await db.refresh(account)
 
@@ -270,10 +390,19 @@ async def update_account(
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(
     account_id: str,
+    hard: bool = False,
     organization_id: str = Depends(require_org_id),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Remove a cloud account — must belong to the authenticated organization."""
+    """Remove a cloud account — must belong to the authenticated organization.
+
+    Default is SOFT delete (sets ``deleted_at``, wipes credentials, stops
+    polling, emits ``resource.deleted`` events for all resources). The row
+    stays for 365+ days to satisfy audit retention (spec §3.3).
+
+    Pass ``hard=true`` to physically delete the row. Only use this for
+    data-erasure / GDPR right-to-be-forgotten.
+    """
     stmt = select(CloudAccountModel).where(
         CloudAccountModel.id == account_id,
         CloudAccountModel.organization_id == organization_id,
@@ -283,6 +412,8 @@ async def delete_account(
 
     if not account:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    previous_status = account.status
 
     # ── 1. Cancel scheduled sync ───────────────────────────────────────────────
     from app.core.dependencies import _sync_scheduler
@@ -301,25 +432,11 @@ async def delete_account(
         except Exception as e:
             logger.warning(f"Failed to stop real-time consumers for {account_id}: {e}")
 
+    connector_settings = get_connector_settings()
+
     # ── 3. Clean up AWS IAM role (best-effort) ─────────────────────────────────
     if account.provider == "aws":
-        credentials: dict[str, Any] = {}
-        # Try Vault first
-        connector_settings = get_connector_settings()
-        if account.vault_secret_path and connector_settings.vault_enabled:
-            try:
-                vault = VaultClient(
-                    vault_url=connector_settings.vault_url,
-                    vault_token=connector_settings.vault_token,
-                    mount_point=connector_settings.vault_mount_point,
-                )
-                if await vault.initialize():
-                    credentials = await vault.get_credentials(account.vault_secret_path) or {}
-            except Exception as e:
-                logger.warning(f"Could not retrieve credentials from Vault for cleanup: {e}")
-        elif account.credentials_enc:
-            credentials = account.credentials_enc or {}
-
+        credentials = await _load_account_credentials(account, connector_settings)
         if credentials.get("access_key") and credentials.get("secret_key"):
             try:
                 from app.services.aws_role_setup import AWSRoleSetupService
@@ -334,7 +451,6 @@ async def delete_account(
 
     # ── 4. Delete credentials from Vault ──────────────────────────────────────
     if account.vault_secret_path:
-        connector_settings = get_connector_settings()
         if connector_settings.vault_enabled:
             try:
                 vault = VaultClient(
@@ -351,8 +467,6 @@ async def delete_account(
     # ── 5. Emit resource.deleted Kafka events for all account resources ────────
     # Spec: "Remove a cloud account (stops polling, emits deleted events)"
     try:
-        from app.core.dependencies import _sync_scheduler
-        # Get the event producer from the scheduler
         producer = getattr(_sync_scheduler, "_producer", None) if _sync_scheduler else None
         if producer:
             from sqlalchemy import select as sa_select
@@ -367,9 +481,7 @@ async def delete_account(
             )
             resource_rows = await db.execute(stmt_resources)
             rows = resource_rows.all()
-            import asyncio as _asyncio
-            import uuid as _uuid
-            correlation_id = str(_uuid.uuid4())
+            correlation_id = str(uuid.uuid4())
             emit_tasks = [
                 producer.emit_resource_deleted(
                     cloud_resource_id=row.cloud_resource_id,
@@ -382,7 +494,7 @@ async def delete_account(
                 for row in rows
             ]
             if emit_tasks:
-                await _asyncio.gather(*emit_tasks, return_exceptions=True)
+                await asyncio.gather(*emit_tasks, return_exceptions=True)
                 logger.info(
                     f"Emitted {len(emit_tasks)} resource.deleted events "
                     f"for account {account_id}"
@@ -390,10 +502,27 @@ async def delete_account(
     except Exception as e:
         logger.warning(f"Failed to emit resource.deleted events for {account_id}: {e}")
 
-    # ── 6. Delete the account record (cascades to discovered resources) ────────
-    await db.delete(account)
-    await db.commit()
-    logger.info(f"Deleted cloud account {account_id} for org {organization_id}")
+    # ── 6. Soft or hard delete ────────────────────────────────────────────────
+    if hard:
+        await db.delete(account)
+        await db.commit()
+        logger.info(f"HARD-deleted cloud account {account_id} for org {organization_id}")
+    else:
+        account.deleted_at = utcnow()
+        account.status = "paused"
+        account.sync_status = "idle"
+        # Wipe credentials on soft-delete — audit rows don't need secrets
+        account.credentials_enc = None
+        account.vault_secret_path = None
+        await db.commit()
+        logger.info(f"Soft-deleted cloud account {account_id} for org {organization_id}")
+
+    # ── 7. Emit health_changed ────────────────────────────────────────────────
+    await _emit_health_change_if_needed(
+        account=account,
+        previous_status=previous_status,
+        new_status="paused" if not hard else "deleted",
+    )
 
 
 @router.post("/{account_id}/sync", response_model=SyncTriggerResponse)
@@ -407,6 +536,7 @@ async def trigger_sync(
     stmt = select(CloudAccountModel).where(
         CloudAccountModel.id == account_id,
         CloudAccountModel.organization_id == organization_id,
+        CloudAccountModel.deleted_at.is_(None),
     )
     result = await db.execute(stmt)
     account = result.scalar_one_or_none()
@@ -429,6 +559,49 @@ async def trigger_sync(
         status="triggered",
         message="Sync triggered successfully",
     )
+
+
+@router.get("/{account_id}/sync/status")
+async def get_sync_status(
+    account_id: str,
+    organization_id: str = Depends(require_org_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Get the current sync progress for an account.
+
+    Returns the in-flight or most-recent sync's progress — used by the UI's
+    "Run scan" button (Page 1 Dashboard) to show live progress in a Flashbar.
+    """
+    stmt = select(CloudAccountModel).where(
+        CloudAccountModel.id == account_id,
+        CloudAccountModel.organization_id == organization_id,
+    )
+    result = await db.execute(stmt)
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    from app.core.dependencies import _sync_scheduler
+    progress = None
+    if _sync_scheduler is not None:
+        progress = await _sync_scheduler.get_sync_progress(account_id)
+
+    # Build a response that's always populated even when no sync has run yet
+    return {
+        "account_id": account_id,
+        "provider": account.provider,
+        "account_status": account.status,
+        "sync_status": account.sync_status,
+        "last_sync_at": account.last_sync_at.isoformat() if account.last_sync_at else None,
+        "last_successful_sync_at": (
+            account.last_successful_sync_at.isoformat()
+            if account.last_successful_sync_at else None
+        ),
+        "resource_count": account.resource_count,
+        "consecutive_errors": account.consecutive_errors,
+        "current_sync": progress,
+    }
 
 
 @router.get("/{account_id}/health", response_model=CloudAccountHealthResponse)
@@ -467,49 +640,12 @@ async def get_account_health(
     )
 
 
-@router.get("/onboarding/aws/template", response_model=OnboardingResponse)
+@router.get("/onboarding/aws/template", response_model=OnboardingResponse, deprecated=True)
 async def get_aws_template() -> OnboardingResponse:
-    template = """AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudVisor Read-Only Access Role
-Resources:
-  CloudVisorReadOnlyRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: CloudVisorReadOnly
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: arn:aws:iam::YOUR_CLOUDVISOR_ACCOUNT_ID:root
-            Action: sts:AssumeRole
-            Condition:
-              StringEquals:
-                sts:ExternalId: YOUR_EXTERNAL_ID
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/ReadOnlyAccess
-Outputs:
-  RoleArn:
-    Value: !GetAtt CloudVisorReadOnlyRole.Arn
-"""
+    """Deprecated: use ``/internal/onboarding/aws/template`` instead."""
+    from app.services.onboarding_templates import AWS_CLOUDFORMATION_TEMPLATE
     return OnboardingResponse(
         provider="aws",
-        instructions="1. Replace YOUR_CLOUDVISOR_ACCOUNT_ID\n2. Replace YOUR_EXTERNAL_ID\n3. Create stack in CloudFormation\n4. Copy the Role ARN to CloudVisor",
-        template=template,
-    )
-
-
-@router.get("/onboarding/azure/instructions", response_model=OnboardingResponse)
-async def get_azure_instructions() -> OnboardingResponse:
-    return OnboardingResponse(
-        provider="azure",
-        instructions="Create a Service Principal with Reader role on your subscription.",
-    )
-
-
-@router.get("/onboarding/gcp/instructions", response_model=OnboardingResponse)
-async def get_gcp_instructions() -> OnboardingResponse:
-    return OnboardingResponse(
-        provider="gcp",
-        instructions="Create a Service Account with Viewer role and download the JSON key.",
+        instructions="Deprecated endpoint. Use /internal/onboarding/aws/template instead.",
+        template=AWS_CLOUDFORMATION_TEMPLATE,
     )

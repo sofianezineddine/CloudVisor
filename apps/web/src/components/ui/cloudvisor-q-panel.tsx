@@ -62,10 +62,12 @@ function ConversationsModal({
   onClose: () => void;
   onSelect: (sessionId: string, title: string) => void;
 }) {
-  const { sessions, loading, deleteSession } = useCopilotSessions();
+  const { sessions, loading, deleteSession, loadSessions } = useCopilotSessions();
   
-  // Debug logging to understand what sessions contains
-  console.log('CloudVisor Q Panel - sessions:', sessions, 'type:', typeof sessions, 'isArray:', Array.isArray(sessions));
+  // Load sessions when modal opens
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -264,11 +266,19 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
   const [inputValue, setInputValue]         = useState('');
   const [isProcessing, setIsProcessing]     = useState(false);
   const [isResizing, setIsResizing]         = useState(false);
-  const [showConversations, setShowConversations] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
-  const { getSession } = useCopilotSessions();
+  // Refs that always reflect the latest state — avoids stale closures in handleSendMessage
+  const messagesRef = useRef<Message[]>([]);
+  const activeSessionIdRef = useRef<string | null>(null);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
+
+  const showConversations    = useCloudVisorQStore(s => s.showConversations);
+  const setShowConversations = useCloudVisorQStore(s => s.setShowConversations);
+
+  const { getSession, loadSessions } = useCopilotSessions();
 
   const panelRef  = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
@@ -276,6 +286,13 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, [messages]);
   useEffect(() => { if (isOpen) setTimeout(() => inputRef.current?.focus(), 100); }, [isOpen]);
+
+  // Load sessions when panel opens
+  useEffect(() => {
+    if (isOpen) {
+      loadSessions();
+    }
+  }, [isOpen, loadSessions]);
 
   useEffect(() => {
     const onResize = () => {
@@ -400,14 +417,16 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
         })),
       };
 
-      const history = messages.filter(m => !m.processing).map(m => ({ role: m.role, content: m.content }));
+      const history = messagesRef.current
+        .filter(m => !m.processing)
+        .map(m => ({ role: m.role, content: m.content }));
 
       const requestBody = JSON.stringify({
         query: userMsg.content,
         stream: false,
         ui_context: context,
         conversation_history: history,
-        ...(activeSessionId ? { session_id: activeSessionId } : {}),
+        ...(activeSessionIdRef.current ? { session_id: activeSessionIdRef.current } : {}),
       });
 
       const authHeaders = {
@@ -439,10 +458,14 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
 
       if (!res.ok) { const err = await res.text().catch(() => ''); throw new Error(`CloudVisor Q returned ${res.status}: ${err}`); }
 
-      const data = await res.json();
+      const raw = await res.json();
+
+      // Unwrap gateway envelope: { data: { answer, session_id, ... }, meta: {} }
+      // or direct copilot response: { answer, session_id, ... }
+      const data = raw?.data ?? raw;
 
       // Track the session_id returned by the backend (auto-created on first message)
-      if (data.session_id && !activeSessionId) {
+      if (data.session_id && !activeSessionIdRef.current) {
         setActiveSessionId(data.session_id);
       }
 
@@ -469,7 +492,7 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
     } finally {
       setIsProcessing(false);
     }
-  }, [inputValue, isProcessing, messages, pathname, scopeMode, scopeProvider, scopeLabel, scopeAccountIds, scopeAccounts]);
+  }, [inputValue, isProcessing, pathname, scopeMode, scopeProvider, scopeLabel, scopeAccountIds, scopeAccounts]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }

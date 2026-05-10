@@ -1,0 +1,119 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --aws-nav-bg:           #232f3e;
+    --aws-nav-hover:        #37475a;
+    --aws-nav-active:       #1a2535;
+    --aws-nav-border:       #3a4a5c;
+    --aws-nav-text:         #d5dbdb;
+    --aws-nav-text-dim:     #8a9ba8;
+    --aws-orange:           #FF9900;
+    --aws-orange-hover:     #e6890a;
+
+    --bg-base:              #f2f3f3;
+    --bg-surface:           #ffffff;
+    --bg-elevated:          #f8f8f8;
+    --bg-overlay:           #ffffff;
+
+    --border-faint:         #eaeded;
+    --border-default:       #d5dbdb;
+    --border-strong:        #aab7b8;
+
+    --text-primary:         #16191f;
+    --text-secondary:       #545b64;
+    --text-tertiary:        #879596;
+    --text-link:            #0073bb;
+    --text-link-hover:      #005276;
+    --text-inverse:         #ffffff;
+
+    --accent:               #0073bb;
+    --accent-hover:         #005276;
+    --accent-dim:           rgba(0,115,187,0.08);
+    --accent-light:         #e8f4fb;
+
+    --btn-primary-bg:       #FF9900;
+    --btn-primary-hover:    #e6890a;
+    --btn-primary-text:     #ffffff;
+    --btn-normal-bg:        #ffffff;
+    --btn-normal-border:    #aab7b8;
+    --btn-normal-hover:     #f2f3f3;
+    --btn-normal-text:      #16191f;
+
+    --shadow-sm:            0 1px 2px rgba(0,28,36,0.12);
+    --shadow-md:            0 2px 8px rgba(0,28,36,0.15);
+    --shadow-lg:            0 4px 16px rgba(0,28,36,0.18);
+
+    --font-sans:            'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:            'JetBrains Mono', 'Monaco', Consolas, 'Courier New', monospace;
+
+    --radius-sm:            2px;
+    --radius-md:            4px;
+    --radius-lg:            8px;
+    --radius-button:        4px;
+    --radius-container:     4px;
+    --radius-badge:         2px;
+    --radius-input:         4px;
+  }
+
+  [data-theme="dark"] {
+    --aws-nav-bg:           #161e2d;
+    --aws-nav-hover:        #1f2d3d;
+    --bg-base:              #0d1117;
+    --bg-surface:           #131920;
+    --bg-elevated:          #1c2433;
+    --bg-overlay:           #1c2433;
+    --border-faint:         rgba(255,255,255,0.08);
+    --border-default:       rgba(255,255,255,0.15);
+    --border-strong:        rgba(255,255,255,0.25);
+    --text-primary:         #f1f5f9;
+    --text-secondary:       #cbd5e1;
+    --text-tertiary:        #94a3b8;
+    --text-link:            #60a5fa;
+    --btn-normal-bg:        #1c2433;
+    --btn-normal-border:    rgba(255,255,255,0.20);
+    --btn-normal-hover:     #243040;
+    --btn-normal-text:      #e2e8f0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-primary);
+    background-color: var(--bg-base);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    padding: 0;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  a {
+    color: var(--text-link);
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--text-link-hover);
+    text-decoration: underline;
+  }
+
+  button {
+    font-family: var(--font-sans);
+  }
+
+  input {
+    font-family: var(--font-sans);
+  }
+}

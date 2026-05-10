@@ -558,7 +558,10 @@ export function Header({
 
   // Load pins on mount and listen for changes from services page
   React.useEffect(() => {
-    setPins(loadPins());
+    // Ensure pins are loaded from localStorage
+    const initialPins = loadPins();
+    setPins(initialPins);
+    
     const handler = () => setPins(loadPins());
     window.addEventListener('cloudvisor-pins-changed', handler);
     return () => window.removeEventListener('cloudvisor-pins-changed', handler);
@@ -568,6 +571,8 @@ export function Header({
     const next = togglePin(href, pins);
     setPins(next);
     savePins(next);
+    // Dispatch event to notify other components
+    window.dispatchEvent(new Event('cloudvisor-pins-changed'));
   };
 
   // Load connected accounts into scope store
@@ -884,14 +889,20 @@ export function Bar3({
   activeTab?: string;
 }) {
   const pathname = usePathname();
-  
+  const showConversations = useCloudVisorQStore(s => s.showConversations);
+
   // Generate service breadcrumbs if none provided
   const displayBreadcrumbs = breadcrumbs || generateServiceBreadcrumbs(pathname, activeTab);
 
   return (
     <div
-      className="sticky flex w-full items-center justify-between border-b px-2 z-30"
-      style={{ top: `${STICKY_HEADER_H}px`, height: `${BAR3_H}px`, backgroundColor: 'var(--bar3-bg)', borderColor: 'var(--bar3-border)' }}
+      className="sticky flex w-full items-center justify-between px-2 z-30"
+      style={{
+        top: `${STICKY_HEADER_H}px`,
+        height: `${BAR3_H}px`,
+        backgroundColor: showConversations ? '#7F7F7F' : 'var(--bar3-bg)',
+        borderBottom: `1px solid ${showConversations ? '#6A6D6D' : 'var(--bar3-border)'}`,
+      }}
     >
       <div className="flex items-center gap-0">
         {/* Hamburger — controls sidebar */}

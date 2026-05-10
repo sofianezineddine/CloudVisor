@@ -41,6 +41,10 @@ interface CloudVisorQState {
   selectedHistoryId: string | null;
   setSelectedHistoryId: (id: string | null) => void;
 
+  // Conversations modal open state (used by Bar3 to change bg color)
+  showConversations: boolean;
+  setShowConversations: (v: boolean) => void;
+
   // Chat sessions
   currentSessionId: string | null;
   setCurrentSessionId: (id: string | null) => void;
@@ -81,12 +85,15 @@ export const useCloudVisorQStore = create<CloudVisorQState>()(
       selectedHistoryId: null,
       setSelectedHistoryId: (id) => set({ selectedHistoryId: id }),
 
+      // Conversations modal
+      showConversations: false,
+      setShowConversations: (v) => set({ showConversations: v }),
+
       // Chat sessions
       currentSessionId: null,
       setCurrentSessionId: (id) => set({ currentSessionId: id }),
       sessions: [],
       setSessions: (sessions) => {
-        console.log('CloudVisor Q Store - setSessions called with:', sessions, 'isArray:', Array.isArray(sessions));
         set({ sessions: Array.isArray(sessions) ? sessions : [] });
       },
       addSession: (session) => set((state) => ({
@@ -98,10 +105,8 @@ export const useCloudVisorQStore = create<CloudVisorQState>()(
     }),
     {
       name: 'cloudvisor-q-storage',
-      partialize: () => ({
-        // Don't persist width - always open at 50% of current viewport
-        // Persist current session ID for continuity
-        currentSessionId: true,
+      partialize: (state) => ({
+        currentSessionId: state.currentSessionId,
       }),
       skipHydration: true, // Prevent SSR hydration issues
     }

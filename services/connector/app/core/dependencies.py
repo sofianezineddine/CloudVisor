@@ -10,7 +10,7 @@ from prometheus_client import generate_latest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cloudvisor_utils.config import CloudvisorSettings, get_settings
-from cloudvisor_utils.tracing import get_tracer
+from cloudvisor_utils.tracing import get_tracer as _get_shared_tracer
 
 from .config import ConnectorSettings, get_connector_settings
 from .database import create_session, create_db_session
@@ -96,6 +96,7 @@ async def init_dependencies(settings: CloudvisorSettings) -> None:
         event_producer=event_producer,
         db_session_factory=_session_factory,
         vault_client=vault_client,
+        sync_timeout_seconds=conn_settings.sync_timeout_seconds,
     )
     await _sync_scheduler.start()
 
@@ -172,5 +173,5 @@ def get_connector_settings_cached() -> ConnectorSettings:
 
 
 def get_tracer() -> object:
-    """Get OpenTelemetry tracer."""
-    return get_tracer("cloudvisor-connector")
+    """Get OpenTelemetry tracer scoped to the connector service."""
+    return _get_shared_tracer("cloudvisor-connector")

@@ -6,7 +6,6 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -14,12 +13,19 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from cloudvisor_types.models import CloudProvider, SyncResult, SyncStatus
 
 from app.clients import ClientFactory, CloudClientBase
+from app.core.time_utils import utcnow
 from app.models import CloudAccountModel, DiscoveredResourceModel
 from app.services.normalizer import BatchNormalizer
 from app.services.vault_client import VaultClient
 from app.producers import ResourceEventProducer
 
 logger = logging.getLogger(__name__)
+
+
+# Global semaphore to cap the total number of concurrent cloud API sessions
+# per process. Prevents thundering-herd when fanning out to every region × every
+# service × every provider.
+_GLOBAL_API_SEMAPHORE = asyncio.Semaphore(32)
 
 
 @dataclass
@@ -226,7 +232,7 @@ class CloudDiscoveryService:
                     return 0
 
                 # Mark them as deleted
-                now = datetime.utcnow()
+                now = utcnow()
                 update_stmt = (
                     update(DiscoveredResourceModel)
                     .where(
@@ -354,7 +360,7 @@ class CloudDiscoveryService:
                         environment=resource.environment.value,
                         first_seen_at=resource.first_seen_at,
                         last_seen_at=resource.last_seen_at,
-                        last_synced_at=datetime.utcnow(),
+                        last_synced_at=utcnow(),
                         resource_hash=resource_hash,
                         is_deleted=False,
                     ).on_conflict_do_update(
@@ -366,7 +372,7 @@ class CloudDiscoveryService:
                             "is_public": resource.is_public,
                             "environment": resource.environment.value,
                             "last_seen_at": resource.last_seen_at,
-                            "last_synced_at": datetime.utcnow(),
+                            "last_synced_at": utcnow(),
                             "resource_hash": resource_hash,
                             "is_deleted": False,
                             "deleted_at": None,
@@ -406,7 +412,7 @@ class CloudDiscoveryService:
                         DiscoveredResourceModel.cloud_resource_id.in_(cloud_resource_ids),
                         DiscoveredResourceModel.organization_id == self._account.organization_id,
                     )
-                    .values(is_deleted=True, deleted_at=datetime.utcnow())
+                    .values(is_deleted=True, deleted_at=utcnow())
                 )
                 await session.execute(stmt)
                 await session.commit()

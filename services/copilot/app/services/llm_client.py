@@ -25,6 +25,25 @@ class BaseLLMClient(ABC):
         """Generate a response from the LLM."""
         pass
 
+    async def generate_from_messages(
+        self,
+        messages: list[dict],
+        stream: bool = False,
+    ) -> str | AsyncGenerator[str, None]:
+        """
+        Generate a response from a full messages array (system + history + user).
+        Default implementation extracts system/user and calls generate().
+        Override in subclasses for native multi-turn support.
+        """
+        system_prompt = ""
+        user_prompt = ""
+        for msg in messages:
+            if msg["role"] == "system":
+                system_prompt = msg["content"]
+            elif msg["role"] == "user":
+                user_prompt = msg["content"]  # last user message wins
+        return await self.generate(system_prompt, user_prompt, stream=stream)
+
 
 class OllamaClient(BaseLLMClient):
     """Ollama client for local LLM inference."""
@@ -53,6 +72,68 @@ class OllamaClient(BaseLLMClient):
         except Exception as e:
             logger.error(f"Ollama API error: {e}")
             raise
+
+    async def generate_from_messages(
+        self,
+        messages: list[dict],
+        stream: bool = False,
+    ) -> str | AsyncGenerator[str, None]:
+        """Generate using the full messages array for proper multi-turn support."""
+        try:
+            if stream:
+                return self._generate_stream_messages(messages)
+            else:
+                return await self._generate_complete_messages(messages)
+        except Exception as e:
+            logger.error(f"Ollama API error: {e}")
+            raise
+
+    async def _generate_complete_messages(self, messages: list[dict]) -> str:
+        """Generate a complete response using a full messages array."""
+        logger.info(f"Calling Ollama API (model: {self.model_name}, {len(messages)} messages)")
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "temperature": self.settings.temperature,
+                "num_predict": self.settings.max_tokens,
+                "repeat_penalty": 1.3,
+                "repeat_last_n": 64,
+                "stop": ["\n\n\n", "---", "==="],
+            },
+        }
+        response = await self.client.post("/api/chat", json=payload)
+        response.raise_for_status()
+        data = response.json()
+        content = data.get("message", {}).get("content", "")
+        logger.info(f"Ollama response received: {len(content)} chars")
+        return content
+
+    async def _generate_stream_messages(self, messages: list[dict]) -> AsyncGenerator[str, None]:
+        """Generate a streaming response using a full messages array."""
+        logger.info(f"Calling Ollama API streaming (model: {self.model_name}, {len(messages)} messages)")
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "stream": True,
+            "options": {
+                "temperature": self.settings.temperature,
+                "num_predict": self.settings.max_tokens,
+            },
+        }
+        async with self.client.stream("POST", "/api/chat", json=payload) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line:
+                    import json
+                    try:
+                        chunk = json.loads(line)
+                        content = chunk.get("message", {}).get("content", "")
+                        if content:
+                            yield content
+                    except json.JSONDecodeError:
+                        continue
 
     async def _generate_complete(self, system_prompt: str, user_prompt: str) -> str:
         """Generate a complete (non-streaming) response using /api/chat."""
@@ -274,6 +355,77 @@ class OpenRouterClient(BaseLLMClient):
             logger.error(f"OpenRouter API error: {e}")
             raise
 
+    async def generate_from_messages(
+        self,
+        messages: list[dict],
+        stream: bool = False,
+    ) -> str | AsyncGenerator[str, None]:
+        """Generate using the full messages array for proper multi-turn support."""
+        try:
+            if stream:
+                return self._generate_stream_messages(messages)
+            else:
+                return await self._generate_complete_messages(messages)
+        except Exception as e:
+            logger.error(f"OpenRouter API error: {e}")
+            raise
+
+    async def _generate_complete_messages(self, messages: list[dict]) -> str:
+        """Generate a complete response using a full messages array."""
+        logger.info(f"Calling OpenRouter API (model: {self.model_name}, {len(messages)} messages)")
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": self.settings.temperature,
+            "max_tokens": self.settings.max_tokens,
+        }
+        response = await self.client.post("/chat/completions", json=payload)
+        if response.status_code != 200:
+            logger.error(f"OpenRouter error {response.status_code}: {response.text}")
+        response.raise_for_status()
+        data = response.json()
+        choices = data.get("choices", [])
+        if not choices:
+            raise ValueError("OpenRouter returned an empty response (no choices)")
+        content = choices[0].get("message", {}).get("content") or ""
+        if not content:
+            finish_reason = choices[0].get("finish_reason", "unknown")
+            logger.warning(f"OpenRouter returned empty content, finish_reason={finish_reason}")
+            content = f"[Model returned empty response. finish_reason={finish_reason}]"
+        logger.info(f"OpenRouter response received: {len(content)} chars")
+        return content
+
+    async def _generate_stream_messages(self, messages: list[dict]) -> AsyncGenerator[str, None]:
+        """Generate a streaming response using a full messages array."""
+        logger.info(f"Calling OpenRouter API streaming (model: {self.model_name}, {len(messages)} messages)")
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": self.settings.temperature,
+            "max_tokens": self.settings.max_tokens,
+            "stream": True,
+        }
+        async with self.client.stream("POST", "/chat/completions", json=payload) as response:
+            if response.status_code != 200:
+                body = await response.aread()
+                logger.error(f"OpenRouter stream error {response.status_code}: {body}")
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line.startswith("data: "):
+                    line = line[6:]
+                    if line.strip() == "[DONE]":
+                        break
+                    try:
+                        import json
+                        chunk = json.loads(line)
+                        if "choices" in chunk and len(chunk["choices"]) > 0:
+                            delta = chunk["choices"][0].get("delta", {})
+                            content = delta.get("content")
+                            if content:
+                                yield content
+                    except json.JSONDecodeError:
+                        continue
+
     async def _generate_complete(self, system_prompt: str, user_prompt: str) -> str:
         """Generate a complete (non-streaming) response."""
         logger.info(f"Calling OpenRouter API (model: {self.model_name}, non-streaming)")
@@ -385,6 +537,83 @@ class NvidiaClient(BaseLLMClient):
             logger.error(f"NVIDIA API call failed: {e}")
             raise
 
+    async def generate_from_messages(
+        self,
+        messages: list[dict],
+        stream: bool = False,
+    ) -> str | AsyncGenerator[str, None]:
+        """Generate using the full messages array for proper multi-turn support."""
+        try:
+            if stream:
+                return self._generate_stream_messages(messages)
+            else:
+                return await self._generate_complete_messages(messages)
+        except Exception as e:
+            logger.error(f"NVIDIA API call failed: {e}")
+            raise
+
+    async def _generate_complete_messages(self, messages: list[dict]) -> str:
+        """Generate a complete response using a full messages array."""
+        logger.info(f"Calling NVIDIA API (model: {self.model_name}, {len(messages)} messages)")
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "max_tokens": self.settings.nvidia_max_tokens,
+            "temperature": self.settings.nvidia_temperature,
+            "top_p": 0.8,
+            "stream": False,
+        }
+        response = await self.client.post(
+            "/chat/completions",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        answer = data["choices"][0]["message"]["content"]
+        logger.info(f"NVIDIA API response received: {len(answer)} chars")
+        return answer
+
+    async def _generate_stream_messages(self, messages: list[dict]) -> AsyncGenerator[str, None]:
+        """Generate a streaming response using a full messages array."""
+        logger.info(f"Calling NVIDIA API streaming (model: {self.model_name}, {len(messages)} messages)")
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "max_tokens": self.settings.nvidia_max_tokens,
+            "temperature": self.settings.nvidia_temperature,
+            "top_p": 0.8,
+            "stream": True,
+        }
+        async with self.client.stream(
+            "POST",
+            "/chat/completions",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line.startswith("data: "):
+                    data_str = line[6:]
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        import json
+                        data = json.loads(data_str)
+                        delta = data["choices"][0]["delta"]
+                        if "content" in delta:
+                            content = delta["content"]
+                            if content:
+                                yield content
+                    except json.JSONDecodeError:
+                        continue
+
     async def _generate_complete(self, system_prompt: str, user_prompt: str) -> str:
         """Generate a complete response from NVIDIA API."""
         logger.info(f"Calling NVIDIA API (model: {self.model_name}, non-streaming)")
@@ -397,6 +626,7 @@ class NvidiaClient(BaseLLMClient):
             ],
             "max_tokens": self.settings.nvidia_max_tokens,
             "temperature": self.settings.nvidia_temperature,
+            "top_p": 0.8,
             "stream": False,
         }
 

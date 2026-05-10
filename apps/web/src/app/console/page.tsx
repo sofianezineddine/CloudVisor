@@ -285,9 +285,6 @@ function ConsoleGrid() {
         onRemove={() => removeWidget('recently-visited')}
       >
         {(() => {
-          console.log('Recently visited items in render:', recentlyVisitedItems);
-          console.log('Current pathname:', typeof window !== 'undefined' ? window.location.pathname : 'SSR');
-          
           return recentlyVisitedItems.length > 0 ? (
             <div className="grid grid-cols-2 gap-x-6 h-full">
               <div className="overflow-auto">
@@ -325,40 +322,7 @@ function ConsoleGrid() {
                 <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
                   Visit CloudVisor services to see them here
                 </p>
-                <div className="flex gap-2 mb-3">
-                  <button
-                    onClick={() => {
-                      console.log('Manual test: Adding CSPM to recently visited');
-                      manualTrackVisit('/cspm');
-                    }}
-                    className="px-2 py-1 text-xs rounded"
-                    style={{ backgroundColor: 'var(--accent)', color: 'white' }}
-                  >
-                    Test CSPM
-                  </button>
-                  <button
-                    onClick={() => {
-                      console.log('Manual test: Tracking current page');
-                      const currentPath = window.location.pathname;
-                      console.log('Current path:', currentPath);
-                      manualTrackVisit(currentPath);
-                    }}
-                    className="px-2 py-1 text-xs rounded"
-                    style={{ backgroundColor: 'var(--success)', color: 'white' }}
-                  >
-                    Track This Page
-                  </button>
-                  <button
-                    onClick={() => {
-                      console.log('Clearing recently visited');
-                      clearRecentlyVisited();
-                    }}
-                    className="px-2 py-1 text-xs rounded"
-                    style={{ backgroundColor: 'var(--critical)', color: 'white' }}
-                  >
-                    Clear
-                  </button>
-                </div>
+
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   {services.slice(0, 4).map((s: any) => (
                     <Link 
