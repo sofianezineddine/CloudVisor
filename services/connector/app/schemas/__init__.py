@@ -8,6 +8,10 @@ from .accounts import (
     SyncTriggerResponse,
     OnboardingResponse,
     ErrorResponse,
+    CredentialRotateRequest,
+    CredentialRotateResponse,
+    ScanHistoryEntry,
+    ScanHistoryResponse,
 )
 
 __all__ = [
@@ -20,4 +24,8 @@ __all__ = [
     "SyncTriggerResponse",
     "OnboardingResponse",
     "ErrorResponse",
+    "CredentialRotateRequest",
+    "CredentialRotateResponse",
+    "ScanHistoryEntry",
+    "ScanHistoryResponse",
 ]

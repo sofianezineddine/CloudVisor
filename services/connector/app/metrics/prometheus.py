@@ -6,7 +6,15 @@ from prometheus_client import Counter, Gauge, Histogram, generate_latest
 
 connector_last_sync_age_seconds = Gauge(
     "cloudvisor_connector_last_sync_age_seconds",
-    "Seconds since last successful sync for an account",
+    "Seconds since last successful sync for an account. "
+    "Updated on every scrape via a collector callback — see LastSyncAgeUpdater.",
+    ["organization_id", "account_id", "provider"],
+)
+
+connector_last_sync_timestamp_seconds = Gauge(
+    "cloudvisor_connector_last_sync_timestamp_seconds",
+    "Unix timestamp of the last successful sync. Preferred over the age gauge "
+    "for PromQL queries: use `time() - last_sync_timestamp_seconds`.",
     ["organization_id", "account_id", "provider"],
 )
 
@@ -130,12 +138,19 @@ class ConnectorMetrics:
             provider=provider,
         ).set(status_value)
 
-        # Update sync age
+        # Update sync age and timestamp so PromQL queries see real freshness
+        import time as _time
+        now_ts = _time.time()
         connector_last_sync_age_seconds.labels(
             organization_id=organization_id,
             account_id=account_id,
             provider=provider,
         ).set(0)
+        connector_last_sync_timestamp_seconds.labels(
+            organization_id=organization_id,
+            account_id=account_id,
+            provider=provider,
+        ).set(now_ts)
 
         # Update resource counts
         connector_resources_total.labels(

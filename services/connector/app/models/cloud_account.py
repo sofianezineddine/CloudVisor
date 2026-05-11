@@ -137,6 +137,18 @@ class DiscoveredResourceModel(Base):
     resource_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # ── Freshness state machine ──────────────────────────────────────────────
+    # "fresh"   — resource was confirmed in the most recent sync
+    # "stale"   — missing for ``missed_sync_count`` recent syncs but under the
+    #             threshold at which we mark it deleted. Useful for catching
+    #             IAM permission drift where one service silently stops
+    #             returning data without meaning the resources vanished.
+    # "deleted" — confirmed removed (either by missing for N cycles, or by
+    #             explicit real-time deletion event).
+    freshness_state: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="fresh"
+    )
+    missed_sync_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Constraints and indexes
     __table_args__ = (
@@ -171,6 +183,62 @@ class DiscoveredResourceModel(Base):
         )
 
 
+class ScanHistoryModel(Base):
+    """Persisted record of each sync operation for an account.
+
+    Written by the scheduler after every sync completes (success or failure).
+    Provides the data for ``GET /accounts/{id}/scans``.
+    """
+
+    __tablename__ = "connector_scan_history"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    account_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), nullable=False, index=True
+    )
+    organization_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), nullable=False, index=True
+    )
+    sync_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    discovered: Mapped[int] = mapped_column(Integer, default=0)
+    updated: Mapped[int] = mapped_column(Integer, default=0)
+    deleted: Mapped[int] = mapped_column(Integer, default=0)
+    errors: Mapped[int] = mapped_column(Integer, default=0)
+    duration_seconds: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    error_details: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_scan_history_account", "account_id"),
+        Index("idx_scan_history_org", "organization_id"),
+        Index("idx_scan_history_started", "started_at"),
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "account_id": self.account_id,
+            "sync_type": self.sync_type,
+            "status": self.status,
+            "correlation_id": self.correlation_id,
+            "discovered": self.discovered,
+            "updated": self.updated,
+            "deleted": self.deleted,
+            "errors": self.errors,
+            "duration_seconds": self.duration_seconds,
+            "error_details": self.error_details or [],
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+        }
+
+
 async def create_connector_tables(engine: Any) -> None:
     """Create all connector tables and ensure RLS policies exist.
 
@@ -200,7 +268,18 @@ async def create_connector_tables(engine: Any) -> None:
                 "ALTER TABLE connector_cloud_accounts "
                 "ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"
             ))
-            logger.debug("Connector account column migrations applied")
+            # Freshness state columns for the stale-sweep feature
+            await conn.execute(text(
+                "ALTER TABLE connector_discovered_resources "
+                "ADD COLUMN IF NOT EXISTS freshness_state VARCHAR(20) "
+                "NOT NULL DEFAULT 'fresh'"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE connector_discovered_resources "
+                "ADD COLUMN IF NOT EXISTS missed_sync_count INTEGER "
+                "NOT NULL DEFAULT 0"
+            ))
+            logger.debug("Connector column migrations applied")
     except Exception as e:
         logger.warning(f"Column migration failed: {e}")
 

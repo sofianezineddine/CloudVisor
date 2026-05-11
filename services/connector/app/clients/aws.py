@@ -200,7 +200,12 @@ class AWSClient(CloudClientBase):
         return await breaker.call(call_with_retry_decorated)
 
     async def list_resources(self, region: str | None = None) -> list[dict[str, Any]]:
-        """List all resources across all supported types and regions."""
+        """List all resources across all supported types and regions.
+
+        Fans out region × service discovery concurrently, but caps overall
+        concurrency with a semaphore so we don't open hundreds of client
+        sessions against AWS simultaneously (which trips throttling).
+        """
         resources = []
 
         if not self._session:
@@ -215,18 +220,26 @@ class AWSClient(CloudClientBase):
         # Get regions to scan for regional services
         target_regions = await self._get_regions(region)
 
-        resource_tasks = []
+        # Cap concurrent discoveries so we respect cloud API session limits.
+        # 20 is conservative; tune via env if needed.
+        sem = asyncio.Semaphore(20)
+
+        async def _bounded(svc: str, r: str) -> list[dict[str, Any]]:
+            async with sem:
+                return await self._discover_resource_type(svc, r)
+
+        resource_tasks: list[Any] = []
 
         # Global services — run once
         for svc in global_services:
             if svc in self.RESOURCE_TYPE_MAPPING:
-                resource_tasks.append(self._discover_resource_type(svc, "us-east-1"))
+                resource_tasks.append(_bounded(svc, "us-east-1"))
 
         # Regional services — run for each region
         for svc in regional_services:
             if svc in self.RESOURCE_TYPE_MAPPING:
                 for r in target_regions:
-                    resource_tasks.append(self._discover_resource_type(svc, r))
+                    resource_tasks.append(_bounded(svc, r))
 
         results = await asyncio.gather(*resource_tasks, return_exceptions=True)
 
@@ -255,17 +268,23 @@ class AWSClient(CloudClientBase):
         if requested_region and requested_region not in ("global", ""):
             return [requested_region]
 
-        # Try to discover all enabled regions
+        # Try to discover all enabled regions — wrapped in retry/CB so a
+        # transient throttle doesn't kill the whole sync.
         try:
             async with self._session.create_client(
                 "ec2", region_name="us-east-1", **self._get_client_config()
             ) as ec2:
-                resp = await ec2.describe_regions(Filters=[{"Name": "opt-in-status", "Values": ["opt-in-not-required", "opted-in"]}])
+                async def _describe():
+                    return await ec2.describe_regions(
+                        Filters=[{"Name": "opt-in-status", "Values": ["opt-in-not-required", "opted-in"]}]
+                    )
+
+                resp = await self._call_with_retry_and_circuit_breaker("ec2", _describe)
                 regions = [r["RegionName"] for r in resp.get("Regions", [])]
                 if regions:
                     return regions
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"describe_regions failed, using fallback region list: {e}")
 
         return FALLBACK_REGIONS
 

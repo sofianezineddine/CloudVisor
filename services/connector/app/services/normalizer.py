@@ -1,7 +1,6 @@
 """Resource normalization service - converts raw cloud API responses to CDM."""
 
 import uuid
-from datetime import datetime
 from typing import Any
 
 from cloudvisor_types.models import (
@@ -10,6 +9,8 @@ from cloudvisor_types.models import (
     Environment,
     get_resource_type,
 )
+
+from app.core.time_utils import utcnow
 
 
 class ResourceNormalizer:
@@ -65,8 +66,8 @@ class ResourceNormalizer:
             organization_id=self._organization_id,
             is_public=is_public,
             environment=environment,
-            first_seen_at=datetime.utcnow(),
-            last_seen_at=datetime.utcnow(),
+            first_seen_at=utcnow(),
+            last_seen_at=utcnow(),
         )
 
     def _get_resource_type(self, raw: dict[str, Any], provider: CloudProvider) -> str:

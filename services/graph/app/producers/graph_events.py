@@ -1,13 +1,24 @@
-"""Kafka producer for graph events."""
+"""Kafka producer for graph events.
+
+Serialization: plain JSON (UTF-8). The graph service does not use Avro
+because its events are consumed only by internal services (AIOps, CDR,
+API) that all handle JSON natively. If Schema Registry integration is
+needed later, follow the connector's AvroSerializer pattern.
+"""
 
 import json
 import logging
-from datetime import datetime
+import os
+from datetime import datetime, timezone
 from typing import Any
 
 from aiokafka import AIOKafkaProducer
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 class GraphEventProducer:
@@ -42,7 +53,7 @@ class GraphEventProducer:
             "asset_id": asset_id,
             "organization_id": organization_id,
             **kwargs,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": _utcnow_iso(),
         }
         await self._send("asset.created", asset_id, event)
 
@@ -52,7 +63,7 @@ class GraphEventProducer:
             "asset_id": asset_id,
             "organization_id": organization_id,
             **kwargs,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": _utcnow_iso(),
         }
         await self._send("asset.updated", asset_id, event)
 
@@ -61,7 +72,7 @@ class GraphEventProducer:
             "event_type": "asset.deleted",
             "asset_id": asset_id,
             "organization_id": organization_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": _utcnow_iso(),
         }
         await self._send("asset.deleted", asset_id, event)
 
@@ -75,7 +86,7 @@ class GraphEventProducer:
             "old_score": old_score,
             "new_score": new_score,
             "delta": new_score - old_score,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": _utcnow_iso(),
         }
         await self._send("asset.risk_score_changed", asset_id, event)
 
@@ -94,7 +105,7 @@ class GraphEventProducer:
             "relationship_type": relationship_type,
             "organization_id": organization_id,
             "action": action,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": _utcnow_iso(),
         }
         await self._send("asset.relationship_changed", f"{source_id}-{target_id}", event)
 

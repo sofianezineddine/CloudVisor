@@ -220,14 +220,22 @@ class ResourceEventProducer:
         deleted: int = 0,
         errors: int = 0,
         duration_seconds: float = 0.0,
+        status: str | None = None,
     ) -> None:
-        """Emit a connector.sync_finished event."""
+        """Emit a connector.sync_finished event.
+
+        ``status`` is normally derived (completed/partial/failed). Pass it
+        explicitly to emit synthetic states like ``cancelled`` when an account
+        is removed mid-sync.
+        """
+        if status is None:
+            status = "completed" if errors == 0 else "partial" if discovered > 0 else "failed"
         event = {
             "event_type": "connector.sync_finished",
             "organization_id": organization_id,
             "account_id": account_id,
             "provider": provider,
-            "status": "completed" if errors == 0 else "partial" if discovered > 0 else "failed",
+            "status": status,
             "correlation_id": correlation_id,
             "discovered": int(discovered),
             "updated": int(updated),

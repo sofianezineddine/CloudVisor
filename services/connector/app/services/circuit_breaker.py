@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, TypeVar
 
+from ..core.time_utils import utcnow
+
 logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -31,7 +33,7 @@ class CircuitBreakerMetrics:
     rejected_requests: int = 0
     last_failure_time: datetime | None = None
     last_success_time: datetime | None = None
-    state_changed_at: datetime = field(default_factory=datetime.utcnow)
+    state_changed_at: datetime = field(default_factory=utcnow)
 
     @property
     def error_rate(self) -> float:
@@ -129,7 +131,7 @@ class CircuitBreaker:
 
     def _check_state_transition(self) -> None:
         """Check if state should transition based on metrics and time."""
-        now = datetime.utcnow()
+        now = utcnow()
         time_in_state = (now - self._metrics.state_changed_at).total_seconds()
 
         if self._state == CircuitState.CLOSED:
@@ -180,11 +182,11 @@ class CircuitBreaker:
         async with self._lock:
             self._metrics.total_requests += 1
             self._metrics.successful_requests += 1
-            self._metrics.last_success_time = datetime.utcnow()
+            self._metrics.last_success_time = utcnow()
 
             # If in HALF_OPEN and we got a success, close the circuit
             if self._state == CircuitState.HALF_OPEN:
-                self._transition_to(CircuitState.CLOSED, datetime.utcnow())
+                self._transition_to(CircuitState.CLOSED, utcnow())
                 logger.info(
                     f"Circuit breaker '{self.name}' recovered and closed. "
                     f"Service is healthy again."
@@ -195,11 +197,11 @@ class CircuitBreaker:
         async with self._lock:
             self._metrics.total_requests += 1
             self._metrics.failed_requests += 1
-            self._metrics.last_failure_time = datetime.utcnow()
+            self._metrics.last_failure_time = utcnow()
 
             # If in HALF_OPEN and we got a failure, reopen the circuit
             if self._state == CircuitState.HALF_OPEN:
-                self._transition_to(CircuitState.OPEN, datetime.utcnow())
+                self._transition_to(CircuitState.OPEN, utcnow())
                 logger.warning(
                     f"Circuit breaker '{self.name}' recovery failed. "
                     f"Reopening circuit. Service still unhealthy."

@@ -10,7 +10,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { connectorAPI, CloudAccount, CreateAccountRequest, UpdateAccountRequest } from '@/lib/api/connector';
+import { connectorAPI, CloudAccount, CreateAccountRequest, UpdateAccountRequest, CloudAccountCredentials } from '@/lib/api/connector';
 import apiClient from '@/lib/api/apiClient';
 import { useScopeStore } from '@/stores/scope';
 
@@ -21,9 +21,12 @@ export const connectorKeys = {
   accounts: () => [...connectorKeys.all(), 'accounts'] as const,
   account:  (id: string) => [...connectorKeys.accounts(), id] as const,
   health:   (id: string) => [...connectorKeys.accounts(), id, 'health'] as const,
+  syncStatus: (id: string) => [...connectorKeys.accounts(), id, 'sync-status'] as const,
+  scanHistory: (id: string, params?: Record<string, unknown>) => [...connectorKeys.accounts(), id, 'scans', params] as const,
   resources: () => [...connectorKeys.all(), 'resources'] as const,
   resourcesList: (params: Record<string, unknown>) => [...connectorKeys.resources(), 'list', params] as const,
   resourcesSummary: (params: Record<string, unknown>) => [...connectorKeys.resources(), 'summary', params] as const,
+  resourceCatalog: () => [...connectorKeys.resources(), 'catalog'] as const,
   onboarding: (provider: string) => [...connectorKeys.all(), 'onboarding', provider] as const,
 };
 
@@ -248,5 +251,77 @@ export function useTriggerAccountSync() {
         queryClient.invalidateQueries({ queryKey: connectorKeys.accounts() });
       }, 2000);
     },
+  });
+}
+
+
+// ─── Sync Status hook ─────────────────────────────────────────────────────────
+
+/**
+ * Poll live sync progress for an account.
+ * Refetches every 3 seconds while a sync is in progress, stops when idle.
+ * Used by the "Run scan" button to show live progress in a Flashbar.
+ */
+export function useSyncStatus(accountId: string | null, enabled = false) {
+  return useQuery({
+    queryKey: connectorKeys.syncStatus(accountId ?? ''),
+    queryFn: () => connectorAPI.getSyncStatus(accountId!),
+    enabled: !!accountId && enabled,
+    staleTime: 2_000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      // Keep polling while a sync is running
+      if (data?.current_sync?.status === 'running') return 3_000;
+      return false; // Stop polling when idle/completed
+    },
+  });
+}
+
+// ─── Scan History hook ────────────────────────────────────────────────────────
+
+/**
+ * Fetch paginated scan history for an account.
+ */
+export function useScanHistory(accountId: string | null, params?: { limit?: number; offset?: number }) {
+  return useQuery({
+    queryKey: connectorKeys.scanHistory(accountId ?? '', params),
+    queryFn: () => connectorAPI.getScanHistory(accountId!, params),
+    enabled: !!accountId,
+    staleTime: 30_000,
+  });
+}
+
+// ─── Credential Rotation hook ─────────────────────────────────────────────────
+
+/**
+ * Rotate credentials for an existing cloud account.
+ * On success: invalidates account queries so the UI reflects the new status.
+ */
+export function useRotateCredentials() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ accountId, credentials }: { accountId: string; credentials: CloudAccountCredentials }) =>
+      connectorAPI.rotateCredentials(accountId, credentials),
+    onSuccess: (_, { accountId }) => {
+      queryClient.invalidateQueries({ queryKey: connectorKeys.account(accountId) });
+      queryClient.invalidateQueries({ queryKey: connectorKeys.health(accountId) });
+      queryClient.invalidateQueries({ queryKey: connectorKeys.accounts() });
+    },
+  });
+}
+
+// ─── Resource Type Catalog hook ───────────────────────────────────────────────
+
+/**
+ * Fetch the complete resource type catalog (all supported types per provider).
+ * Cached indefinitely — the catalog doesn't change at runtime.
+ * Used to populate resource-type filter dropdowns in the asset explorer.
+ */
+export function useResourceTypeCatalog() {
+  return useQuery({
+    queryKey: connectorKeys.resourceCatalog(),
+    queryFn: () => connectorAPI.getResourceTypeCatalog(),
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 }

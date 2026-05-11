@@ -4,9 +4,14 @@ import asyncio
 import hashlib
 import json
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from .base import CloudClientBase
+from ..services.resilience import (
+    CircuitBreakerOpenException,
+    classify_oci,
+    resilient_call,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +62,21 @@ class OCIClient(CloudClientBase):
         )
         self._oci_config: dict | None = None
         self._compartments: list[str] = []
+
+    async def _call(self, service: str, func: Callable[..., Any], **kwargs: Any) -> Any:
+        """Wrap an OCI SDK call with retry + circuit breaker.
+
+        OCI SDK methods are sync — this helper awaits them correctly via the
+        shared ``resilient_call`` and translates ``oci.exceptions.ServiceError``
+        into retryable categories.
+        """
+        return await resilient_call(
+            provider="oci",
+            service=service,
+            func=func,
+            classify=classify_oci,
+            **kwargs,
+        )
 
     # ─── Connection ───────────────────────────────────────────────────────────
 

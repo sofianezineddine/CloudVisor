@@ -22,11 +22,12 @@ _engine: object | None = None
 _session_factory: object | None = None
 _sync_scheduler: object | None = None
 _realtime_manager: object | None = None  # RealtimeConsumerManager
+_vault_client: object | None = None  # VaultClient
 
 
 async def init_dependencies(settings: CloudvisorSettings) -> None:
     """Initialize shared dependencies at app startup."""
-    global _redis_client, _engine, _session_factory, _sync_scheduler, _realtime_manager
+    global _redis_client, _engine, _session_factory, _sync_scheduler, _realtime_manager, _vault_client
 
     from .database import create_engine
     from ..models import create_connector_tables
@@ -72,6 +73,7 @@ async def init_dependencies(settings: CloudvisorSettings) -> None:
         )
         if await vault_client.initialize():
             logger.info("Vault client initialized successfully")
+            _vault_client = vault_client
         else:
             logger.warning("Vault initialization failed - running without credential storage")
             vault_client = None
@@ -97,6 +99,7 @@ async def init_dependencies(settings: CloudvisorSettings) -> None:
         db_session_factory=_session_factory,
         vault_client=vault_client,
         sync_timeout_seconds=conn_settings.sync_timeout_seconds,
+        stale_to_deleted_threshold=conn_settings.stale_to_deleted_threshold,
     )
     await _sync_scheduler.start()
 
@@ -123,7 +126,7 @@ async def init_dependencies(settings: CloudvisorSettings) -> None:
 
 async def shutdown_dependencies() -> None:
     """Clean up dependencies at app shutdown."""
-    global _redis_client, _engine, _sync_scheduler, _realtime_manager
+    global _redis_client, _engine, _sync_scheduler, _realtime_manager, _vault_client
 
     if _realtime_manager:
         await _realtime_manager.stop()
@@ -132,6 +135,13 @@ async def shutdown_dependencies() -> None:
     if _sync_scheduler:
         await _sync_scheduler.stop()
         _sync_scheduler = None
+
+    if _vault_client is not None:
+        try:
+            await _vault_client.close()
+        except Exception as e:
+            logger.debug(f"Vault client close failed: {e}")
+        _vault_client = None
 
     if _redis_client:
         await _redis_client.close()

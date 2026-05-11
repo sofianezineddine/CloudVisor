@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.time_utils import utcnow
 from ..models.cloud_account import CloudAccountModel
 
 logger = logging.getLogger(__name__)
@@ -104,7 +105,7 @@ class AccountRepository:
         """Update account status and optional error message."""
         values: dict[str, Any] = {
             "status": status,
-            "updated_at": datetime.utcnow(),
+            "updated_at": utcnow(),
         }
         if error_message is not None:
             values["error_message"] = error_message
@@ -123,7 +124,7 @@ class AccountRepository:
         consecutive_errors: int | None = None,
     ) -> None:
         """Update sync-related fields after a sync completes."""
-        now = datetime.utcnow()
+        now = utcnow()
         values: dict[str, Any] = {
             "last_sync_at": now,
             "updated_at": now,
@@ -155,7 +156,7 @@ class AccountRepository:
         await self._session.execute(
             update(CloudAccountModel)
             .where(CloudAccountModel.id == account_id)
-            .values(polling_interval_minutes=interval_minutes, updated_at=datetime.utcnow())
+            .values(polling_interval_minutes=interval_minutes, updated_at=utcnow())
         )
 
     async def delete(self, account_id: str) -> bool:

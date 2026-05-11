@@ -4,9 +4,14 @@ import asyncio
 import hashlib
 import json
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from .base import CloudClientBase
+from ..services.resilience import (
+    CircuitBreakerOpenException,
+    classify_gcp,
+    resilient_call,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +51,21 @@ class GCPClient(CloudClientBase):
         self._gcp_credentials = None
         self._all_zones: list[str] = []
         self._all_regions: list[str] = []
+
+    async def _call(self, service: str, func: Callable[..., Any], **kwargs: Any) -> Any:
+        """Wrap a GCP SDK call with retry + circuit breaker.
+
+        GCP SDK methods are often sync — pass them as-is and this helper will
+        handle awaitables / returns transparently. Provider classifier maps
+        google.api_core exceptions to retryable categories.
+        """
+        return await resilient_call(
+            provider="gcp",
+            service=service,
+            func=func,
+            classify=classify_gcp,
+            **kwargs,
+        )
 
     # ─── Connection ───────────────────────────────────────────────────────────
 

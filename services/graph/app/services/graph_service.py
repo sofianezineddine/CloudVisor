@@ -131,6 +131,59 @@ class GraphService:
 
     # ─── Redis cache helpers ──────────────────────────────────────────────────
 
+    # Type-label mapping: resource_type suffix → Neo4j label
+    _TYPE_LABEL_MAP: dict[str, str] = {
+        "ec2": "EC2Instance",
+        "instance": "EC2Instance",
+        "virtualmachine": "VirtualMachine",
+        "s3bucket": "S3Bucket",
+        "bucket": "StorageBucket",
+        "iamuser": "IAMUser",
+        "iamrole": "IAMRole",
+        "iampolicy": "IAMPolicy",
+        "serviceaccount": "ServiceAccount",
+        "rdsinstance": "RDSInstance",
+        "lambdafunction": "LambdaFunction",
+        "cloudfunction": "CloudFunction",
+        "ekscluster": "EKSCluster",
+        "gkecluster": "GKECluster",
+        "akskubernetesservice": "AKSCluster",
+        "okecluster": "OKECluster",
+        "vpc": "VPC",
+        "virtualnetwork": "VirtualNetwork",
+        "vcn": "VCN",
+        "subnet": "Subnet",
+        "subnetwork": "Subnetwork",
+        "securitygroup": "SecurityGroup",
+        "networksecuritygroup": "NetworkSecurityGroup",
+        "securitylist": "SecurityList",
+        "loadbalancer": "LoadBalancer",
+        "kmskey": "KMSKey",
+        "cloudtrailtrail": "CloudTrailTrail",
+        "ecrrepository": "ECRRepository",
+        "efsfilesystem": "EFSFileSystem",
+        "dynamodbtable": "DynamoDBTable",
+        "sqsqueue": "SQSQueue",
+        "snstopic": "SNSTopic",
+        "route53hostedzone": "Route53HostedZone",
+        "cloudfrontdistribution": "CloudFrontDistribution",
+        "apigateway": "APIGateway",
+        "secretsmanagersecret": "SecretsManagerSecret",
+    }
+
+    def _derive_type_label(self, resource_type: str) -> str:
+        """Derive a Neo4j-safe type-specific label from a resource_type string.
+
+        Examples:
+          'aws::ec2::instance' → 'EC2Instance'
+          'azure::compute::virtualmachine' → 'VirtualMachine'
+          'EC2' → 'EC2Instance'
+
+        Returns empty string if no mapping found (node keeps only :Asset label).
+        """
+        suffix = resource_type.split("::")[-1].lower().replace("_", "").replace(" ", "")
+        return self._TYPE_LABEL_MAP.get(suffix, "")
+
     async def _cache_get(self, key: str) -> Any | None:
         """Get a cached value from Redis. Returns None if unavailable."""
         if not self._redis:
@@ -166,14 +219,22 @@ class GraphService:
     # ─── Node CRUD ────────────────────────────────────────────────────────────
 
     async def create_asset_node(self, asset: AssetNode) -> dict[str, Any]:
-        """Create or update an asset node, resolve relationships, index in ES."""
+        """Create or update an asset node, resolve relationships, index in ES.
+
+        Uses both the generic :Asset label AND a type-specific label (e.g.
+        :EC2Instance, :S3Bucket) so Cypher queries can use either.
+        """
         properties = asset.to_properties()
         properties["last_seen_at"] = datetime.utcnow().isoformat()
 
-        query = """
-        MERGE (a:Asset {id: $id})
+        # Derive a type-specific label from the resource_type
+        type_label = self._derive_type_label(asset.resource_type)
+
+        query = f"""
+        MERGE (a:Asset {{id: $id}})
         ON CREATE SET a += $props, a.created_at = $now
         ON MATCH  SET a += $props
+        {"SET a:" + type_label if type_label else ""}
         RETURN a
         """
         result = await self._neo4j.execute_query(

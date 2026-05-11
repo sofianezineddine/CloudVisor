@@ -129,7 +129,11 @@ async def get_assets_summary(
     t0 = time.monotonic()
     proxy = get_graph_proxy()
     try:
-        result = await proxy.get("/internal/graph/stats", headers=user.auth_headers)
+        result = await proxy.get(
+            "/internal/assets/stats",
+            params={"org_id": user.organization_id},
+            headers=user.auth_headers,
+        )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Asset service unavailable: {e}")
     return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
@@ -222,6 +226,37 @@ async def get_attack_paths(
             data=paths,
             total=total,
             next_cursor=make_next_cursor(offset, limit, total),
+            took_ms=int((time.monotonic() - t0) * 1000),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Graph service unavailable: {e}")
+
+
+@router.get("/{asset_id}/history")
+async def get_asset_history(
+    asset_id: str,
+    start_time: str | None = Query(None, description="ISO timestamp for range start"),
+    end_time: str | None = Query(None, description="ISO timestamp for range end"),
+    limit: int = Query(100, ge=1, le=500),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Get historical snapshots for an asset (time-travel queries)."""
+    t0 = time.monotonic()
+    graph = get_graph_proxy()
+    params: dict[str, Any] = {"limit": limit}
+    if start_time:
+        params["start_time"] = start_time
+    if end_time:
+        params["end_time"] = end_time
+    try:
+        result = await graph.get(
+            f"/internal/assets/{asset_id}/history",
+            params=params,
+            headers=user.auth_headers,
+        )
+        return ok(
+            data=result.get("snapshots", []),
+            total=result.get("total", 0),
             took_ms=int((time.monotonic() - t0) * 1000),
         )
     except Exception as e:

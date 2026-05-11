@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { connectorAPI, DiscoveredResource } from '@/lib/api/connector';
+import { graphAPI, GraphAsset } from '@/lib/api/graph';
 import apiClient from '@/lib/api/apiClient';
 import { useScopeStore } from '@/stores/scope';
 
@@ -46,7 +47,10 @@ function fmtProvider(p: string): string {
   return { aws: 'AWS', azure: 'Azure', gcp: 'GCP', oci: 'OCI' }[p] ?? p.toUpperCase();
 }
 
-function deriveRisk(r: DiscoveredResource): number {
+function deriveRisk(r: DiscoveredResource & { risk_score?: number; open_findings_count?: number }): number {
+  // Use real risk_score from graph service if available
+  if (r.risk_score != null && r.risk_score > 0) return r.risk_score;
+  // Fallback: derive from basic properties
   let s = 10; if (r.is_public) s += 40; if (r.environment === 'prod') s = Math.round(s * 1.5);
   return Math.min(s, 100);
 }
@@ -250,6 +254,8 @@ const ALL_COLUMNS = [
   { id: 'provider',    label: 'Provider',      required: false },
   { id: 'region',      label: 'Region',        required: false },
   { id: 'environment', label: 'Environment',   required: false },
+  { id: 'risk_score',  label: 'Risk Score',    required: false },
+  { id: 'findings',    label: 'Findings',      required: false },
   { id: 'exposure',    label: 'Exposure',      required: false },
   { id: 'tags',        label: 'Tags',          required: false },
 ] as const;
@@ -364,7 +370,7 @@ export function AssetsTab() {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [showPrefs, setShowPrefs] = React.useState(false);
   const [visibleCols, setVisibleCols] = React.useState<Set<ColumnId>>(
-    new Set(['name', 'type', 'provider', 'region', 'environment', 'exposure', 'tags'] as ColumnId[])
+    new Set(['name', 'type', 'provider', 'region', 'environment', 'risk_score', 'findings', 'exposure'] as ColumnId[])
   );
 
   const [resources, setResources] = React.useState<DiscoveredResource[]>([]);
@@ -392,75 +398,105 @@ export function AssetsTab() {
     setLoading(true); setError(null);
     try {
       let items: any[] = [];
+      const orgId = useScopeStore.getState().organizationId;
       
       if (debSearch && debSearch.length >= 2) {
+        // Search: try graph service ES-backed search first (has risk scores)
         try {
-          // For search, use a high limit to get all matching results
-          const searchResp = await apiClient.assets.search(debSearch, { 
-            provider: globalProvider || undefined, 
-            limit: 5000 // Increased limit for search
-          });
-          items = (searchResp?.data as any[]) ?? [];
+          if (orgId) {
+            const searchResp = await graphAPI.searchAssets({
+              q: debSearch,
+              org_id: orgId,
+              provider: globalProvider || undefined,
+              page_size: 200,
+            });
+            items = searchResp?.hits ?? [];
+          }
         } catch {
-          const resp = await connectorAPI.listResources({ 
-            account_id: globalAccountId, 
-            provider: !globalAccountId ? globalProvider : undefined, 
-            resource_type: typeFilter || undefined, 
-            search: debSearch, 
-            limit: 5000, // Increased limit
-            offset: 0 
-          });
-          items = (resp?.resources as any[]) ?? [];
-        }
-        if (globalAccountId) items = items.filter((a: any) => a.account_id === globalAccountId);
-      } else {
-        try {
-          // For regular listing, try to get all resources by using a very high limit
-          // or multiple API calls if needed
-          let allItems: any[] = [];
-          let offset = 0;
-          const batchSize = 1000;
-          let hasMore = true;
-          
-          while (hasMore && allItems.length < 10000) { // Safety limit
+          // Fallback to connector search
+          try {
             const resp = await connectorAPI.listResources({ 
               account_id: globalAccountId, 
               provider: !globalAccountId ? globalProvider : undefined, 
-              resource_type: typeFilter || undefined, 
-              limit: batchSize, 
-              offset: offset 
+              search: debSearch, 
+              limit: 2000, 
+              offset: 0 
             });
-            const batch = (resp?.resources as any[]) ?? [];
-            allItems = [...allItems, ...batch];
-            
-            // Check if we got fewer results than requested (indicates end of data)
-            hasMore = batch.length === batchSize;
-            offset += batchSize;
-            
-            console.log(`Fetched batch: ${batch.length} resources, total so far: ${allItems.length}`);
+            items = (resp?.resources as any[]) ?? [];
+          } catch {
+            const searchResp = await apiClient.assets.search(debSearch, { 
+              provider: globalProvider || undefined, 
+              limit: 2000,
+            });
+            items = (searchResp?.data as any[]) ?? [];
           }
-          
-          items = allItems;
+        }
+        if (globalAccountId) items = items.filter((a: any) => a.account_id === globalAccountId);
+      } else {
+        // Regular listing: try graph service first (has risk_score + open_findings_count)
+        try {
+          if (orgId) {
+            const graphResp = await graphAPI.listAssets({
+              org_id: orgId,
+              provider: globalProvider || (!globalAccountId ? undefined : undefined),
+              resource_type: typeFilter || undefined,
+              page: 1,
+              page_size: 2000,
+            });
+            items = graphResp?.assets ?? [];
+            // If graph returned data with risk scores, use it
+            if (items.length > 0 && items.some((a: any) => a.risk_score > 0)) {
+              console.log(`Fetched ${items.length} assets from graph service (with risk scores)`);
+            } else {
+              throw new Error('Graph returned no scored data, falling back');
+            }
+          } else {
+            throw new Error('No org_id available');
+          }
         } catch {
-          // Fallback to assets API with high limit
-          const resp = await apiClient.assets.list({ 
-            account_id: globalAccountId, 
-            provider: !globalAccountId ? globalProvider : undefined, 
-            resource_type: typeFilter || undefined, 
-            limit: 5000, // High limit
-            offset: 0 
-          });
-          items = (resp?.data as any[]) ?? [];
+          // Fallback: fetch from connector (no risk scores, but complete inventory)
+          try {
+            let allItems: any[] = [];
+            let offset = 0;
+            const batchSize = 1000;
+            let hasMore = true;
+            
+            while (hasMore && allItems.length < 10000) {
+              const resp = await connectorAPI.listResources({ 
+                account_id: globalAccountId, 
+                provider: !globalAccountId ? globalProvider : undefined, 
+                resource_type: typeFilter || undefined, 
+                limit: batchSize, 
+                offset: offset 
+              });
+              const batch = (resp?.resources as any[]) ?? [];
+              allItems = [...allItems, ...batch];
+              hasMore = batch.length === batchSize;
+              offset += batchSize;
+            }
+            items = allItems;
+          } catch {
+            const resp = await apiClient.assets.list({ 
+              account_id: globalAccountId, 
+              provider: !globalAccountId ? globalProvider : undefined, 
+              resource_type: typeFilter || undefined, 
+              limit: 5000, 
+              offset: 0 
+            });
+            items = (resp?.data as any[]) ?? [];
+          }
         }
       }
-      
-      console.log(`Total resources fetched: ${items.length}`);
       
       setResources(items.map((a: any) => ({
         id: a.id, cloud_resource_id: a.cloud_resource_id ?? a.id, provider: a.provider, account_id: a.account_id,
         organization_id: a.organization_id ?? '', region: a.region ?? 'global', resource_type: a.resource_type,
         name: a.name, tags: a.tags ?? {}, is_public: a.is_public ?? false, environment: a.environment ?? 'unknown',
         first_seen_at: a.first_seen_at ?? null, last_seen_at: a.last_seen_at ?? null,
+        // Graph service enrichment fields
+        risk_score: a.risk_score ?? 0,
+        open_findings_count: a.open_findings_count ?? 0,
+        freshness_state: a.freshness_state ?? 'fresh',
       })));
     } catch (e) { 
       console.error('Error fetching resources:', e);
@@ -477,6 +513,19 @@ export function AssetsTab() {
   const catCounts = React.useMemo(() => {
     const c: Record<string, number> = {};
     for (const r of resources) { const k = getCat(r.resource_type); c[k] = (c[k] ?? 0) + 1; }
+    return c;
+  }, [resources]);
+
+  const catRiskCounts = React.useMemo(() => {
+    const c: Record<string, { critical: number; high: number; total: number }> = {};
+    for (const r of resources) {
+      const k = getCat(r.resource_type);
+      if (!c[k]) c[k] = { critical: 0, high: 0, total: 0 };
+      c[k].total++;
+      const score = (r as any).risk_score ?? deriveRisk(r);
+      if (score >= 70) c[k].critical++;
+      else if (score >= 40) c[k].high++;
+    }
     return c;
   }, [resources]);
 
@@ -498,6 +547,8 @@ export function AssetsTab() {
         case 'region':   return a.region.localeCompare(b.region) * m;
         case 'env':      return a.environment.localeCompare(b.environment) * m;
         case 'risk':     return (deriveRisk(a) - deriveRisk(b)) * m;
+        case 'risk_score': return (((a as any).risk_score ?? 0) - ((b as any).risk_score ?? 0)) * m;
+        case 'findings': return (((a as any).open_findings_count ?? 0) - ((b as any).open_findings_count ?? 0)) * m;
         default:         return a.name.localeCompare(b.name) * m;
       }
     });
@@ -548,11 +599,23 @@ export function AssetsTab() {
           <div className="flex items-center gap-0 border-b overflow-x-auto scrollbar-hide">
             {[{ id: '', label: 'All resources', count: resources.length }, ...CATEGORIES.map(c => ({ id: c.id, label: c.label, count: catCounts[c.id] ?? 0 })).filter(c => c.count > 0)].map(tab => {
               const active = catFilter === tab.id;
+              const riskInfo = tab.id ? catRiskCounts[tab.id] : null;
               return (
                 <button key={tab.id} onClick={() => setCatFilter(tab.id)}
-                  className="px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap"
+                  className="px-4 py-2.5 text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5"
                   style={{ borderBottomColor: active ? 'var(--accent)' : 'transparent', color: active ? 'var(--accent)' : 'var(--text-secondary)' }}>
-                  {tab.label} {tab.count > 0 && <span className="ml-1 text-xs">({tab.count.toLocaleString()})</span>}
+                  {tab.label}
+                  {tab.count > 0 && <span className="text-xs">({tab.count.toLocaleString()})</span>}
+                  {riskInfo && riskInfo.critical > 0 && (
+                    <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ backgroundColor: 'var(--critical-bg)', color: 'var(--critical)' }}>
+                      {riskInfo.critical}
+                    </span>
+                  )}
+                  {riskInfo && riskInfo.high > 0 && riskInfo.critical === 0 && (
+                    <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ backgroundColor: 'var(--high-bg)', color: 'var(--high)' }}>
+                      {riskInfo.high}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -581,7 +644,7 @@ export function AssetsTab() {
       {error && <div className="p-3 rounded border border-[var(--critical)] bg-[var(--critical-dim)] text-[var(--critical)] text-sm">{error}</div>}
 
       {viewMode === 'graph' ? (
-        <div className="h-[600px] border rounded-lg overflow-hidden bg-[var(--bg-surface)]">
+        <div className="rounded-lg overflow-hidden bg-[var(--bg-surface)] -mx-4 sm:-mx-6" style={{ height: 'calc(100vh - 200px)', minHeight: '600px' }}>
           <AssetGraph resources={filtered} loading={loading} onSwitchToTable={() => setViewMode('table')} />
         </div>
       ) : (
@@ -597,6 +660,8 @@ export function AssetsTab() {
                   {showAccountCol && <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--text-primary)]">Account</th>}
                   {visibleCols.has('region') && <SortTh label="Region" field="region" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />}
                   {visibleCols.has('environment') && <SortTh label="Environment" field="env" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />}
+                  {visibleCols.has('risk_score') && <SortTh label="Risk" field="risk_score" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />}
+                  {visibleCols.has('findings') && <SortTh label="Findings" field="findings" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />}
                   {visibleCols.has('exposure') && <SortTh label="Exposure" field="risk" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />}
                   {visibleCols.has('tags') && <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--text-primary)]">Tags</th>}
                 </tr>
@@ -611,6 +676,21 @@ export function AssetsTab() {
                     {showAccountCol && <td className="px-3 py-2.5 max-w-[150px] truncate"><div className="text-xs">{accountNameMap[r.account_id] || r.account_id}</div></td>}
                     {visibleCols.has('region') && <td className="px-3 py-2.5">{r.region}</td>}
                     {visibleCols.has('environment') && <td className="px-3 py-2.5">{r.environment}</td>}
+                    {visibleCols.has('risk_score') && <td className="px-3 py-2.5">
+                      {(() => {
+                        const score = (r as any).risk_score ?? deriveRisk(r);
+                        const color = score >= 70 ? 'var(--critical)' : score >= 40 ? 'var(--high)' : score >= 20 ? 'var(--medium)' : 'var(--low)';
+                        const bg = score >= 70 ? 'var(--critical-bg)' : score >= 40 ? 'var(--high-bg)' : score >= 20 ? 'var(--medium-bg)' : 'var(--low-bg)';
+                        return <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold" style={{ color, backgroundColor: bg }}>{score}</span>;
+                      })()}
+                    </td>}
+                    {visibleCols.has('findings') && <td className="px-3 py-2.5">
+                      {(() => {
+                        const count = (r as any).open_findings_count ?? 0;
+                        if (count === 0) return <span style={{ color: 'var(--text-tertiary)' }}>0</span>;
+                        return <span className="font-mono font-semibold" style={{ color: count >= 5 ? 'var(--critical)' : count >= 2 ? 'var(--high)' : 'var(--medium)' }}>{count}</span>;
+                      })()}
+                    </td>}
                     {visibleCols.has('exposure') && <td className="px-3 py-2.5">{r.is_public ? <span className="text-[var(--critical)] flex items-center gap-1 font-medium"><Globe className="h-3 w-3" /> Public</span> : 'None'}</td>}
                     {visibleCols.has('tags') && <td className="px-3 py-2.5 max-w-[150px] truncate"><div className="flex flex-wrap gap-1">{Object.entries(r.tags ?? {}).slice(0, 2).map(([k, v]) => <span key={k} className="text-[10px] border px-1 rounded bg-[var(--bg-elevated)]">{k}:{v}</span>)}</div></td>}
                   </tr>

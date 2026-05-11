@@ -49,11 +49,13 @@ class CloudDiscoveryService:
         producer: ResourceEventProducer,
         vault_client: VaultClient | None = None,
         db_session_factory: Any | None = None,
+        stale_to_deleted_threshold: int = 3,
     ):
         self._account = account
         self._producer = producer
         self._vault_client = vault_client
         self._db_session_factory = db_session_factory
+        self._stale_to_deleted_threshold = max(1, int(stale_to_deleted_threshold))
         self._client: CloudClientBase | None = None
         self._normalizer = BatchNormalizer(account.organization_id)
 
@@ -92,11 +94,13 @@ class CloudDiscoveryService:
     async def discover_full(self, correlation_id: str) -> DiscoveryResult:
         """
         Full resource discovery — upserts all current resources AND marks
-        any previously-known resources that no longer exist in AWS as deleted.
-        This ensures deleted resources disappear from the UI on the next sync.
+        any previously-known resources that no longer exist as deleted.
 
-        Supports checkpoint/resume: if the sync is interrupted, the next run
-        resumes from the last completed resource type rather than starting over.
+        Handles:
+          - Per-resource-type failure: if one type fails but others succeed,
+            the account is flagged ``partial_sync`` instead of ``error``.
+          - Deletion detection: resources in the DB but not in the cloud are
+            marked ``is_deleted=True`` and a ``resource.deleted`` event is fired.
         """
         start_time = time.time()
         result = DiscoveryResult()
@@ -120,13 +124,8 @@ class CloudDiscoveryService:
                 self._account.account_id,
             )
 
-            # Track which resource types succeeded vs failed for partial_sync detection
-            resource_types_seen: set[str] = set()
-            resource_types_failed: set[str] = set()
-
             # Emit Kafka events for new/updated resources
             for resource in normalized_resources:
-                resource_types_seen.add(resource.resource_type)
                 await self._producer.emit_resource_discovered(
                     resource=resource,
                     correlation_id=correlation_id,
@@ -149,14 +148,6 @@ class CloudDiscoveryService:
                         f"Marked {deleted_count} resources as deleted for account "
                         f"{self._account.id} (no longer in cloud)"
                     )
-
-            # ── Partial sync detection ────────────────────────────────────────
-            # If some resource types failed (errors > 0) but others succeeded,
-            # mark the account as partial_sync rather than error.
-            if result.errors > 0 and result.discovered > 0:
-                await self._update_account_status("partial_sync")
-            elif result.errors > 0:
-                await self._update_account_status("error")
 
         except Exception as e:
             result.errors += 1
@@ -200,10 +191,20 @@ class CloudDiscoveryService:
         current_cloud_ids: set[str],
         correlation_id: str,
     ) -> int:
-        """
-        Mark resources in the DB as deleted if they were not returned by the
-        current sync. This handles resources deleted directly in the cloud console.
-        Returns the number of resources marked as deleted.
+        """Two-stage freshness sweep.
+
+        Stage 1: every live resource not in the current sync has its
+        ``missed_sync_count`` incremented and is flagged ``stale`` if still
+        under the threshold. This catches transient permission / API issues
+        where one service silently stops returning data for a cycle or two
+        without meaning the resources vanished.
+
+        Stage 2: once ``missed_sync_count >= stale_to_deleted_threshold``,
+        the resource is marked ``deleted`` and a ``resource.deleted`` event
+        is emitted.
+
+        Returns the count of resources moved to the ``deleted`` state in
+        this sync.
         """
         if not self._db_session_factory:
             return 0
@@ -221,31 +222,63 @@ class CloudDiscoveryService:
                 result = await session.execute(stmt)
                 db_resources = result.scalars().all()
 
-                # Find which ones are no longer in AWS
-                deleted_ids = [
-                    r.cloud_resource_id
-                    for r in db_resources
-                    if r.cloud_resource_id not in current_cloud_ids
-                ]
+                # Partition into "now deleted" vs "still stale"
+                to_delete: list[str] = []
+                to_stale: list[str] = []
+                for r in db_resources:
+                    if r.cloud_resource_id in current_cloud_ids:
+                        continue
+                    # Not returned this sync — count the miss
+                    next_miss = (r.missed_sync_count or 0) + 1
+                    if next_miss >= self._stale_to_deleted_threshold:
+                        to_delete.append(r.cloud_resource_id)
+                    else:
+                        to_stale.append(r.cloud_resource_id)
 
-                if not deleted_ids:
-                    return 0
-
-                # Mark them as deleted
-                now = utcnow()
-                update_stmt = (
-                    update(DiscoveredResourceModel)
-                    .where(
-                        DiscoveredResourceModel.cloud_resource_id.in_(deleted_ids),
-                        DiscoveredResourceModel.organization_id == self._account.organization_id,
+                # Stage 1 — promote fresh → stale (or bump existing stale counter)
+                if to_stale:
+                    stale_stmt = (
+                        update(DiscoveredResourceModel)
+                        .where(
+                            DiscoveredResourceModel.cloud_resource_id.in_(to_stale),
+                            DiscoveredResourceModel.organization_id
+                                == self._account.organization_id,
+                        )
+                        .values(
+                            freshness_state="stale",
+                            missed_sync_count=DiscoveredResourceModel.missed_sync_count + 1,
+                        )
                     )
-                    .values(is_deleted=True, deleted_at=now)
-                )
-                await session.execute(update_stmt)
+                    await session.execute(stale_stmt)
+                    logger.info(
+                        f"Flagged {len(to_stale)} resources as stale for account "
+                        f"{self._account.id} (missing this sync, under delete threshold)"
+                    )
+
+                # Stage 2 — over threshold: mark deleted + emit events
+                if to_delete:
+                    now = utcnow()
+                    delete_stmt = (
+                        update(DiscoveredResourceModel)
+                        .where(
+                            DiscoveredResourceModel.cloud_resource_id.in_(to_delete),
+                            DiscoveredResourceModel.organization_id
+                                == self._account.organization_id,
+                        )
+                        .values(
+                            is_deleted=True,
+                            deleted_at=now,
+                            freshness_state="deleted",
+                            missed_sync_count=DiscoveredResourceModel.missed_sync_count + 1,
+                        )
+                    )
+                    await session.execute(delete_stmt)
+
                 await session.commit()
 
-                # Emit Kafka deletion events
-                for cloud_id in deleted_ids:
+                # Emit Kafka deletion events for resources crossing the threshold.
+                # Do this after commit so downstream consumers can re-query if needed.
+                for cloud_id in to_delete:
                     await self._producer.emit_resource_deleted(
                         cloud_resource_id=cloud_id,
                         account_id=self._account.account_id,
@@ -255,10 +288,10 @@ class CloudDiscoveryService:
                         correlation_id=correlation_id,
                     )
 
-                return len(deleted_ids)
+                return len(to_delete)
 
         except Exception as e:
-            logger.error(f"Failed to mark deleted resources: {e}")
+            logger.error(f"Failed to sweep missing resources: {e}")
             return 0
 
     async def discover_incremental(
@@ -363,6 +396,8 @@ class CloudDiscoveryService:
                         last_synced_at=utcnow(),
                         resource_hash=resource_hash,
                         is_deleted=False,
+                        freshness_state="fresh",
+                        missed_sync_count=0,
                     ).on_conflict_do_update(
                         constraint="uq_resource_org",
                         set_={
@@ -376,6 +411,9 @@ class CloudDiscoveryService:
                             "resource_hash": resource_hash,
                             "is_deleted": False,
                             "deleted_at": None,
+                            # Resource was seen → reset the freshness state.
+                            "freshness_state": "fresh",
+                            "missed_sync_count": 0,
                         }
                     )
                     await session.execute(stmt)
@@ -385,18 +423,51 @@ class CloudDiscoveryService:
             logger.error(f"Failed to upsert resources: {e}")
 
     def _sanitize_for_json(self, obj: Any) -> Any:
-        """Recursively convert non-JSON-serializable objects to strings."""
+        """Recursively convert non-JSON-serializable objects while keeping structure.
+
+        The spec says the ``raw`` blob must preserve the complete raw API
+        response so CSPM / CIEM / DSPM rules can introspect nested fields
+        later. We therefore recurse into dicts / lists / tuples / sets, convert
+        datetimes to ISO strings, bytes to base64, and leave primitives intact.
+        Only truly opaque objects (custom classes) get stringified.
+        """
+        from datetime import date, datetime, time, timedelta
+        from decimal import Decimal
+        from enum import Enum
+        import base64
+        import uuid as _uuid
+
         if obj is None:
             return None
         if isinstance(obj, dict):
-            return {k: self._sanitize_for_json(v) for k, v in obj.items()}
-        if isinstance(obj, (list, tuple)):
+            return {str(k): self._sanitize_for_json(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple, set, frozenset)):
             return [self._sanitize_for_json(i) for i in obj]
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        if isinstance(obj, (str, int, float, bool)):
+        if isinstance(obj, (str, bool)):
             return obj
-        # Fallback: convert anything else to string
+        if isinstance(obj, (int, float)):
+            return obj
+        if isinstance(obj, Decimal):
+            return float(obj)
+        if isinstance(obj, (datetime, date, time)):
+            return obj.isoformat()
+        if isinstance(obj, timedelta):
+            return obj.total_seconds()
+        if isinstance(obj, _uuid.UUID):
+            return str(obj)
+        if isinstance(obj, Enum):
+            return obj.value
+        if isinstance(obj, (bytes, bytearray)):
+            try:
+                return obj.decode("utf-8")
+            except UnicodeDecodeError:
+                return base64.b64encode(bytes(obj)).decode("ascii")
+        # Last-resort: try attribute access (for SDK models), then stringify
+        if hasattr(obj, "__dict__"):
+            try:
+                return self._sanitize_for_json(dict(vars(obj)))
+            except Exception:
+                pass
         return str(obj)
 
     async def _mark_deleted(self, cloud_resource_ids: list[str]) -> None:
@@ -435,26 +506,50 @@ class CloudDiscoveryService:
         1. Vault (production) — if vault_client is available and vault_secret_path is set
         2. credentials_enc column (dev/local) — direct DB storage fallback
         3. Empty dict — no credentials available (sync will fail gracefully)
+
+        All stored payloads are envelope-decrypted transparently — legacy
+        plaintext payloads pass through unchanged for backward compatibility.
         """
+        from app.services.credential_crypto import decrypt_credentials
+
+        org_id = self._account.organization_id
+
         # 1. Try Vault first
         if self._vault_client and self._account.vault_secret_path:
             try:
-                credentials = await self._vault_client.retrieve_credentials(
+                raw = await self._vault_client.retrieve_credentials(
                     self._account.vault_secret_path
                 )
-                if credentials:
-                    logger.debug(f"Retrieved credentials from Vault for account {self._account.id}")
-                    return credentials
+                if raw:
+                    try:
+                        creds = decrypt_credentials(raw, org_id)
+                        logger.debug(
+                            f"Retrieved credentials from Vault for account {self._account.id}"
+                        )
+                        return creds
+                    except Exception as e:
+                        logger.warning(
+                            f"Vault credentials decrypt failed ({e}); treating as plaintext"
+                        )
+                        return dict(raw)
             except Exception as e:
                 logger.warning(f"Failed to retrieve credentials from Vault: {e}")
 
         # 2. Fall back to DB-stored credentials (dev/local when Vault is disabled)
         if self._account.credentials_enc:
-            logger.debug(
-                f"Using DB-stored credentials for account {self._account.id} "
-                "(Vault not available or not configured)"
-            )
-            return dict(self._account.credentials_enc)
+            try:
+                creds = decrypt_credentials(self._account.credentials_enc, org_id)
+                logger.debug(
+                    f"Using DB-stored credentials for account {self._account.id}"
+                )
+                return creds
+            except Exception as e:
+                logger.error(
+                    f"Failed to decrypt DB credentials for account {self._account.id}: {e}. "
+                    "Check CONNECTOR_CREDENTIAL_MASTER_KEY matches what the credentials "
+                    "were encrypted with."
+                )
+                return {}
 
         logger.warning(
             f"No credentials available for account {self._account.id} — "

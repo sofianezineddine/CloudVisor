@@ -4,9 +4,14 @@ import asyncio
 import hashlib
 import json
 import logging
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from .base import CloudClientBase
+from ..services.resilience import (
+    CircuitBreakerOpenException,
+    classify_azure,
+    resilient_call,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +63,21 @@ class AzureClient(CloudClientBase):
         )
         self._tenant_id = credentials.get("tenant_id") or ""
         self._client_id = credentials.get("client_id") or ""
+
+    async def _call(self, service: str, func: Callable[..., Any], **kwargs: Any) -> Any:
+        """Wrap an Azure SDK call with retry + circuit breaker.
+
+        Use this inside ``_discover_<type>`` methods instead of calling the
+        SDK directly so transient throttles and 5xx errors don't abort the
+        whole sync.
+        """
+        return await resilient_call(
+            provider="azure",
+            service=service,
+            func=func,
+            classify=classify_azure,
+            **kwargs,
+        )
         self._client_secret = credentials.get("client_secret") or ""
         self._credential = None
 

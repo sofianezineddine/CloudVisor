@@ -19,10 +19,16 @@ class ConnectorSettings(BaseSettings):
     )
 
     service_name: str = Field(default="connector")
-    polling_interval_default: int = Field(default=1)  # 1 minute for near-real-time
+    # Spec §3.1: default is 15 min, allowed 5/15/30/60. 1 is dev-only.
+    polling_interval_default: int = Field(default=15)
     polling_interval_options: list[int] = Field(default=[1, 5, 15, 30, 60])
     sync_timeout_seconds: int = Field(default=300)
     batch_size: int = Field(default=100)
+    # ── Freshness sweep ──────────────────────────────────────────────────────
+    # A resource missing from N consecutive full syncs is marked deleted.
+    # For fewer than N misses, it's marked ``stale`` but kept visible so
+    # transient permission/api issues don't wipe the inventory.
+    stale_to_deleted_threshold: int = Field(default=3)
     circuit_breaker_error_threshold: float = Field(default=0.5)
     circuit_breaker_window_seconds: int = Field(default=300)
     circuit_breaker_pause_seconds: int = Field(default=900)

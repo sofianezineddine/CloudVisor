@@ -21,18 +21,12 @@ class ElasticsearchClient:
         self._client: AsyncElasticsearch | None = None
 
     async def connect(self) -> None:
-        """Initialize Elasticsearch client — force HTTP (no SSL), compatible with ES 8.x."""
+        """Initialize Elasticsearch client — compatible with ES 8.x."""
         try:
             self._client = AsyncElasticsearch(
                 [self._url],
                 verify_certs=False,
                 ssl_show_warn=False,
-                # Disable the new Accept header that sends compatible-with=9
-                # which breaks ES 8.x. Use the plain JSON content type.
-                headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                },
             )
             await self._client.info()
             logger.info(f"Connected to Elasticsearch at {self._url}")

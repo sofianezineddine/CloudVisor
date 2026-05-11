@@ -22,7 +22,7 @@ export interface CloudAccount {
   name: string;
   account_id: string;
   region: string;
-  status: 'pending' | 'active' | 'error' | 'auth_failed' | 'partial_sync';
+  status: 'pending' | 'active' | 'error' | 'auth_failed' | 'partial_sync' | 'paused';
   sync_status: 'idle' | 'syncing' | 'completed' | 'error';
   last_sync_at: string | null;
   last_successful_sync_at: string | null;
@@ -32,6 +32,7 @@ export interface CloudAccount {
   polling_interval_minutes: number;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface DiscoveredResource {
@@ -46,6 +47,8 @@ export interface DiscoveredResource {
   tags: Record<string, string>;
   is_public: boolean;
   environment: 'prod' | 'staging' | 'dev' | 'unknown';
+  freshness_state: 'fresh' | 'stale' | 'deleted';
+  missed_sync_count: number;
   first_seen_at: string | null;
   last_seen_at: string | null;
 }
@@ -61,6 +64,7 @@ export interface ResourceSummary {
   total: number;
   by_provider: Record<string, number>;
   by_type: Record<string, number>;
+  by_freshness: Record<string, number>;
 }
 
 export interface CloudAccountCredentials {
@@ -127,6 +131,77 @@ export interface OnboardingResponse {
   provider: string;
   instructions: string;
   template?: string;
+}
+
+export interface SyncStatusResponse {
+  account_id: string;
+  provider: string;
+  account_status: string;
+  sync_status: string;
+  last_sync_at: string | null;
+  last_successful_sync_at: string | null;
+  resource_count: number;
+  consecutive_errors: number;
+  current_sync: {
+    correlation_id: string;
+    sync_type: string;
+    status: string;
+    started_at?: string;
+    finished_at?: string;
+    discovered?: number;
+    updated?: number;
+    deleted?: number;
+    errors?: number;
+    duration_seconds?: number;
+    error_details?: string[];
+  } | null;
+}
+
+export interface CredentialRotateRequest {
+  credentials: CloudAccountCredentials;
+}
+
+export interface CredentialRotateResponse {
+  account_id: string;
+  vault_stored: boolean;
+  connectivity_ok: boolean;
+  warnings: string[];
+}
+
+export interface ScanHistoryEntry {
+  id: string;
+  account_id: string;
+  sync_type: string;
+  status: string;
+  correlation_id: string;
+  discovered: number;
+  updated: number;
+  deleted: number;
+  errors: number;
+  duration_seconds: number;
+  started_at: string;
+  finished_at: string | null;
+  error_details: string[];
+}
+
+export interface ScanHistoryResponse {
+  scans: ScanHistoryEntry[];
+  total: number;
+  account_id: string;
+}
+
+export interface ResourceTypeCatalogEntry {
+  service_key: string;
+  resource_type: string;
+}
+
+export interface ResourceTypeCatalog {
+  providers: Record<string, {
+    display_name: string;
+    resource_types: ResourceTypeCatalogEntry[];
+    total: number;
+  }>;
+  total_types: number;
 }
 
 // ─── API Client ──────────────────────────────────────────────────────────────
@@ -329,6 +404,60 @@ export const connectorAPI = {
     else if (provider) query.set('provider', provider);
     const qs = query.toString();
     return connectorFetch(`/internal/resources/summary${qs ? `?${qs}` : ''}`);
+  },
+
+  // ─── Sync Status ─────────────────────────────────────────────────────────
+
+  /**
+   * Get live sync progress for an account.
+   * Returns the in-flight or most-recent sync's progress snapshot.
+   * Used by the "Run scan" button to show live progress in a Flashbar.
+   */
+  async getSyncStatus(accountId: string): Promise<SyncStatusResponse> {
+    return connectorFetch(`/internal/accounts/${accountId}/sync/status`);
+  },
+
+  // ─── Credential Rotation ─────────────────────────────────────────────────
+
+  /**
+   * Rotate credentials for an existing cloud account.
+   * Encrypts new credentials, validates connectivity, and updates storage.
+   */
+  async rotateCredentials(
+    accountId: string,
+    credentials: CloudAccountCredentials
+  ): Promise<CredentialRotateResponse> {
+    return connectorFetch(`/internal/accounts/${accountId}/credentials/rotate`, {
+      method: 'POST',
+      body: JSON.stringify({ credentials }),
+    });
+  },
+
+  // ─── Scan History ────────────────────────────────────────────────────────
+
+  /**
+   * Get paginated scan history for an account.
+   * Returns past sync operations with resource counts, duration, and errors.
+   */
+  async getScanHistory(
+    accountId: string,
+    params?: { limit?: number; offset?: number }
+  ): Promise<ScanHistoryResponse> {
+    const query = new URLSearchParams();
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    const qs = query.toString();
+    return connectorFetch(`/internal/accounts/${accountId}/scans${qs ? `?${qs}` : ''}`);
+  },
+
+  // ─── Resource Type Catalog ───────────────────────────────────────────────
+
+  /**
+   * Get the complete catalog of supported resource types per provider.
+   * Used to populate resource-type filter dropdowns in the asset explorer.
+   */
+  async getResourceTypeCatalog(): Promise<ResourceTypeCatalog> {
+    return connectorFetch('/internal/resources/catalog');
   },
 };
 

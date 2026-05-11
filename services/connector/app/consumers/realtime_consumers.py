@@ -12,6 +12,7 @@ import json
 import logging
 from typing import Any
 
+from ..core.time_utils import utcnow
 from ..producers import ResourceEventProducer
 
 logger = logging.getLogger(__name__)
@@ -181,7 +182,6 @@ class CloudTrailConsumer:
                 # For create/modify events, emit a minimal updated event.
                 # The graph service will re-fetch the full resource state.
                 from cloudvisor_types.models import CloudResource, CloudProvider, Environment
-                from datetime import datetime
                 import uuid
 
                 resource_obj = CloudResource(
@@ -197,8 +197,8 @@ class CloudTrailConsumer:
                     organization_id=self._organization_id,
                     is_public=False,
                     environment=Environment.UNKNOWN,
-                    first_seen_at=datetime.utcnow(),
-                    last_seen_at=datetime.utcnow(),
+                    first_seen_at=utcnow(),
+                    last_seen_at=utcnow(),
                 )
                 await self._producer.emit_resource_updated(
                     resource=resource_obj,
@@ -325,7 +325,6 @@ class AzureMonitorConsumer:
             )
         elif "/write" in operation_name.lower():
             from cloudvisor_types.models import CloudResource, CloudProvider, Environment
-            from datetime import datetime
             import uuid
 
             # Extract resource type from the resource ID path
@@ -345,8 +344,8 @@ class AzureMonitorConsumer:
                 organization_id=self._organization_id,
                 is_public=False,
                 environment=Environment.UNKNOWN,
-                first_seen_at=datetime.utcnow(),
-                last_seen_at=datetime.utcnow(),
+                first_seen_at=utcnow(),
+                last_seen_at=utcnow(),
             )
             await self._producer.emit_resource_updated(
                 resource=resource_obj,
@@ -397,7 +396,15 @@ class GCPAssetConsumer:
         logger.info(f"GCP Asset consumer stopped for project {self._project_id}")
 
     async def _consume_loop(self) -> None:
-        """Pull messages from Pub/Sub subscription."""
+        """Pull messages from Pub/Sub subscription.
+
+        google-cloud-pubsub's ``subscribe`` calls back from a separate thread,
+        so we cannot call ``asyncio.create_task`` from inside it — that requires
+        a running loop on the calling thread. We capture the current (asyncio)
+        event loop and use ``run_coroutine_threadsafe`` to hand work back to it.
+        """
+        main_loop = asyncio.get_running_loop()
+
         try:
             from google.cloud import pubsub_v1
             from google.oauth2 import service_account
@@ -420,10 +427,16 @@ class GCPAssetConsumer:
             subscriber = pubsub_v1.SubscriberClient(credentials=gcp_creds)
 
             def callback(message: Any) -> None:
-                """Synchronous callback — schedule async processing."""
+                """Runs on Pub/Sub's thread — marshal work to the asyncio loop."""
                 try:
                     data = json.loads(message.data.decode("utf-8"))
-                    asyncio.create_task(self._process_asset_event(data))
+                    # Schedule the async handler on the asyncio loop
+                    future = asyncio.run_coroutine_threadsafe(
+                        self._process_asset_event(data), main_loop
+                    )
+                    # Block this thread until processing finishes so we can
+                    # ack/nack deterministically.
+                    future.result(timeout=30)
                     message.ack()
                 except Exception as e:
                     logger.warning(f"GCP asset message processing error: {e}")
@@ -436,7 +449,10 @@ class GCPAssetConsumer:
                 await asyncio.sleep(1)
 
             streaming_pull.cancel()
-            streaming_pull.result(timeout=5)
+            try:
+                await asyncio.to_thread(streaming_pull.result, 5)
+            except Exception:
+                pass
 
         except ImportError:
             logger.warning("google-cloud-pubsub not installed — GCP Asset consumer disabled")
@@ -470,7 +486,6 @@ class GCPAssetConsumer:
             )
         else:
             from cloudvisor_types.models import CloudResource, CloudProvider, Environment
-            from datetime import datetime
             import uuid
 
             resource_type = asset_type.replace("googleapis.com/", "").lower()
@@ -489,8 +504,8 @@ class GCPAssetConsumer:
                 organization_id=self._organization_id,
                 is_public=False,
                 environment=Environment.UNKNOWN,
-                first_seen_at=datetime.utcnow(),
-                last_seen_at=datetime.utcnow(),
+                first_seen_at=utcnow(),
+                last_seen_at=utcnow(),
             )
             await self._producer.emit_resource_updated(
                 resource=resource_obj,
@@ -554,7 +569,13 @@ class OCIEventsConsumer:
         logger.info(f"OCI Events consumer stopped for tenancy {self._tenancy_ocid}")
 
     async def _consume_loop(self) -> None:
-        """Poll OCI Streaming for events."""
+        """Poll OCI Streaming for events.
+
+        The OCI Streaming API returns an ``opc-next-cursor`` header on each
+        ``get_messages`` response — we use that as the cursor for the next
+        call so we don't re-read the same messages. ``consumer_heartbeat`` is
+        for group coordination and is NOT the right API for cursor advancement.
+        """
         try:
             import oci
 
@@ -591,18 +612,39 @@ class OCIEventsConsumer:
                         self._cursor,
                         limit=100,
                     )
-                    messages = response.data
+                    messages = response.data or []
                     if messages:
+                        import base64
                         for msg in messages:
-                            import base64
-                            body = json.loads(base64.b64decode(msg.value).decode("utf-8"))
-                            await self._process_oci_event(body)
-                        # Advance cursor
-                        self._cursor = stream_client.consumer_heartbeat(
-                            self._stream_ocid, self._cursor
-                        ).data.value
-                    else:
+                            try:
+                                body = json.loads(
+                                    base64.b64decode(msg.value).decode("utf-8")
+                                )
+                                await self._process_oci_event(body)
+                            except Exception as e:
+                                logger.warning(f"OCI message parse error: {e}")
+
+                    # Advance the cursor using the opc-next-cursor header.
+                    # Fall back to the header from response_headers in any casing.
+                    next_cursor = None
+                    try:
+                        headers = getattr(response, "headers", {}) or {}
+                        next_cursor = (
+                            headers.get("opc-next-cursor")
+                            or headers.get("Opc-Next-Cursor")
+                            or headers.get("OPC-NEXT-CURSOR")
+                        )
+                    except Exception:
+                        pass
+
+                    if next_cursor:
+                        self._cursor = next_cursor
+                    elif not messages:
+                        # No new messages and no advance cursor — just sleep.
                         await asyncio.sleep(5)
+
+                    if not messages:
+                        await asyncio.sleep(2)
                 except Exception as e:
                     logger.warning(f"OCI stream poll error: {e}")
                     await asyncio.sleep(10)
@@ -639,7 +681,6 @@ class OCIEventsConsumer:
             )
         else:
             from cloudvisor_types.models import CloudResource, CloudProvider, Environment
-            from datetime import datetime
             import uuid
 
             # Derive resource type from event type (e.g. "com.oraclecloud.computeapi.launchinstance")
@@ -659,8 +700,8 @@ class OCIEventsConsumer:
                 organization_id=self._organization_id,
                 is_public=False,
                 environment=Environment.UNKNOWN,
-                first_seen_at=datetime.utcnow(),
-                last_seen_at=datetime.utcnow(),
+                first_seen_at=utcnow(),
+                last_seen_at=utcnow(),
             )
             await self._producer.emit_resource_updated(
                 resource=resource_obj,

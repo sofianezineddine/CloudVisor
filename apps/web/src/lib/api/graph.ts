@@ -155,6 +155,35 @@ export const graphAPI = {
   }> {
     return graphFetch(`/internal/assets/${assetId}/findings`);
   },
+
+  /** Get historical snapshots for an asset (time-travel) */
+  async getAssetHistory(
+    assetId: string,
+    params?: { start_time?: string; end_time?: string; limit?: number }
+  ): Promise<{ asset_id: string; snapshots: any[]; total: number }> {
+    const q = new URLSearchParams();
+    if (params?.start_time) q.set('start_time', params.start_time);
+    if (params?.end_time) q.set('end_time', params.end_time);
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return graphFetch(`/internal/assets/${assetId}/history${qs ? `?${qs}` : ''}`);
+  },
+
+  /** Full-text search across assets */
+  async searchAssets(params: {
+    q: string;
+    org_id: string;
+    provider?: string;
+    region?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<{ total: number; hits: GraphAsset[]; page: number; page_size: number; source: string }> {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) query.set(k, String(v));
+    });
+    return graphFetch(`/internal/assets/search?${query}`);
+  },
 };
 
 export default graphAPI;

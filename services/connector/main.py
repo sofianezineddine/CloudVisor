@@ -186,10 +186,49 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception as e:
             logger.debug(f"SQLAlchemy OTel instrumentation skipped: {e}")
 
+        # ── OTel httpx instrumentation (outbound HTTP to Vault, Schema Registry, etc.)
+        try:
+            from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+            HTTPXClientInstrumentor().instrument()
+            logger.info("OpenTelemetry httpx instrumentation enabled")
+        except Exception as e:
+            logger.debug(f"httpx OTel instrumentation skipped: {e}")
+
+        # ── OTel botocore instrumentation (AWS SDK calls from the connector) ──
+        # Instruments both boto3 (sync) and aiobotocore (async) under the hood.
+        try:
+            from opentelemetry.instrumentation.botocore import BotocoreInstrumentor
+            BotocoreInstrumentor().instrument()
+            logger.info("OpenTelemetry botocore instrumentation enabled")
+        except Exception as e:
+            logger.debug(f"botocore OTel instrumentation skipped: {e}")
+
+        # ── OTel aiokafka instrumentation (producer + consumer spans) ─────────
+        try:
+            from opentelemetry.instrumentation.aiokafka import AIOKafkaInstrumentor
+            AIOKafkaInstrumentor().instrument()
+            logger.info("OpenTelemetry aiokafka instrumentation enabled")
+        except Exception as e:
+            logger.debug(f"aiokafka OTel instrumentation skipped: {e}")
+
     try:
         yield
     finally:
         logger.info("Shutting down dependencies")
+        # Un-instrument OTel so reload / reinit doesn't double-wrap clients.
+        # Each uninstrument guarded — idempotent and tolerant of missing pkgs.
+        if otel_enabled:
+            for mod_name, cls_name in (
+                ("opentelemetry.instrumentation.sqlalchemy", "SQLAlchemyInstrumentor"),
+                ("opentelemetry.instrumentation.httpx", "HTTPXClientInstrumentor"),
+                ("opentelemetry.instrumentation.botocore", "BotocoreInstrumentor"),
+                ("opentelemetry.instrumentation.aiokafka", "AIOKafkaInstrumentor"),
+            ):
+                try:
+                    mod = __import__(mod_name, fromlist=[cls_name])
+                    getattr(mod, cls_name)().uninstrument()
+                except Exception:
+                    pass
         await shutdown_dependencies()
 
 

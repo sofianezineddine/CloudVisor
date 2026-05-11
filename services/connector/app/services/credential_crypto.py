@@ -38,10 +38,16 @@ _SCHEME = "AES-256-GCM+HKDF-SHA256"
 
 
 def _hkdf_sha256(key_material: bytes, salt: bytes, info: bytes, length: int = 32) -> bytes:
-    """HKDF-SHA256 key derivation (RFC 5869)."""
-    # Extract step
+    """HKDF-SHA256 key derivation (RFC 5869).
+
+    Python 3 ``hmac.new(key, msg, digestmod)`` signature:
+      - Extract step: key=salt, msg=key_material, digestmod=sha256
+      - Expand step:  key=prk,  msg=T(n-1)||info||counter, digestmod=sha256
+    Both calls are positional and correct — digestmod is the third positional arg.
+    """
+    # Extract step: PRK = HMAC-SHA256(salt, IKM)
     prk = hmac.new(salt, key_material, hashlib.sha256).digest()
-    # Expand step
+    # Expand step: OKM = T(1) || T(2) || ... where T(n) = HMAC-SHA256(PRK, T(n-1)||info||n)
     okm = b""
     t = b""
     counter = 1

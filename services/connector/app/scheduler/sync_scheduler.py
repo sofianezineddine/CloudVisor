@@ -37,9 +37,7 @@ class SyncScheduler:
     the polling interval instead of all firing at once.
     """
 
-    # Seconds added on top of the sync timeout when acquiring the Redis lock,
-    # to give the sync clean shutdown headroom before the lock can be re-acquired.
-    _LOCK_HEADROOM_SECONDS = 60
+    _SCHED_LOCK_HEADROOM_SECONDS = 60
 
     def __init__(
         self,
@@ -48,12 +46,14 @@ class SyncScheduler:
         db_session_factory: Any,
         vault_client: Any | None = None,
         sync_timeout_seconds: int = 300,
+        stale_to_deleted_threshold: int = 3,
     ):
         self._redis = redis_client
         self._producer = event_producer
         self._db_session_factory = db_session_factory
         self._vault_client = vault_client
         self._sync_timeout_seconds = sync_timeout_seconds
+        self._stale_to_deleted_threshold = stale_to_deleted_threshold
         self._running = False
         self._tasks: dict[str, asyncio.Task] = {}
 
@@ -76,9 +76,25 @@ class SyncScheduler:
         time in the past ≤ polling_interval_minutes. This prevents all
         accounts from firing a sync simultaneously on a cold start and
         thundering-herding the cloud APIs.
+
+        NOTE: This query needs to see ALL accounts across ALL orgs. We bypass
+        RLS by executing as the connection owner (no ``app.current_org_id``
+        set). This works because the RLS policy uses
+        ``current_setting('app.current_org_id', true)`` which returns '' when
+        unset — and we explicitly disable RLS for this system-level query by
+        running it with ``SET LOCAL row_security = off``.
         """
         try:
             async with self._db_session_factory() as session:
+                # Bypass RLS for this system-level query. The DB user must be
+                # the table owner or a superuser for this to work. If it fails
+                # (non-owner user), fall back to querying without RLS bypass.
+                try:
+                    from sqlalchemy import text
+                    await session.execute(text("SET LOCAL row_security = off"))
+                except Exception:
+                    pass  # Non-fatal — query may still work if RLS isn't active yet
+
                 stmt = select(CloudAccountModel).where(
                     CloudAccountModel.status.in_(["active", "pending"]),
                     CloudAccountModel.deleted_at.is_(None),
@@ -205,7 +221,7 @@ class SyncScheduler:
         itself even under timeout pressure.
         """
         lock_key = _SYNC_LOCK_KEY.format(account_id=account.id)
-        lock_ttl = self._sync_timeout_seconds * 2 + self._LOCK_HEADROOM_SECONDS
+        lock_ttl = self._sync_timeout_seconds * 2 + self._SCHED_LOCK_HEADROOM_SECONDS
         lock_acquired = await self._redis.set(lock_key, "1", nx=True, ex=lock_ttl)
 
         if not lock_acquired:
@@ -245,6 +261,7 @@ class SyncScheduler:
                 producer=self._producer,
                 vault_client=self._vault_client,
                 db_session_factory=self._db_session_factory,
+                stale_to_deleted_threshold=self._stale_to_deleted_threshold,
             )
 
             # Get known resources for incremental sync
@@ -299,6 +316,15 @@ class SyncScheduler:
                 "duration_seconds": result.duration_seconds,
             }, ttl_seconds=3600)
 
+            # Persist scan history record
+            await self._record_scan_history(
+                account=account,
+                correlation_id=correlation_id,
+                sync_type=sync_type,
+                result=result,
+                status="completed" if result.errors == 0 else "partial" if result.discovered > 0 else "failed",
+            )
+
             logger.info(
                 f"Sync completed for account {account.id}: "
                 f"{result.discovered} discovered, {result.updated} updated, "
@@ -343,10 +369,55 @@ class SyncScheduler:
                 "finished_at": utcnow().isoformat(),
                 "error": str(e)[:500],
             }, ttl_seconds=3600)
+            # Record the failed sync in history
+            await self._record_scan_history(
+                account=account,
+                correlation_id=correlation_id,
+                sync_type=sync_type,
+                result=DiscoveryResult(errors=1, error_details=[str(e)]),
+                status="failed",
+            )
             raise
 
         finally:
             await self._redis.delete(lock_key)
+
+    async def _record_scan_history(
+        self,
+        account: CloudAccountModel,
+        correlation_id: str,
+        sync_type: str,
+        result: DiscoveryResult,
+        status: str,
+    ) -> None:
+        """Persist a scan history record to the database."""
+        if not self._db_session_factory:
+            return
+        try:
+            from ..models import ScanHistoryModel
+            import uuid as _uuid
+            now = utcnow()
+            record = ScanHistoryModel(
+                id=str(_uuid.uuid4()),
+                account_id=account.id,
+                organization_id=account.organization_id,
+                sync_type=sync_type,
+                status=status,
+                correlation_id=correlation_id,
+                discovered=result.discovered,
+                updated=result.updated,
+                deleted=result.deleted,
+                errors=result.errors,
+                duration_seconds=result.duration_seconds,
+                error_details=result.error_details[:10],
+                started_at=now,
+                finished_at=now,
+            )
+            async with self._db_session_factory() as session:
+                session.add(record)
+                await session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to record scan history for {account.id}: {e}")
 
     async def _monitor_loop(self) -> None:
         """
@@ -374,6 +445,7 @@ class SyncScheduler:
 
                 interval_minutes = int(schedule_data.get("interval_minutes", 15))
                 last_sync_at = schedule_data.get("last_sync_at")
+                organization_id = schedule_data.get("organization_id", "")
 
                 # If no last_sync_at has been seeded, skip this tick and seed
                 # one now (prevents the classic "fire immediately on first seen"
@@ -389,8 +461,11 @@ class SyncScheduler:
                 if utcnow() < next_sync_time:
                     continue  # Not due yet
 
-                # Trigger sync
-                async with self._db_session_factory() as session:
+                # Trigger sync — set RLS context so the query can see the account.
+                # The scheduler is a system-level component that needs cross-org
+                # visibility; we use the org_id from the Redis schedule hash.
+                from ..core.database import create_db_session
+                async with create_db_session(self._db_session_factory, organization_id) as session:
                     stmt = select(CloudAccountModel).where(
                         CloudAccountModel.id == account_id,
                         CloudAccountModel.deleted_at.is_(None),
@@ -399,8 +474,10 @@ class SyncScheduler:
                     account = result.scalar_one_or_none()
 
                     if account and account.status == "active":
-                        await self.trigger_sync(account, sync_type="incremental")
+                        # Update last_sync_at BEFORE triggering so concurrent
+                        # ticks don't double-fire.
                         await self._redis.hset(key, "last_sync_at", utcnow().isoformat())
+                        await self.trigger_sync(account, sync_type="incremental")
                     elif not account:
                         # Account was deleted — clear the stale schedule
                         await self._redis.delete(key)

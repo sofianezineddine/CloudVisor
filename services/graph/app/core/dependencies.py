@@ -42,6 +42,22 @@ async def init_dependencies(settings: CloudvisorSettings, graph_settings: GraphS
     # Create snapshot tables
     async with _engine.begin() as conn:
         await conn.run_sync(SnapshotBase.metadata.create_all)
+
+    # Attempt to convert asset_snapshots to a TimescaleDB hypertable for
+    # efficient time-range queries and automatic compression. Non-fatal if
+    # TimescaleDB extension is not installed (plain PostgreSQL still works).
+    try:
+        from sqlalchemy import text
+        async with _engine.begin() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE"))
+            await conn.execute(text(
+                "SELECT create_hypertable('asset_snapshots', 'snapshot_timestamp', "
+                "if_not_exists => TRUE, migrate_data => TRUE)"
+            ))
+        logger.info("TimescaleDB hypertable created for asset_snapshots")
+    except Exception as e:
+        logger.debug(f"TimescaleDB hypertable setup skipped (non-fatal): {e}")
+
     logger.info("Graph snapshot tables created")
 
     # ── Redis ─────────────────────────────────────────────────────────────────

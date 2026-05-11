@@ -30,7 +30,7 @@ class ConnectAccountRequest(BaseModel):
     account_id: str = Field(..., min_length=1)
     region: str = Field(default="global")
     credentials: dict[str, Any] = Field(default_factory=dict)
-    polling_interval_minutes: int = Field(default=1, ge=1, le=60)
+    polling_interval_minutes: int = Field(default=15, description="Allowed: 1, 5, 15, 30, 60")
 
 
 @router.get("")

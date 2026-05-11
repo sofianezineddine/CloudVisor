@@ -73,10 +73,16 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=[
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Correlation-ID"],
     )
 
     # Prometheus metrics — Rule 9: observability is not optional
@@ -127,6 +133,27 @@ def create_app() -> FastAPI:
         return {"status": "ready", "service": "graph"}
 
     app.include_router(assets_router, prefix="/internal")
+
+    # ── GraphQL endpoint (spec §3.2) ──────────────────────────────────────────
+    try:
+        from strawberry.fastapi import GraphQLRouter
+        from app.api.graphql_schema import schema
+
+        async def get_graphql_context():
+            """Provide Neo4j and Redis clients to GraphQL resolvers."""
+            import app.core.dependencies as deps
+            return {
+                "neo4j": deps._neo4j_client,
+                "redis": deps._redis_client,
+            }
+
+        graphql_app = GraphQLRouter(schema, context_getter=get_graphql_context)
+        app.include_router(graphql_app, prefix="/graphql")
+        logger.info("GraphQL endpoint mounted at /graphql")
+    except ImportError as e:
+        logger.warning(f"GraphQL not available (strawberry not installed): {e}")
+    except Exception as e:
+        logger.warning(f"GraphQL setup failed: {e}")
 
     return app
 

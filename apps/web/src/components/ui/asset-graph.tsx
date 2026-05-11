@@ -98,23 +98,26 @@ function buildGraphData(resources: any[]): { nodes: GraphNode[]; edges: GraphEdg
   const connected = new Set<number>();
   const seen = new Set<string>();
 
-  // Build nodes
+  // Build nodes — color by RISK LEVEL (not just type) for security visibility
   resources.forEach((r, i) => {
     const t = getNodeType(r.resource_type);
     const rs = riskScore(r);
+    const rl = riskLevel(rs);
+    // Use risk-based color for the node border/glow, type color for the fill
+    const nodeColor = rs > 0 ? riskColor(rs) : t.color;
     nodes.push({
       id: r.id,
-      x: 100 + Math.random() * 1600,
-      y: 100 + Math.random() * 900,
+      x: 50 + Math.random() * 2400,
+      y: 50 + Math.random() * 1400,
       vx: 0, vy: 0,
-      r: t.id === 'vpc' ? 10 : t.id === 'subnet' ? 8 : 6,
+      r: t.id === 'vpc' ? 10 : t.id === 'subnet' ? 8 : rs >= 70 ? 9 : rs >= 40 ? 7 : 6,
       color: t.color,
       label: r.name || r.id,
       typeLabel: t.label,
       typeId: t.id,
       region: r.region || 'global',
       risk: rs,
-      riskLvl: riskLevel(rs),
+      riskLvl: rl,
       edgeCount: 0,
       hidden: false,
       resource: r,
@@ -266,6 +269,8 @@ function Sidebar({
               { l: 'Edges',    v: String(selectedNode.edgeCount) },
               { l: 'Risk',     v: `${selectedNode.riskLvl.toUpperCase()} (${Math.round(selectedNode.risk)})`,
                 color: riskColor(selectedNode.risk) },
+              { l: 'Findings', v: String(selectedNode.resource?.open_findings_count ?? 0),
+                color: (selectedNode.resource?.open_findings_count ?? 0) > 0 ? '#e05060' : undefined },
               { l: 'Provider', v: selectedNode.resource?.provider?.toUpperCase() || '—' },
               { l: 'Exposure', v: selectedNode.resource?.is_public ? '⚠ Public' : 'Private',
                 color: selectedNode.resource?.is_public ? '#e05060' : undefined },
@@ -367,7 +372,12 @@ function CanvasGraph({ resources, loading, onSwitchToTable }: {
     canvas.style.height = height + 'px';
     const ctx = canvas.getContext('2d')!;
     ctx.scale(dpr, dpr);
-    drawFrame();
+    // After resize, re-fit the graph to fill the new canvas dimensions
+    if (graphRef.current && graphRef.current.nodes.length > 0) {
+      resetView();
+    } else {
+      drawFrame();
+    }
   }
 
   function getCanvasSize() {
@@ -473,16 +483,17 @@ function CanvasGraph({ resources, loading, onSwitchToTable }: {
       ctx.save();
       ctx.globalAlpha = alpha;
 
-      // Fill
+      // Fill — blend type color with risk intensity
       const riskA = n.riskLvl === 'high' ? 0.9 : n.riskLvl === 'med' ? 0.75 : 0.55;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fillStyle = n.color + Math.round(riskA * 255).toString(16).padStart(2, '0');
       ctx.fill();
 
-      // Border
-      ctx.strokeStyle = isSel ? '#ffffff' : isGroupSel ? '#4a90e8' : isHov ? n.color : n.color + '70';
-      ctx.lineWidth = isSel ? 2 : isGroupSel ? 1.5 : isHov ? 1.5 : 0.5;
+      // Border — colored by RISK LEVEL for security visibility
+      const borderColor = n.risk >= 70 ? '#e05060' : n.risk >= 40 ? '#f0a030' : n.color;
+      ctx.strokeStyle = isSel ? '#ffffff' : isGroupSel ? '#4a90e8' : isHov ? borderColor : borderColor + '70';
+      ctx.lineWidth = isSel ? 2 : isGroupSel ? 1.5 : isHov ? 1.5 : n.risk >= 70 ? 1.2 : 0.5;
       ctx.stroke();
 
       // Label
@@ -562,13 +573,17 @@ function CanvasGraph({ resources, loading, onSwitchToTable }: {
       if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x;
       if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y;
     });
-    const pad = 60;
-    const ww = maxX - minX + pad * 2, wh = maxY - minY + pad * 2;
-    const scale = Math.min(W / ww, H / wh, 2);
+    const pad = 40;
+    const ww = (maxX - minX) + pad * 2 || 1;
+    const wh = (maxY - minY) + pad * 2 || 1;
+    // Scale to fill the canvas — use the smaller ratio so everything fits
+    const scale = Math.min(W / ww, H / wh, 3);
+    const cx = minX + (maxX - minX) / 2;
+    const cy = minY + (maxY - minY) / 2;
     transformRef.current = {
       scale,
-      x: W / 2 - (minX + (maxX - minX) / 2) * scale,
-      y: H / 2 - (minY + (maxY - minY) / 2) * scale,
+      x: W / 2 - cx * scale,
+      y: H / 2 - cy * scale,
     };
     drawFrame();
   }
@@ -588,7 +603,10 @@ function CanvasGraph({ resources, loading, onSwitchToTable }: {
   function toggleLayout() {
     const graph = graphRef.current;
     if (!graph) return;
-    const cx = 900, cy = 550, clusterR = 380;
+    const { W, H } = getCanvasSize();
+    // Use the actual canvas dimensions to spread clusters across the full area
+    const cx = 1200, cy = 800;
+    const clusterR = Math.min(cx, cy) * 0.45;
     const types = [...new Set(graph.nodes.map(n => n.typeId))];
     types.forEach((tid, ti) => {
       const angle = (ti / types.length) * Math.PI * 2;
@@ -597,7 +615,7 @@ function CanvasGraph({ resources, loading, onSwitchToTable }: {
       const typeNodes = graph.nodes.filter(n => n.typeId === tid);
       typeNodes.forEach((n, i) => {
         const a = (i / typeNodes.length) * Math.PI * 2;
-        const spread = 60 + Math.min(typeNodes.length, 50) * 2.5;
+        const spread = 60 + Math.min(typeNodes.length, 50) * 3;
         n.x = tx + Math.cos(a) * spread;
         n.y = ty + Math.sin(a) * spread;
       });
@@ -751,8 +769,14 @@ function CanvasGraph({ resources, loading, onSwitchToTable }: {
         (tt.querySelector('#ag-tt-type') as HTMLElement).textContent = found.typeLabel;
         (tt.querySelector('#ag-tt-region') as HTMLElement).textContent = found.region;
         (tt.querySelector('#ag-tt-edges') as HTMLElement).textContent = String(found.edgeCount);
+        const findingsEl = tt.querySelector('#ag-tt-findings') as HTMLElement;
+        if (findingsEl) {
+          const fc = found.resource?.open_findings_count ?? 0;
+          findingsEl.textContent = fc > 0 ? `${fc} open` : 'None';
+          findingsEl.style.color = fc >= 5 ? '#e05060' : fc > 0 ? '#f0a030' : '';
+        }
         const riskEl = tt.querySelector('#ag-tt-risk') as HTMLElement;
-        riskEl.textContent = found.riskLvl.charAt(0).toUpperCase() + found.riskLvl.slice(1);
+        riskEl.textContent = `${found.riskLvl.charAt(0).toUpperCase() + found.riskLvl.slice(1)} (${Math.round(found.risk)})`;
         riskEl.className = 'ag-tt-risk ag-risk-' + found.riskLvl;
       } else {
         tt.classList.remove('show');
@@ -929,6 +953,7 @@ function CanvasGraph({ resources, loading, onSwitchToTable }: {
             <div className="ag-tt-row"><span>Type</span><span className="ag-tt-val" id="ag-tt-type">—</span></div>
             <div className="ag-tt-row"><span>Region</span><span className="ag-tt-val" id="ag-tt-region">—</span></div>
             <div className="ag-tt-row"><span>Edges</span><span className="ag-tt-val" id="ag-tt-edges">—</span></div>
+            <div className="ag-tt-row"><span>Findings</span><span className="ag-tt-val" id="ag-tt-findings">—</span></div>
             <div><span className="ag-tt-risk" id="ag-tt-risk">—</span></div>
           </div>
 

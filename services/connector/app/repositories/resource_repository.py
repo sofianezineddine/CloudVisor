@@ -8,6 +8,7 @@ from sqlalchemy import select, func, update, and_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.time_utils import utcnow
 from ..models.cloud_account import DiscoveredResourceModel
 
 logger = logging.getLogger(__name__)
@@ -152,8 +153,8 @@ class ResourceRepository:
                     "is_public": resource_data["is_public"],
                     "environment": resource_data["environment"],
                     "resource_hash": resource_data["resource_hash"],
-                    "last_seen_at": resource_data.get("last_seen_at", datetime.utcnow()),
-                    "last_synced_at": datetime.utcnow(),
+                    "last_seen_at": resource_data.get("last_seen_at", utcnow()),
+                    "last_synced_at": utcnow(),
                     "is_deleted": False,
                     "deleted_at": None,
                 },
@@ -203,7 +204,7 @@ class ResourceRepository:
                         "environment": pg_insert(DiscoveredResourceModel).excluded.environment,
                         "resource_hash": pg_insert(DiscoveredResourceModel).excluded.resource_hash,
                         "last_seen_at": pg_insert(DiscoveredResourceModel).excluded.last_seen_at,
-                        "last_synced_at": datetime.utcnow(),
+                        "last_synced_at": utcnow(),
                         "is_deleted": False,
                         "deleted_at": None,
                     },
@@ -216,8 +217,12 @@ class ResourceRepository:
             result = await self._session.execute(stmt)
             rows = result.fetchall()
             for row in rows:
-                # Heuristic: if first_seen_at is very recent, it was just created
-                age_seconds = (datetime.utcnow() - row[1].replace(tzinfo=None)).total_seconds()
+                # Heuristic: if first_seen_at is very recent, it was just created.
+                # Compare as naive UTC so both sides are consistent.
+                first_seen = row[1]
+                if first_seen.tzinfo is not None:
+                    first_seen = first_seen.replace(tzinfo=None)
+                age_seconds = (utcnow().replace(tzinfo=None) - first_seen).total_seconds()
                 if age_seconds < 5:
                     created += 1
                 else:
@@ -238,7 +243,7 @@ class ResourceRepository:
         if not cloud_resource_ids:
             return 0
 
-        now = datetime.utcnow()
+        now = utcnow()
         result = await self._session.execute(
             update(DiscoveredResourceModel)
             .where(

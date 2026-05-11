@@ -1,4 +1,8 @@
-"""API routes for cloud account management — tenant-isolated by organization_id."""
+"""API routes for cloud account management — tenant-isolated by organization_id.
+
+Route handlers are intentionally thin: validate input, call the service layer,
+return the result. All business logic lives in ``app/services/account_service.py``.
+"""
 
 import asyncio
 import logging
@@ -11,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, get_redis
 from app.core.auth import require_org_id
+from app.core.config import get_connector_settings
 from app.core.time_utils import utcnow
+from app.models import CloudAccountModel
 from app.schemas import (
     CloudAccountCreate,
     CloudAccountUpdate,
@@ -22,96 +28,18 @@ from app.schemas import (
     SyncTriggerResponse,
     OnboardingResponse,
     ErrorResponse,
+    CredentialRotateRequest,
+    CredentialRotateResponse,
+    ScanHistoryResponse,
+    ScanHistoryEntry,
 )
-from app.models import CloudAccountModel
-from app.services.credential_crypto import (
-    decrypt_credentials,
-    encrypt_credentials,
-)
+from app.services.account_service import AccountService, get_account_service
+from app.services.credential_crypto import decrypt_credentials
 from app.services.vault_client import VaultClient
-from app.core.config import get_connector_settings
 
 logger = logging.getLogger(__name__)
 
-
 router = APIRouter(prefix="/accounts", tags=["accounts"])
-
-
-async def _load_account_credentials(
-    account: CloudAccountModel,
-    connector_settings: Any,
-) -> dict[str, Any]:
-    """Load and decrypt credentials for an account.
-
-    Tries Vault first, then falls back to ``credentials_enc``. Handles both
-    the new envelope-encrypted payload and legacy plaintext transparently.
-    """
-    # Try Vault
-    if account.vault_secret_path and connector_settings.vault_enabled:
-        try:
-            vault = VaultClient(
-                vault_url=connector_settings.vault_url,
-                vault_token=connector_settings.vault_token,
-                mount_point=connector_settings.vault_mount_point,
-            )
-            if await vault.initialize():
-                raw = await vault.retrieve_credentials(account.vault_secret_path)
-                if raw:
-                    try:
-                        return decrypt_credentials(raw, account.organization_id)
-                    except Exception as e:
-                        logger.warning(
-                            f"Credential decryption failed for {account.id}: {e}. "
-                            "Treating Vault payload as plaintext (legacy)."
-                        )
-                        return dict(raw)
-        except Exception as e:
-            logger.warning(f"Could not retrieve Vault credentials for {account.id}: {e}")
-
-    # Fall back to DB
-    if account.credentials_enc:
-        try:
-            return decrypt_credentials(account.credentials_enc, account.organization_id)
-        except Exception as e:
-            logger.error(
-                f"Failed to decrypt DB credentials for {account.id}: {e}. "
-                "Check CONNECTOR_CREDENTIAL_MASTER_KEY."
-            )
-            return {}
-
-    return {}
-
-
-async def _emit_health_change_if_needed(
-    account: CloudAccountModel,
-    previous_status: str,
-    new_status: str,
-    error_message: str | None = None,
-) -> None:
-    """Emit connector.health_changed when status transitions."""
-    if previous_status == new_status:
-        return
-    try:
-        from app.core.dependencies import _sync_scheduler
-        producer = getattr(_sync_scheduler, "_producer", None) if _sync_scheduler else None
-        if producer is None:
-            return
-        await producer.emit_health_changed(
-            account_id=account.id,
-            organization_id=account.organization_id,
-            provider=account.provider,
-            previous_status=previous_status,
-            new_status=new_status,
-            error_message=error_message,
-            resource_count=account.resource_count,
-        )
-        logger.info(
-            f"Emitted connector.health_changed: {account.id} "
-            f"{previous_status} → {new_status}"
-        )
-    except Exception as e:
-        # Never block on telemetry
-        logger.warning(f"Failed to emit health_changed for {account.id}: {e}")
 
 
 @router.post("", response_model=CloudAccountResponse, status_code=status.HTTP_201_CREATED)
@@ -121,174 +49,60 @@ async def create_account(
     organization_id: str = Depends(require_org_id),
     db: AsyncSession = Depends(get_db),
 ) -> CloudAccountResponse:
-    """Register a new cloud account for the authenticated organization."""
-    # Check for duplicate (same provider + cloud account_id within this org)
+    """Register a new cloud account for the authenticated organization.
+
+    For AWS accounts, a read-only IAM role is automatically provisioned in the
+    customer's account using the provided access keys. The role ARN is stored
+    instead of the raw keys. See ``AWSRoleSetupService`` for details.
+
+    Credentials are envelope-encrypted with a per-org DEK before storage.
+    """
+    # Duplicate check — route layer responsibility (needs DB access)
     existing = await db.execute(
         select(CloudAccountModel).where(
             CloudAccountModel.organization_id == organization_id,
             CloudAccountModel.provider == account_data.provider,
             CloudAccountModel.account_id == account_data.account_id,
+            CloudAccountModel.deleted_at.is_(None),
         )
     )
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Account {account_data.account_id} ({account_data.provider}) is already connected to your organization.",
+            detail=(
+                f"Account {account_data.account_id} ({account_data.provider}) "
+                "is already connected to your organization."
+            ),
         )
 
-    account = CloudAccountModel(
-        id=str(uuid.uuid4()),
-        organization_id=organization_id,          # ← from JWT, not random
-        provider=account_data.provider,
-        name=account_data.name,
-        account_id=account_data.account_id,
-        region=account_data.region,
-        status="pending",
-        sync_status="idle",
-        polling_interval_minutes=account_data.polling_interval_minutes,
-    )
+    settings = get_connector_settings()
+    service = get_account_service(db=db, settings=settings)
 
-    # For AWS: automatically create a read-only role using the provided credentials,
-    # then store the role ARN instead of the raw access keys.
-    credentials_to_store = dict(account_data.credentials) if account_data.credentials else {}
-
-    if account_data.provider == "aws" and credentials_to_store.get("access_key") and credentials_to_store.get("secret_key"):
-        try:
-            from app.services.aws_role_setup import AWSRoleSetupService
-            setup = AWSRoleSetupService(
-                access_key=credentials_to_store["access_key"],
-                secret_key=credentials_to_store["secret_key"],
-            )
-            role_info = await setup.setup_role()
-
-            # Store role ARN + external_id + original keys (needed to re-assume the role)
-            # The original keys are kept so we can re-assume the role on each sync.
-            credentials_to_store["role_arn"] = role_info["role_arn"]
-            credentials_to_store["external_id"] = role_info["external_id"]
-
-            # Update account_id with the verified AWS account ID
-            account.account_id = role_info["account_id"]
-
-            logger.info(
-                f"Auto-provisioned CloudVisorReadOnly role in AWS account "
-                f"{role_info['account_id']}: {role_info['role_arn']}"
-            )
-        except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e),
-            )
-        except Exception as e:
-            logger.warning(f"Role auto-setup failed, falling back to direct key usage: {e}")
-            # Non-fatal: fall back to using the access key directly
-
-    # Store credentials in Vault (preferred) or directly in DB (dev/fallback).
-    # In BOTH paths, the credentials are envelope-encrypted with a per-org DEK
-    # derived from CONNECTOR_CREDENTIAL_MASTER_KEY before persistence (spec §8).
-    connector_settings = get_connector_settings()
-    if credentials_to_store:
-        encrypted_payload = encrypt_credentials(credentials_to_store, organization_id)
-        vault_stored = False
-
-        # Try Vault only if it's enabled
-        if connector_settings.vault_enabled:
-            try:
-                vault = VaultClient(
-                    vault_url=connector_settings.vault_url,
-                    vault_token=connector_settings.vault_token,
-                    mount_point=connector_settings.vault_mount_point,
-                )
-                initialized = await vault.initialize()
-                if initialized:
-                    vault_path = await vault.store_credentials(
-                        account_id=account.id,
-                        organization_id=organization_id,
-                        provider=account.provider,
-                        credentials=encrypted_payload,
-                    )
-                    account.vault_secret_path = vault_path
-                    vault_stored = True
-                    logger.info(f"Encrypted credentials stored in Vault for account {account.id}")
-                else:
-                    logger.warning("Vault unavailable/sealed — falling back to DB credential storage")
-            except Exception as e:
-                logger.warning(
-                    f"Vault storage failed ({type(e).__name__}: {str(e)[:120]}) "
-                    "— falling back to DB credential storage"
-                )
-
-        if not vault_stored:
-            # Vault disabled, sealed, or unreachable — store encrypted blob in DB.
-            account.credentials_enc = encrypted_payload
-            logger.info(f"Encrypted credentials stored in DB for account {account.id}")
-
-    # ── Validate connectivity before marking active (spec requirement) ─────────
-    connectivity_ok = False
-    if credentials_to_store:
-        try:
-            from app.clients import ClientFactory
-            test_client = ClientFactory.create_client(
-                provider=account_data.provider,
-                credentials=credentials_to_store,
-            )
-            connectivity_ok = await test_client.connect()
-            try:
-                await test_client.disconnect()
-            except Exception:
-                pass
-            if not connectivity_ok:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Could not connect to {account_data.provider} account. "
-                           "Please verify your credentials and permissions.",
-                )
-            logger.info(f"Connectivity validated for {account_data.provider} account {account_data.account_id}")
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.warning(f"Connectivity check failed: {e} — proceeding with pending status")
-            connectivity_ok = False
-
-    previous_status = account.status
-    account.status = "active" if connectivity_ok else "pending"
-
-    db.add(account)
-    await db.commit()
-    await db.refresh(account)
-
-    # Emit connector.health_changed for the initial status transition
-    await _emit_health_change_if_needed(
-        account=account,
-        previous_status=previous_status,
-        new_status=account.status,
-    )
-
-    # Schedule + trigger initial sync
-    from app.core.dependencies import _sync_scheduler, get_realtime_manager
-    if _sync_scheduler is not None:
-        await _sync_scheduler.schedule_account(
-            account_id=account.id,
+    try:
+        result = await service.create_account(
+            account_data=account_data,
             organization_id=organization_id,
-            provider=account.provider,
-            interval_minutes=account.polling_interval_minutes,
         )
-        asyncio.create_task(_sync_scheduler.trigger_sync(account, sync_type="full"))
+    except ValueError as e:
+        # Raised by AWS role setup when credentials are invalid / missing perms
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    # Start real-time consumers for this account
-    realtime_manager = get_realtime_manager()
-    if realtime_manager is not None:
-        started = await realtime_manager.add_account_consumers(
-            account_id=account.id,
-            organization_id=organization_id,
-            provider=account.provider,
-            cloud_account_id=account.account_id,
-            credentials=credentials_to_store,
-            region=account.region,
+    if not result.connectivity_ok and account_data.credentials:
+        # Connectivity failed — surface it as a 400 so the UI can show a clear error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Could not connect to {account_data.provider} account. "
+                "Please verify your credentials and permissions."
+            ),
         )
-        if started:
-            logger.info(f"Started {started} real-time consumer(s) for account {account.id}")
 
-    return CloudAccountResponse(**account.to_dict())
+    response = CloudAccountResponse(**result.account.to_dict())
+    if result.warnings:
+        logger.warning(
+            f"Account {result.account.id} created with warnings: {result.warnings}"
+        )
+    return response
 
 
 @router.get("", response_model=CloudAccountListResponse)
@@ -433,10 +247,11 @@ async def delete_account(
             logger.warning(f"Failed to stop real-time consumers for {account_id}: {e}")
 
     connector_settings = get_connector_settings()
+    service = get_account_service(db=db, settings=connector_settings)
 
     # ── 3. Clean up AWS IAM role (best-effort) ─────────────────────────────────
     if account.provider == "aws":
-        credentials = await _load_account_credentials(account, connector_settings)
+        credentials = await service._load_account_credentials(account, connector_settings)
         if credentials.get("access_key") and credentials.get("secret_key"):
             try:
                 from app.services.aws_role_setup import AWSRoleSetupService
@@ -466,9 +281,24 @@ async def delete_account(
 
     # ── 5. Emit resource.deleted Kafka events for all account resources ────────
     # Spec: "Remove a cloud account (stops polling, emits deleted events)"
+    # We also emit a synthetic connector.sync_finished(status="cancelled") first
+    # so downstream consumers can distinguish "sync never ran" from "account removed".
+    correlation_id = str(uuid.uuid4())
     try:
         producer = getattr(_sync_scheduler, "_producer", None) if _sync_scheduler else None
         if producer:
+            # Announce that any pending sync has been cancelled due to removal.
+            try:
+                await producer.emit_sync_finished(
+                    account_id=account.id,
+                    organization_id=organization_id,
+                    provider=account.provider,
+                    correlation_id=correlation_id,
+                    status="cancelled",
+                )
+            except Exception as e:
+                logger.debug(f"Failed to emit cancelled sync event: {e}")
+
             from sqlalchemy import select as sa_select
             from app.models import DiscoveredResourceModel
             stmt_resources = sa_select(
@@ -481,7 +311,6 @@ async def delete_account(
             )
             resource_rows = await db.execute(stmt_resources)
             rows = resource_rows.all()
-            correlation_id = str(uuid.uuid4())
             emit_tasks = [
                 producer.emit_resource_deleted(
                     cloud_resource_id=row.cloud_resource_id,
@@ -518,7 +347,7 @@ async def delete_account(
         logger.info(f"Soft-deleted cloud account {account_id} for org {organization_id}")
 
     # ── 7. Emit health_changed ────────────────────────────────────────────────
-    await _emit_health_change_if_needed(
+    await service._emit_health_changed(
         account=account,
         previous_status=previous_status,
         new_status="paused" if not hard else "deleted",
@@ -648,4 +477,130 @@ async def get_aws_template() -> OnboardingResponse:
         provider="aws",
         instructions="Deprecated endpoint. Use /internal/onboarding/aws/template instead.",
         template=AWS_CLOUDFORMATION_TEMPLATE,
+    )
+
+
+# ── Credential rotation ───────────────────────────────────────────────────────
+
+@router.post(
+    "/{account_id}/credentials/rotate",
+    response_model=CredentialRotateResponse,
+    summary="Rotate credentials for a cloud account",
+    description=(
+        "Replace the stored credentials for an account with new ones. "
+        "For AWS, a new CloudVisorReadOnly role is provisioned if the new "
+        "credentials have IAM permissions. Connectivity is validated before "
+        "the old credentials are replaced."
+    ),
+)
+async def rotate_credentials(
+    account_id: str,
+    body: CredentialRotateRequest,
+    organization_id: str = Depends(require_org_id),
+    db: AsyncSession = Depends(get_db),
+) -> CredentialRotateResponse:
+    """Rotate credentials without disconnecting and reconnecting the account."""
+    stmt = select(CloudAccountModel).where(
+        CloudAccountModel.id == account_id,
+        CloudAccountModel.organization_id == organization_id,
+        CloudAccountModel.deleted_at.is_(None),
+    )
+    result = await db.execute(stmt)
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    settings = get_connector_settings()
+    service = get_account_service(db=db, settings=settings)
+
+    try:
+        rotate_result = await service.rotate_credentials(
+            account=account,
+            new_credentials=dict(body.credentials),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return CredentialRotateResponse(
+        account_id=rotate_result.account_id,
+        vault_stored=rotate_result.vault_stored,
+        connectivity_ok=rotate_result.connectivity_ok,
+        warnings=rotate_result.warnings,
+    )
+
+
+# ── Scan history ──────────────────────────────────────────────────────────────
+
+@router.get(
+    "/{account_id}/scans",
+    response_model=ScanHistoryResponse,
+    summary="List scan history for an account",
+    description=(
+        "Returns a paginated list of past sync operations for the account, "
+        "newest first. Each entry includes resource counts, duration, and "
+        "any error details."
+    ),
+)
+async def list_scan_history(
+    account_id: str,
+    organization_id: str = Depends(require_org_id),
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+) -> ScanHistoryResponse:
+    """Get paginated scan history for an account."""
+    from sqlalchemy import select as sa_select, func
+    from app.models import ScanHistoryModel
+
+    # Verify account belongs to org
+    stmt = sa_select(CloudAccountModel).where(
+        CloudAccountModel.id == account_id,
+        CloudAccountModel.organization_id == organization_id,
+    )
+    result = await db.execute(stmt)
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    # Count
+    count_stmt = sa_select(func.count()).select_from(ScanHistoryModel).where(
+        ScanHistoryModel.account_id == account_id,
+        ScanHistoryModel.organization_id == organization_id,
+    )
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    # Fetch page
+    history_stmt = (
+        sa_select(ScanHistoryModel)
+        .where(
+            ScanHistoryModel.account_id == account_id,
+            ScanHistoryModel.organization_id == organization_id,
+        )
+        .order_by(ScanHistoryModel.started_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = (await db.execute(history_stmt)).scalars().all()
+
+    return ScanHistoryResponse(
+        account_id=account_id,
+        total=total,
+        scans=[
+            ScanHistoryEntry(
+                id=r.id,
+                account_id=r.account_id,
+                sync_type=r.sync_type,
+                status=r.status,
+                correlation_id=r.correlation_id,
+                discovered=r.discovered,
+                updated=r.updated,
+                deleted=r.deleted,
+                errors=r.errors,
+                duration_seconds=r.duration_seconds,
+                started_at=r.started_at,
+                finished_at=r.finished_at,
+                error_details=r.error_details or [],
+            )
+            for r in rows
+        ],
     )

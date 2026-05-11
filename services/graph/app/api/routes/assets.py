@@ -96,21 +96,31 @@ async def search_assets(
     # Try injected Elasticsearch client
     if es:
         try:
-            result = await es.full_text_search(
-                "assets",
-                search_term=q,
-                fields=["name", "resource_type"],
-                size=page_size,
-            )
-            # Filter by org_id (ES doesn't enforce tenant isolation automatically)
-            hits = [h for h in result["hits"] if h.get("organization_id") == org_id]
+            # Build a filtered query that enforces tenant isolation at the ES level
+            # (not post-filter in Python) for performance.
+            should_clauses = [
+                {"match": {"name": {"query": q, "fuzziness": "AUTO"}}},
+                {"match": {"resource_type": {"query": q, "fuzziness": "AUTO"}}},
+            ]
+            must_clauses = [
+                {"term": {"organization_id": org_id}},
+                {"bool": {"should": should_clauses, "minimum_should_match": 1}},
+            ]
             if provider:
-                hits = [h for h in hits if h.get("provider") == provider]
+                must_clauses.append({"term": {"provider": provider}})
             if region:
-                hits = [h for h in hits if h.get("region") == region]
+                must_clauses.append({"term": {"region": region}})
+
+            es_query = {"bool": {"must": must_clauses}}
+            result = await es.search(
+                "assets",
+                query=es_query,
+                size=page_size,
+                from_=(page - 1) * page_size,
+            )
             return {
-                "total": len(hits),
-                "hits": hits,
+                "total": result["total"],
+                "hits": result["hits"],
                 "page": page,
                 "page_size": page_size,
                 "source": "elasticsearch",
