@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield } from 'lucide-react';
-
-const ADMIN_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
+import { authAPI } from '@/lib/api/auth';
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
@@ -19,18 +18,7 @@ export default function AdminLoginPage() {
     setError(null);
 
     try {
-      const response = await fetch(`${ADMIN_API_BASE_URL}/admin/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Login failed');
-      }
-
-      const tokens = await response.json();
+      const tokens = await authAPI.adminLogin(email, password);
       localStorage.setItem('admin_access_token', tokens.access_token);
       localStorage.setItem('admin_refresh_token', tokens.refresh_token);
       router.push('/admin/dashboard');

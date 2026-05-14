@@ -79,6 +79,42 @@ async def get_finding_stats(
         raise HTTPException(status_code=502, detail=f"Alert service unavailable: {e}")
 
 
+@router.get("/metrics")
+async def get_finding_metrics(
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Pre-aggregated Redis metrics for dashboard (by severity, status, provider, MTTR)."""
+    t0 = time.monotonic()
+    alert = get_alert_proxy()
+    try:
+        result = await alert.get(
+            "/internal/findings/metrics",
+            params={"x_org_id": user.organization_id},
+            headers=user.auth_headers,
+        )
+        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Alert service unavailable: {e}")
+
+
+@router.get("/sla-violations")
+async def get_sla_violations(
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Get findings that have violated SLA targets (CRITICAL: 4h ack / 24h resolve)."""
+    t0 = time.monotonic()
+    alert = get_alert_proxy()
+    try:
+        result = await alert.get(
+            "/internal/findings/sla-violations",
+            params={"x_org_id": user.organization_id},
+            headers=user.auth_headers,
+        )
+        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Alert service unavailable: {e}")
+
+
 @router.post("/bulk")
 async def bulk_update_findings(
     data: BulkUpdateRequest,
@@ -95,6 +131,46 @@ async def bulk_update_findings(
             "/internal/findings/bulk",
             json=data.model_dump(),
             headers={**user.auth_headers, "x_org_id": user.organization_id},
+        )
+        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Alert service unavailable: {e}")
+
+
+class SubmitFindingRequest(BaseModel):
+    """Direct finding submission from CI/CD tools."""
+    rule_id: str
+    resource_id: str
+    resource_name: str | None = None
+    severity: str = "MEDIUM"
+    title: str
+    description: str | None = None
+    remediation: str | None = None
+    provider: str | None = None
+    account_id: str | None = None
+    region: str | None = None
+    resource_type: str | None = None
+    tags: dict | None = None
+    compliance_mapping: list | None = None
+
+
+@router.post("/submit", status_code=201)
+async def submit_finding(
+    data: SubmitFindingRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """
+    Direct REST submission for CI/CD CLI tools that cannot use Kafka.
+    Processes through the same deduplication + enrichment + notification pipeline.
+    """
+    t0 = time.monotonic()
+    alert = get_alert_proxy()
+    try:
+        result = await alert.post(
+            "/internal/findings/submit",
+            json=data.model_dump(exclude_none=True),
+            params={"x_org_id": user.organization_id},
+            headers=user.auth_headers,
         )
         return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
     except Exception as e:
@@ -264,6 +340,28 @@ async def accept_risk(
             f"/internal/findings/{finding_id}/accept-risk",
             json={"justification": data.justification},
             headers=user.auth_headers,
+        )
+        return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Alert service unavailable: {e}")
+
+
+@router.post("/{finding_id}/acknowledge")
+async def acknowledge_finding(
+    finding_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """
+    Acknowledge a finding for SLA tracking.
+    Records the time of acknowledgment — used to compute SLA compliance.
+    """
+    t0 = time.monotonic()
+    alert = get_alert_proxy()
+    try:
+        result = await alert.post(
+            f"/internal/findings/{finding_id}/acknowledge",
+            json={},
+            headers={**user.auth_headers, "X-User-ID": user.user_id},
         )
         return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
     except Exception as e:

@@ -7,3 +7,8 @@ httpx
 pydantic
 pydantic-settings
 prometheus-client
+python-hcl2>=4.3.0
+pyyaml
+deepdiff>=6.7.0
+numpy>=1.26.0
+hypothesis>=6.100.0

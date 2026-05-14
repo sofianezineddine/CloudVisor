@@ -6,7 +6,7 @@ import {
   Shield, ChevronDown, ChevronUp, AlertTriangle,
 } from 'lucide-react';
 import {
-  useCSPMCompliance, useCSPMFramework, useCSPMScans,
+  useCSPMCompliance, useCSPMFramework, useCSPMScans, useCSPMFindings,
 } from '@/hooks/use-cspm';
 
 const COMPLIANCE_FRAMEWORKS = ['CIS-AWS', 'SOC2', 'PCI-DSS', 'HIPAA', 'NIST-800-53', 'ISO27001', 'GDPR'];
@@ -83,13 +83,38 @@ export function ComplianceTab() {
   const { data: scansData, isLoading: scansLoading } = useCSPMScans();
   const { data: complianceData, isLoading: listLoading, error: listError } = useCSPMCompliance();
   const { data: frameworkData, isLoading: fwLoading, error: fwError } = useCSPMFramework(activeFramework);
+  // Fetch real findings to compute compliance when policy service returns mock data
+  const { data: findingsData } = useCSPMFindings({ status: 'open', page_size: 500 });
 
   const scans = Array.isArray(scansData) ? scansData : [];
   const hasScans = scans.length > 0;
 
   const frameworks = complianceData?.frameworks ?? [];
   const summary = frameworks.find(f => f.framework === activeFramework);
-  const controls = frameworkData?.controls ?? summary?.controls ?? [];
+  const rawControls = frameworkData?.controls ?? summary?.controls ?? [];
+
+  // Detect if the policy service is returning mock/placeholder data.
+  // A sign of mock data: all controls pass AND there are open findings.
+  const openFindings = findingsData?.items ?? [];
+  const allControlsPass = rawControls.length > 0 && rawControls.every(c => c.status === 'pass');
+  const hasMockData = allControlsPass && openFindings.length > 0;
+
+  // When mock data is detected, recompute control status from real findings.
+  const controls = React.useMemo(() => {
+    if (!hasMockData) return rawControls;
+    // Map open finding rule_ids to failing controls
+    const failingRuleIds = new Set(openFindings.map(f => f.rule_id));
+    return rawControls.map(ctrl => {
+      const ctrlId = (ctrl as any).id ?? ctrl.control_id ?? ctrl.rule_id ?? '';
+      const isFailing = failingRuleIds.has(ctrlId);
+      const findingCount = openFindings.filter(f => f.rule_id === ctrlId).length;
+      return {
+        ...ctrl,
+        status: isFailing ? 'fail' as const : 'pass' as const,
+        finding_count: findingCount,
+      };
+    });
+  }, [rawControls, hasMockData, openFindings]);
 
   // Group controls by domain
   const domainGroups = React.useMemo(() => {
@@ -169,18 +194,29 @@ export function ComplianceTab() {
         <Skeleton className="h-16 mb-4" />
       ) : (summary || frameworkData) ? (() => {
         const d = frameworkData ?? summary!;
+        // Recompute stats from real controls if mock data was detected
+        const effectivePassing = hasMockData
+          ? controls.filter(c => c.status === 'pass').length
+          : d.passing;
+        const effectiveFailing = hasMockData
+          ? controls.filter(c => c.status === 'fail').length
+          : d.failing;
+        const effectiveTotal = controls.length || d.total_controls;
+        const effectivePct = effectiveTotal > 0
+          ? Math.round((effectivePassing / effectiveTotal) * 100)
+          : d.percentage;
         return (
           <div className="mb-4 flex items-center gap-6 p-4 rounded-[var(--radius-container)] border border-[var(--border-default)] bg-[var(--bg-surface)]">
             <div>
-              <div className="font-mono text-2xl font-bold" style={{ color: postureColor(d.percentage) }}>{d.percentage}%</div>
+              <div className="font-mono text-2xl font-bold" style={{ color: postureColor(effectivePct) }}>{effectivePct}%</div>
               <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{d.display_name || d.framework}</div>
             </div>
             <div className="flex-1 h-2 overflow-hidden rounded-full" style={{ backgroundColor: 'var(--border-default)' }}>
-              <div className="h-full rounded-full" style={{ width: `${d.percentage}%`, backgroundColor: postureColor(d.percentage) }} />
+              <div className="h-full rounded-full" style={{ width: `${effectivePct}%`, backgroundColor: postureColor(effectivePct) }} />
             </div>
             <div className="flex gap-4 text-sm">
-              <span style={{ color: 'var(--success)' }}>{d.passing} passing</span>
-              <span style={{ color: 'var(--critical)' }}>{d.failing} failing</span>
+              <span style={{ color: 'var(--success)' }}>{effectivePassing} passing</span>
+              <span style={{ color: 'var(--critical)' }}>{effectiveFailing} failing</span>
               <span style={{ color: 'var(--text-tertiary)' }}>{d.not_applicable} N/A</span>
             </div>
           </div>

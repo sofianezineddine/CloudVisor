@@ -58,7 +58,8 @@ async def list_channels(
     try:
         result = await alert.get(
             "/internal/notifications/channels",
-            params={"x_org_id": user.organization_id},
+            # Alert service expects 'organization_id' as the query param name
+            params={"organization_id": user.organization_id},
             headers=user.auth_headers,
         )
         channels = result.get("channels", result if isinstance(result, list) else [])
@@ -82,7 +83,9 @@ async def add_channel(
     try:
         result = await alert.post(
             "/internal/notifications/channels",
-            json={**data.model_dump(), "x_org_id": user.organization_id},
+            json=data.model_dump(),
+            # Alert service expects organization_id as query param
+            params={"organization_id": user.organization_id},
             headers=user.auth_headers,
         )
         return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
@@ -137,7 +140,8 @@ async def test_channel(
     try:
         result = await alert.post(
             "/internal/notifications/test",
-            json={**data.model_dump(exclude_none=True), "x_org_id": user.organization_id},
+            json=data.model_dump(exclude_none=True),
+            params={"organization_id": user.organization_id},
             headers=user.auth_headers,
         )
         return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))

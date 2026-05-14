@@ -1,10 +1,18 @@
-"""TOTP-based MFA service."""
+"""TOTP-based MFA service.
 
-import pyotp
-import qrcode
+Spec §3.3:
+- TOTP-based MFA (RFC 6238) compatible with Google Authenticator, Authy, 1Password
+- MFA enrollment: generate QR code + backup codes (10 single-use codes, bcrypt hashed)
+- Backup codes are bcrypt-hashed (not SHA-256) per spec
+"""
+
+import base64
 import secrets
 from io import BytesIO
-from typing import Any
+
+import bcrypt
+import pyotp
+import qrcode
 
 
 def generate_totp_secret() -> str:
@@ -28,7 +36,7 @@ def verify_totp(secret: str, code: str) -> bool:
 
 
 def generate_qr_code(uri: str) -> bytes:
-    """Generate QR code image for TOTP URI."""
+    """Generate QR code image for TOTP URI. Returns raw PNG bytes."""
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
     qr.add_data(uri)
     qr.make(fit=True)
@@ -39,14 +47,36 @@ def generate_qr_code(uri: str) -> bytes:
     return buffer.getvalue()
 
 
+def generate_qr_code_base64(uri: str) -> str:
+    """Generate QR code as a base64-encoded data URI (safe for embedding in JSON/HTML)."""
+    png_bytes = generate_qr_code(uri)
+    return f"data:image/png;base64,{base64.b64encode(png_bytes).decode('utf-8')}"
+
+
 def generate_backup_codes(count: int = 10) -> list[str]:
-    """Generate single-use backup codes."""
-    return [secrets.token_hex(4).upper() for _ in range(count)]
+    """Generate single-use backup codes with sufficient entropy.
+
+    Each code is 16 URL-safe random bytes (128 bits of entropy).
+    Spec §3.3: 10 single-use codes, bcrypt hashed.
+    """
+    return [secrets.token_urlsafe(16) for _ in range(count)]
 
 
-def verify_backup_code(code: str, hashed_codes: list[str]) -> bool:
-    """Verify a backup code against hashed codes."""
-    import hashlib
+def hash_backup_code(code: str) -> str:
+    """Hash a backup code using bcrypt (spec §3.3 requirement)."""
+    return bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
-    code_hash = hashlib.sha256(code.encode()).hexdigest()
-    return code_hash in hashed_codes
+
+def verify_backup_code(code: str, hashed_codes: list[str]) -> tuple[bool, str | None]:
+    """Verify a backup code against bcrypt-hashed codes.
+
+    Returns (matched, matched_hash) so the caller can remove the used code.
+    Backup codes are single-use — the matched hash must be deleted after use.
+    """
+    for hashed in hashed_codes:
+        try:
+            if bcrypt.checkpw(code.encode("utf-8"), hashed.encode("utf-8")):
+                return True, hashed
+        except Exception:
+            continue
+    return False, None

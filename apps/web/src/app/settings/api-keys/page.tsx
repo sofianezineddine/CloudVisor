@@ -4,39 +4,16 @@ import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Key, Plus, Loader2, Copy, Trash2, Eye, EyeOff, AlertTriangle, CheckCircle2 } from 'lucide-react';
-
-const AUTH_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
-
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('access_token');
-}
-
-async function authFetch(path: string, options: RequestInit = {}) {
-  const token = getToken();
-  const res = await fetch(`${AUTH_BASE_URL}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...options,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  if (res.status === 204) return null;
-  return res.json();
-}
+import { authAPI } from '@/lib/api/auth';
 
 interface ApiKey {
   id: string;
   name: string;
-  key_prefix: string;
   scopes: string[];
   last_used_at: string | null;
   created_at: string;
   expires_at: string | null;
+  is_active: boolean;
 }
 
 export default function ApiKeysPage() {
@@ -53,17 +30,14 @@ export default function ApiKeysPage() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['api-keys'],
-    queryFn: () => authFetch('/auth/api-keys'),
-    select: (d) => (d?.keys ?? []) as ApiKey[],
+    queryFn: () => authAPI.getApiKeys(),
+    select: (d: any) => (d?.keys ?? []) as ApiKey[],
   });
 
   const createMutation = useMutation({
     mutationFn: (name: string) =>
-      authFetch('/auth/api-keys', {
-        method: 'POST',
-        body: JSON.stringify({ name, scopes: ['findings:read', 'assets:read'] }),
-      }),
-    onSuccess: (result) => {
+      authAPI.createApiKey({ name, scopes: ['findings:read', 'assets:read'] }),
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['api-keys'] });
       setNewKeyValue(result?.key ?? null);
       setShowCreate(false);
@@ -73,9 +47,8 @@ export default function ApiKeysPage() {
   });
 
   const rotateMutation = useMutation({
-    mutationFn: (keyId: string) =>
-      authFetch(`/auth/api-keys/${keyId}/rotate`, { method: 'POST' }),
-    onSuccess: (result) => {
+    mutationFn: (keyId: string) => authAPI.rotateApiKey(keyId),
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['api-keys'] });
       setNewKeyValue(result?.key ?? null);
     },
@@ -83,8 +56,7 @@ export default function ApiKeysPage() {
   });
 
   const revokeMutation = useMutation({
-    mutationFn: (keyId: string) =>
-      authFetch(`/auth/api-keys/${keyId}`, { method: 'DELETE' }),
+    mutationFn: (keyId: string) => authAPI.revokeApiKey(keyId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
     onError: (e: Error) => setError(e.message),
   });
@@ -223,8 +195,8 @@ export default function ApiKeysPage() {
                     {showKeys[apiKey.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                   <Button variant="outline" size="sm"
-                    onClick={() => copyToClipboard(apiKey.key_prefix + '...')}
-                    title="Copy key prefix">
+                    onClick={() => copyToClipboard(apiKey.id)}
+                    title="Copy key ID">
                     <Copy className="h-4 w-4" />
                   </Button>
                   <Button variant="outline" size="sm"
@@ -246,9 +218,12 @@ export default function ApiKeysPage() {
                 <div className="mt-1 flex items-center gap-2">
                   <code className="flex-1 rounded px-3 py-2 text-sm font-mono"
                     style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>
-                    {showKeys[apiKey.id] ? apiKey.key_prefix + '...' : '•'.repeat(32)}
+                    {showKeys[apiKey.id] ? `cv_live_${'•'.repeat(8)}...` : '•'.repeat(32)}
                   </code>
                 </div>
+                <p className="mt-1 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  Key value is only shown once at creation. Rotate to get a new key.
+                </p>
               </div>
 
               {apiKey.scopes?.length > 0 && (

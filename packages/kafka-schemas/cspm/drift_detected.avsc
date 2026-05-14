@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "DriftDetected",
+  "namespace": "com.cloudvisor.cspm",
+  "doc": "Emitted when configuration drift is detected on a resource",
+  "fields": [
+    {"name": "organization_id", "type": "string"},
+    {"name": "resource_id", "type": "string"},
+    {"name": "resource_type", "type": "string"},
+    {"name": "field_name", "type": "string"},
+    {"name": "baseline_value", "type": ["null", "string"]},
+    {"name": "current_value", "type": ["null", "string"]},
+    {"name": "is_security_relevant", "type": "boolean"},
+    {"name": "severity", "type": "string"},
+    {"name": "timestamp", "type": "string"}
+  ]
+}

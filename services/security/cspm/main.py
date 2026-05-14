@@ -27,8 +27,18 @@ app.add_middleware(
 )
 
 from app.routes import router  # noqa: E402 — absolute import after PYTHONPATH=/app
+from app.api.iam_routes import router as iam_router  # noqa: E402
+from app.api.attack_path_routes import router as attack_path_router  # noqa: E402
+from app.api.iac_routes import router as iac_router  # noqa: E402
+from app.api.drift_routes import router as drift_router  # noqa: E402
+from app.api.policy_routes import router as policy_router  # noqa: E402
 
 app.include_router(router)
+app.include_router(iam_router)
+app.include_router(attack_path_router)
+app.include_router(iac_router)
+app.include_router(drift_router)
+app.include_router(policy_router)
 
 
 # ── Internal scan trigger ─────────────────────────────────────────────────────
@@ -112,6 +122,32 @@ async def startup():
         logger.info("CSPM resource event consumer started")
     except Exception as e:
         logger.warning(f"Kafka consumer failed to start (degraded mode): {e}")
+
+    # 3b. Start Drift Detection consumer
+    try:
+        from app.consumers.drift_consumer import DriftEventConsumer
+        drift_consumer = DriftEventConsumer(
+            bootstrap_servers=kafka_servers,
+            kafka_producer=kafka_producer,
+        )
+        await drift_consumer.start()
+        asyncio.create_task(drift_consumer.run())
+        logger.info("CSPM drift event consumer started")
+    except Exception as e:
+        logger.warning(f"Drift consumer failed to start (degraded mode): {e}")
+
+    # 3c. Start Correlation Engine consumer
+    try:
+        from app.consumers.correlation_consumer import CorrelationEventConsumer
+        correlation_consumer = CorrelationEventConsumer(
+            bootstrap_servers=kafka_servers,
+            kafka_producer=kafka_producer,
+        )
+        await correlation_consumer.start()
+        asyncio.create_task(correlation_consumer.run())
+        logger.info("CSPM correlation event consumer started")
+    except Exception as e:
+        logger.warning(f"Correlation consumer failed to start (degraded mode): {e}")
 
     # 4. Run initial scan for all organizations that have resources
     asyncio.create_task(_run_initial_scan())

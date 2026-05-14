@@ -6,10 +6,11 @@ from typing import Any, Optional, List
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .core.auth import require_org_id
 from .db_helper import get_db
 from .models_db import (
     CSPMComplianceResultModel,
@@ -21,11 +22,15 @@ from .services.risk_scorer import compute_risk_score, get_score_color
 
 logger = logging.getLogger(__name__)
 
+_VALID_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
+_VALID_STATUSES = {"open", "resolved", "suppressed", "accepted_risk"}
+
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
 # Pydantic response schemas
 # ---------------------------------------------------------------------------
+
 
 
 class FindingOut(BaseModel):
@@ -65,6 +70,13 @@ class FindingListOut(BaseModel):
 
 class FindingStatusUpdate(BaseModel):
     status: str  # resolved, suppressed, accepted_risk, open
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        if v not in _VALID_STATUSES:
+            raise ValueError(f"status must be one of {sorted(_VALID_STATUSES)}")
+        return v
 
 
 class ResourcePostureOut(BaseModel):
@@ -109,16 +121,18 @@ class ScanOut(BaseModel):
 
 
 class ScanRequest(BaseModel):
-    organization_id: str
+    organization_id: Optional[str] = None  # sent by API gateway; also resolved from org_id param
     account_id: Optional[str] = None
     scan_type: str = "on_demand"
 
 
 # ---------------------------------------------------------------------------
-# Helper: extract org_id from request headers (X-Org-ID or default)
+# Helper: extract org_id from validated JWT (never from query params)
 # ---------------------------------------------------------------------------
 
 def _org_id_from_query(org_id: Optional[str] = Query(default=None, alias="org_id")) -> str:
+    # NOTE: This helper is kept only for the compliance proxy endpoints that
+    # forward to the Policy service. All other endpoints use require_org_id.
     return org_id or "default"
 
 
@@ -129,7 +143,7 @@ def _org_id_from_query(org_id: Optional[str] = Query(default=None, alias="org_id
 
 @router.get("/api/v1/cspm/findings", response_model=FindingListOut)
 async def list_findings(
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
     severity: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None),
     provider: Optional[str] = Query(default=None),
@@ -140,6 +154,11 @@ async def list_findings(
     page_size: int = Query(default=20, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ) -> FindingListOut:
+    # Validate enum inputs
+    if severity and severity.upper() not in _VALID_SEVERITIES:
+        raise HTTPException(status_code=422, detail=f"severity must be one of {sorted(_VALID_SEVERITIES)}")
+    if status and status.lower() not in _VALID_STATUSES:
+        raise HTTPException(status_code=422, detail=f"status must be one of {sorted(_VALID_STATUSES)}")
     try:
         q = select(CSPMFindingModel).where(CSPMFindingModel.organization_id == org_id)
         if severity:
@@ -197,18 +216,16 @@ async def get_finding(
 async def update_finding_status(
     finding_id: str,
     payload: FindingStatusUpdate,
+    org_id: str = Depends(require_org_id),
     db: AsyncSession = Depends(get_db),
 ) -> FindingOut:
-    valid_statuses = {"open", "resolved", "suppressed", "accepted_risk"}
-    if payload.status not in valid_statuses:
-        raise HTTPException(
-            status_code=422,
-            detail=f"status must be one of {sorted(valid_statuses)}",
-        )
     try:
         row = (
             await db.execute(
-                select(CSPMFindingModel).where(CSPMFindingModel.id == finding_id)
+                select(CSPMFindingModel).where(
+                    CSPMFindingModel.id == finding_id,
+                    CSPMFindingModel.organization_id == org_id,  # enforce ownership
+                )
             )
         ).scalar_one_or_none()
         if not row:
@@ -264,7 +281,7 @@ async def get_finding_remediation(
 
 @router.get("/api/v1/cspm/posture")
 async def get_posture(
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
     account_id: Optional[str] = Query(default=None),
     provider: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
@@ -374,7 +391,7 @@ async def get_posture(
 
 @router.get("/api/v1/cspm/posture/accounts")
 async def get_account_posture(
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Per-account posture cards."""
@@ -425,7 +442,7 @@ async def get_account_posture(
 
 @router.get("/api/v1/cspm/resources", response_model=list[ResourcePostureOut])
 async def list_resources(
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
     provider: Optional[str] = Query(default=None),
     account_id: Optional[str] = Query(default=None),
     region: Optional[str] = Query(default=None),
@@ -472,7 +489,7 @@ POLICY_SERVICE_URL = os.environ.get("POLICY_SERVICE_URL", "http://localhost:8003
 
 @router.get("/api/v1/cspm/compliance")
 async def get_compliance(
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
 ) -> Any:
     """Get compliance posture for all frameworks — proxied from Policy service."""
     try:
@@ -493,7 +510,7 @@ async def get_compliance(
 @router.get("/api/v1/cspm/compliance/{framework}")
 async def get_compliance_framework(
     framework: str,
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
 ) -> Any:
     """Get compliance posture for a specific framework — proxied from Policy service."""
     try:
@@ -521,7 +538,7 @@ async def get_compliance_framework(
 
 @router.get("/api/v1/cspm/scans", response_model=list[ScanOut])
 async def list_scans(
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
     account_id: Optional[str] = Query(default=None),
     account_ids: Optional[str] = Query(default=None),  # comma-separated list
     page: int = Query(default=1, ge=1),
@@ -550,13 +567,17 @@ async def list_scans(
 @router.post("/api/v1/cspm/scans", response_model=ScanOut, status_code=201)
 async def trigger_scan(
     payload: ScanRequest,
+    org_id: str = Depends(require_org_id),
     db: AsyncSession = Depends(get_db),
 ) -> ScanOut:
     import asyncio
+    # org_id from query param (set by API gateway) takes precedence;
+    # fall back to body field for backward compatibility
+    effective_org_id = org_id if org_id != "default" else (payload.organization_id or org_id)
     try:
         scan = CSPMScanModel(
             id=str(uuid.uuid4()),
-            organization_id=payload.organization_id,
+            organization_id=effective_org_id,
             account_id=payload.account_id,
             scan_type=payload.scan_type,
             status="running",
@@ -570,12 +591,10 @@ async def trigger_scan(
         from .services.scan_executor import run_scan
         from .db_helper import AsyncSessionLocal
         scan_id = scan.id
-        org_id = payload.organization_id
-        acc_id = payload.account_id
 
         async def _run():
             async with AsyncSessionLocal() as scan_db:
-                await run_scan(scan_db, scan_id, org_id, acc_id)
+                await run_scan(scan_db, scan_id, effective_org_id, payload.account_id)
 
         asyncio.create_task(_run())
 
@@ -607,13 +626,13 @@ async def get_scan(
 
 
 # ---------------------------------------------------------------------------
-# Stats endpoint
+# Drift findings endpoint
 # ---------------------------------------------------------------------------
 
 
 @router.get("/api/v1/cspm/drift")
 async def get_drift_findings(
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -646,13 +665,16 @@ async def get_drift_findings(
 @router.get("/api/v1/cspm/scans/{scan_id}/resources")
 async def get_scan_resources(
     scan_id: str,
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Return resources evaluated in a specific scan."""
     try:
         scan = (await db.execute(
-            select(CSPMScanModel).where(CSPMScanModel.id == scan_id)
+            select(CSPMScanModel).where(
+                CSPMScanModel.id == scan_id,
+                CSPMScanModel.organization_id == org_id,  # enforce ownership
+            )
         )).scalar_one_or_none()
         if not scan:
             raise HTTPException(status_code=404, detail="Scan not found")
@@ -690,7 +712,7 @@ async def get_scan_resources(
 # ---------------------------------------------------------------------------
 
 class ReportRequest(BaseModel):
-    report_type: str  # compliance, posture, findings_export
+    report_type: str = "findings_export"  # compliance, posture, findings_export
     framework: Optional[str] = None
     format: str = "csv"  # csv, pdf
     date_from: Optional[datetime] = None
@@ -705,10 +727,13 @@ class ReportOut(BaseModel):
     framework: Optional[str] = None
     format: str
     status: str
-    created_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    date_from: Optional[datetime] = None
+    date_to: Optional[datetime] = None
+    account_ids: list[str] = []
     file_size_bytes: Optional[int] = None
     error_message: Optional[str] = None
+    created_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -716,7 +741,7 @@ class ReportOut(BaseModel):
 
 @router.get("/api/v1/cspm/reports", response_model=list[ReportOut])
 async def list_reports(
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
     db: AsyncSession = Depends(get_db),
 ) -> list[ReportOut]:
     try:
@@ -736,7 +761,7 @@ async def list_reports(
 @router.post("/api/v1/cspm/reports", response_model=ReportOut, status_code=201)
 async def create_report(
     payload: ReportRequest,
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
     db: AsyncSession = Depends(get_db),
 ) -> ReportOut:
     import asyncio
@@ -825,7 +850,7 @@ async def download_report(
 
 @router.get("/api/v1/cspm/stats")
 async def get_stats(
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
     account_id: Optional[str] = Query(default=None),
     provider: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
@@ -930,7 +955,7 @@ async def get_stats(
 
 @router.get("/api/v1/cspm/posture/trend")
 async def get_posture_trend(
-    org_id: str = Depends(_org_id_from_query),
+    org_id: str = Depends(require_org_id),
     days: int = Query(default=30, ge=7, le=90),
     account_id: Optional[str] = Query(default=None),
     provider: Optional[str] = Query(default=None),
@@ -1025,331 +1050,3 @@ async def get_posture_trend(
     except Exception as e:
         logger.error(f"get_posture_trend error: {e}")
         return []
-
-
-# ---------------------------------------------------------------------------
-# Drift detection endpoint
-# ---------------------------------------------------------------------------
-
-
-@router.get("/api/v1/cspm/findings/drift")
-async def get_drift_findings(
-    org_id: str = Depends(_org_id_from_query),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-) -> dict[str, Any]:
-    """Return findings that have regressed (regression_count > 0)."""
-    try:
-        q = (
-            select(CSPMFindingModel)
-            .where(
-                CSPMFindingModel.organization_id == org_id,
-                CSPMFindingModel.regression_count > 0,
-                CSPMFindingModel.status == "open",
-            )
-            .order_by(CSPMFindingModel.regression_count.desc())
-        )
-        count_q = select(func.count()).select_from(q.subquery())
-        total = (await db.execute(count_q)).scalar() or 0
-        rows = (await db.execute(q.offset((page - 1) * page_size).limit(page_size))).scalars().all()
-        return {
-            "items": [FindingOut.model_validate(r) for r in rows],
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-        }
-    except Exception as e:
-        logger.error(f"get_drift_findings error: {e}")
-        return {"items": [], "total": 0, "page": page, "page_size": page_size}
-
-
-# ---------------------------------------------------------------------------
-# Scan resources detail endpoint
-# ---------------------------------------------------------------------------
-
-
-@router.get("/api/v1/cspm/scans/{scan_id}/resources")
-async def get_scan_resources(
-    scan_id: str,
-    org_id: str = Depends(_org_id_from_query),
-    db: AsyncSession = Depends(get_db),
-) -> list[dict[str, Any]]:
-    """Return resources evaluated in a specific scan."""
-    try:
-        # Get the scan to find org + account scope
-        scan = (await db.execute(
-            select(CSPMScanModel).where(CSPMScanModel.id == scan_id)
-        )).scalar_one_or_none()
-        if not scan:
-            raise HTTPException(status_code=404, detail="Scan not found")
-
-        q = select(CSPMResourcePostureModel).where(
-            CSPMResourcePostureModel.organization_id == scan.organization_id
-        )
-        if scan.account_id:
-            q = q.where(CSPMResourcePostureModel.account_id == scan.account_id)
-
-        rows = (await db.execute(q.limit(200))).scalars().all()
-        return [
-            {
-                "resource_id": r.resource_id,
-                "resource_name": r.resource_name,
-                "resource_type": r.resource_type,
-                "provider": r.provider,
-                "account_id": r.account_id,
-                "region": r.region,
-                "risk_score": r.risk_score,
-                "critical_count": r.critical_count,
-                "high_count": r.high_count,
-            }
-            for r in rows
-        ]
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"get_scan_resources error: {e}")
-        return []
-
-
-# ---------------------------------------------------------------------------
-# Reports endpoints
-# ---------------------------------------------------------------------------
-
-
-class ReportRequest(BaseModel):
-    report_type: str = "findings_export"   # compliance, posture, findings_export
-    framework: Optional[str] = None
-    format: str = "csv"                    # csv, pdf
-    date_from: Optional[datetime] = None
-    date_to: Optional[datetime] = None
-    account_ids: list[str] = []
-
-
-class ReportOut(BaseModel):
-    id: str
-    organization_id: str
-    report_type: str
-    framework: Optional[str] = None
-    format: str
-    status: str
-    date_from: Optional[datetime] = None
-    date_to: Optional[datetime] = None
-    account_ids: list[str] = []
-    file_size_bytes: Optional[int] = None
-    error_message: Optional[str] = None
-    created_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-
-@router.get("/api/v1/cspm/reports", response_model=list[ReportOut])
-async def list_reports(
-    org_id: str = Depends(_org_id_from_query),
-    db: AsyncSession = Depends(get_db),
-) -> list[ReportOut]:
-    from .models_db import CSPMReportModel
-    try:
-        rows = (await db.execute(
-            select(CSPMReportModel)
-            .where(CSPMReportModel.organization_id == org_id)
-            .order_by(CSPMReportModel.created_at.desc())
-            .limit(50)
-        )).scalars().all()
-        return [ReportOut.model_validate(r) for r in rows]
-    except Exception as e:
-        logger.error(f"list_reports error: {e}")
-        return []
-
-
-@router.post("/api/v1/cspm/reports", response_model=ReportOut, status_code=201)
-async def create_report(
-    payload: ReportRequest,
-    org_id: str = Depends(_org_id_from_query),
-    db: AsyncSession = Depends(get_db),
-) -> ReportOut:
-    import asyncio
-    from .models_db import CSPMReportModel
-    try:
-        report = CSPMReportModel(
-            id=str(uuid.uuid4()),
-            organization_id=org_id,
-            report_type=payload.report_type,
-            framework=payload.framework,
-            format=payload.format,
-            status="pending",
-            date_from=payload.date_from,
-            date_to=payload.date_to,
-            account_ids=payload.account_ids,
-            created_at=datetime.utcnow(),
-        )
-        db.add(report)
-        await db.commit()
-        await db.refresh(report)
-
-        # Generate in background
-        from .db_helper import AsyncSessionLocal
-        report_id = report.id
-
-        async def _generate():
-            async with AsyncSessionLocal() as gen_db:
-                await _generate_report(gen_db, report_id, org_id, payload)
-
-        asyncio.create_task(_generate())
-        return ReportOut.model_validate(report)
-    except Exception as e:
-        logger.error(f"create_report error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create report")
-
-
-@router.get("/api/v1/cspm/reports/{report_id}", response_model=ReportOut)
-async def get_report(
-    report_id: str,
-    db: AsyncSession = Depends(get_db),
-) -> ReportOut:
-    from .models_db import CSPMReportModel
-    row = (await db.execute(
-        select(CSPMReportModel).where(CSPMReportModel.id == report_id)
-    )).scalar_one_or_none()
-    if not row:
-        raise HTTPException(status_code=404, detail="Report not found")
-    return ReportOut.model_validate(row)
-
-
-@router.get("/api/v1/cspm/reports/{report_id}/download")
-async def download_report(
-    report_id: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """Download a generated report as CSV."""
-    from fastapi.responses import StreamingResponse
-    from .models_db import CSPMReportModel
-    import io
-
-    row = (await db.execute(
-        select(CSPMReportModel).where(CSPMReportModel.id == report_id)
-    )).scalar_one_or_none()
-    if not row:
-        raise HTTPException(status_code=404, detail="Report not found")
-    if row.status != "ready":
-        raise HTTPException(status_code=400, detail=f"Report is not ready (status: {row.status})")
-
-    # Return stored CSV content
-    content = row.file_path or ""
-    return StreamingResponse(
-        io.StringIO(content),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="report-{report_id}.csv"'},
-    )
-
-
-async def _generate_report(
-    db: AsyncSession,
-    report_id: str,
-    org_id: str,
-    payload: "ReportRequest",
-) -> None:
-    """Generate CSV report content and store in DB."""
-    import csv
-    import io
-    from .models_db import CSPMReportModel
-
-    try:
-        # Mark as generating
-        report = (await db.execute(
-            select(CSPMReportModel).where(CSPMReportModel.id == report_id)
-        )).scalar_one_or_none()
-        if not report:
-            return
-        report.status = "generating"
-        await db.commit()
-
-        output = io.StringIO()
-
-        if payload.report_type == "findings_export":
-            q = select(CSPMFindingModel).where(CSPMFindingModel.organization_id == org_id)
-            if payload.date_from:
-                q = q.where(CSPMFindingModel.created_at >= payload.date_from)
-            if payload.date_to:
-                q = q.where(CSPMFindingModel.created_at <= payload.date_to)
-            if payload.account_ids:
-                q = q.where(CSPMFindingModel.account_id.in_(payload.account_ids))
-
-            findings = (await db.execute(q)).scalars().all()
-            writer = csv.writer(output)
-            writer.writerow([
-                "ID", "Rule ID", "Title", "Severity", "Status",
-                "Resource Name", "Resource Type", "Provider", "Account ID",
-                "Region", "First Seen", "Last Seen", "Resolved At",
-            ])
-            for f in findings:
-                writer.writerow([
-                    f.id, f.rule_id, f.title, f.severity, f.status,
-                    f.resource_name, f.resource_type, f.provider, f.account_id,
-                    f.region,
-                    f.first_seen_at.isoformat() if f.first_seen_at else "",
-                    f.last_seen_at.isoformat() if f.last_seen_at else "",
-                    f.resolved_at.isoformat() if f.resolved_at else "",
-                ])
-
-        elif payload.report_type == "posture":
-            resources = (await db.execute(
-                select(CSPMResourcePostureModel).where(
-                    CSPMResourcePostureModel.organization_id == org_id
-                )
-            )).scalars().all()
-            writer = csv.writer(output)
-            writer.writerow([
-                "Resource ID", "Resource Name", "Type", "Provider",
-                "Account ID", "Region", "Environment", "Risk Score",
-                "Critical", "High", "Medium", "Low", "Last Scanned",
-            ])
-            for r in resources:
-                writer.writerow([
-                    r.resource_id, r.resource_name, r.resource_type, r.provider,
-                    r.account_id, r.region, r.environment, r.risk_score,
-                    r.critical_count, r.high_count, r.medium_count, r.low_count,
-                    r.last_scanned_at.isoformat() if r.last_scanned_at else "",
-                ])
-
-        elif payload.report_type == "compliance":
-            compliance_rows = (await db.execute(
-                select(CSPMComplianceResultModel).where(
-                    CSPMComplianceResultModel.organization_id == org_id,
-                    CSPMComplianceResultModel.framework == (payload.framework or "CIS-AWS"),
-                )
-            )).scalars().all()
-            writer = csv.writer(output)
-            writer.writerow([
-                "Framework", "Control ID", "Status", "Finding Count", "Last Evaluated",
-            ])
-            for c in compliance_rows:
-                writer.writerow([
-                    c.framework, c.control_id, c.status, c.finding_count,
-                    c.last_evaluated_at.isoformat() if c.last_evaluated_at else "",
-                ])
-
-        csv_content = output.getvalue()
-
-        # Store in report record
-        report.status = "ready"
-        report.file_path = csv_content
-        report.file_size_bytes = len(csv_content.encode("utf-8"))
-        report.completed_at = datetime.utcnow()
-        await db.commit()
-        logger.info(f"Report {report_id} generated successfully")
-
-    except Exception as e:
-        logger.error(f"Report generation failed: {e}", exc_info=True)
-        try:
-            report = (await db.execute(
-                select(CSPMReportModel).where(CSPMReportModel.id == report_id)
-            )).scalar_one_or_none()
-            if report:
-                report.status = "failed"
-                report.error_message = str(e)[:500]
-                await db.commit()
-        except Exception:
-            pass

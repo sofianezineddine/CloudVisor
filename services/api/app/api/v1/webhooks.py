@@ -80,7 +80,12 @@ async def list_webhooks(
     try:
         result = await alert.get(
             "/internal/webhooks",
-            params=params,
+            params={
+                "organization_id": user.organization_id,
+                "limit": limit,
+                "offset": offset,
+                **filters,
+            },
             headers=user.auth_headers,
         )
         webhooks = result.get("webhooks", result if isinstance(result, list) else [])
@@ -112,11 +117,8 @@ async def create_webhook(
     try:
         result = await alert.post(
             "/internal/webhooks",
-            json={
-                **data.model_dump(exclude_none=True),
-                "org_id": user.organization_id,
-                "created_by": user.user_id,
-            },
+            json=data.model_dump(exclude_none=True),
+            params={"organization_id": user.organization_id},
             headers=user.auth_headers,
         )
         return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
@@ -134,6 +136,7 @@ async def delete_webhook(
     try:
         await alert.delete(
             f"/internal/webhooks/{webhook_id}",
+            params={"organization_id": user.organization_id},
             headers=user.auth_headers,
         )
     except Exception as e:

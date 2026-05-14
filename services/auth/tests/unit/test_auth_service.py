@@ -45,7 +45,7 @@ class TestPasswordValidation:
     def test_hash_and_verify(self):
         svc = self._make_service()
         password = "SecurePass1!"
-        hashed = svc._hash_password(password)
+        hashed = svc._hash_password_sync(password)
         assert hashed != password
         assert hashed.startswith("$2b$")
 
@@ -53,13 +53,13 @@ class TestPasswordValidation:
     async def test_check_password_correct(self):
         svc = self._make_service()
         password = "SecurePass1!"
-        hashed = svc._hash_password(password)
+        hashed = svc._hash_password_sync(password)
         assert await svc._check_password(password, hashed) is True
 
     @pytest.mark.asyncio
     async def test_check_password_wrong(self):
         svc = self._make_service()
-        hashed = svc._hash_password("SecurePass1!")
+        hashed = svc._hash_password_sync("SecurePass1!")
         assert await svc._check_password("WrongPass1!", hashed) is False
 
 
@@ -164,11 +164,16 @@ class TestMFA:
         assert len(set(codes)) == 10
 
     def test_verify_backup_code(self):
-        from app.services.mfa import generate_backup_codes, verify_backup_code
+        from app.services.mfa import generate_backup_codes, verify_backup_code, hash_backup_code
         codes = generate_backup_codes(5)
-        hashed = [hashlib.sha256(c.encode()).hexdigest() for c in codes]
-        assert verify_backup_code(codes[0], hashed) is True
-        assert verify_backup_code("INVALID", hashed) is False
+        hashed = [hash_backup_code(c) for c in codes]
+        matched, matched_hash = verify_backup_code(codes[0], hashed)
+        assert matched is True
+        assert matched_hash is not None
+        # Wrong code should not match
+        no_match, no_hash = verify_backup_code("INVALID_CODE_XYZ", hashed)
+        assert no_match is False
+        assert no_hash is None
 
     def test_generate_qr_code(self):
         from app.services.mfa import generate_totp_secret, get_totp_uri, generate_qr_code

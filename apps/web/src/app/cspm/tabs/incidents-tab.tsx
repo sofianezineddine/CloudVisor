@@ -50,21 +50,25 @@ function IncidentStatusBadge({ status }: { status: string }) {
 export function IncidentsTab() {
   const [incidents, setIncidents] = React.useState<Incident[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  // null = no error, string = dismissible warning, 'fatal' = service unavailable
+  const [serviceUnavailable, setServiceUnavailable] = React.useState(false);
+  const [updateError, setUpdateError] = React.useState<string | null>(null);
   const [statusFilter, setStatusFilter] = React.useState('');
   const [severityFilter, setSeverityFilter] = React.useState('');
 
   const fetchIncidents = React.useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setServiceUnavailable(false);
     try {
-      const params: any = { limit: 50 };
+      const params: Record<string, unknown> = { limit: 50 };
       if (statusFilter) params.status = statusFilter;
       if (severityFilter) params.severity = severityFilter;
-      const resp = await apiClient.incidents.list(params);
+      const resp = await apiClient.incidents.list(params as any);
       setIncidents((resp?.data as Incident[]) ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load incidents');
+    } catch {
+      // Alert service may be unavailable — show empty state, not a crash
+      setServiceUnavailable(true);
+      setIncidents([]);
     } finally {
       setLoading(false);
     }
@@ -73,11 +77,12 @@ export function IncidentsTab() {
   React.useEffect(() => { fetchIncidents(); }, [fetchIncidents]);
 
   const handleStatusChange = async (incidentId: string, newStatus: string) => {
+    setUpdateError(null);
     try {
       await apiClient.incidents.update(incidentId, { status: newStatus });
       await fetchIncidents();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update incident');
+      setUpdateError(e instanceof Error ? e.message : 'Failed to update incident');
     }
   };
 
@@ -100,15 +105,31 @@ export function IncidentsTab() {
         </Button>
       </div>
 
-      {/* Error banner */}
-      {error && (
+      {/* Service unavailable notice — non-blocking, dismissible */}
+      {serviceUnavailable && (
+        <div
+          className="flex items-start gap-2 rounded-lg border p-3 text-sm"
+          style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+        >
+          <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--warning)' }} />
+          <span>
+            The alert service is currently unavailable. Incidents will appear here once the service is running.
+          </span>
+          <button onClick={() => setServiceUnavailable(false)} className="ml-auto flex-shrink-0">
+            <X className="h-4 w-4" style={{ color: 'var(--text-tertiary)' }} />
+          </button>
+        </div>
+      )}
+
+      {/* Inline update error */}
+      {updateError && (
         <div
           className="flex items-center gap-2 rounded-lg border p-3 text-sm"
           style={{ borderColor: 'var(--critical)', backgroundColor: 'var(--critical-dim)', color: 'var(--critical)' }}
         >
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-          {error}
-          <button onClick={() => setError(null)} className="ml-auto">
+          {updateError}
+          <button onClick={() => setUpdateError(null)} className="ml-auto">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -120,11 +141,7 @@ export function IncidentsTab() {
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value)}
           className="rounded-md border px-3 py-2 text-sm focus:outline-none"
-          style={{
-            borderColor: 'var(--border-default)',
-            backgroundColor: 'var(--bg-surface)',
-            color: 'var(--text-primary)',
-          }}
+          style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
         >
           <option value="">All statuses</option>
           <option value="open">Open</option>
@@ -137,11 +154,7 @@ export function IncidentsTab() {
           value={severityFilter}
           onChange={e => setSeverityFilter(e.target.value)}
           className="rounded-md border px-3 py-2 text-sm focus:outline-none"
-          style={{
-            borderColor: 'var(--border-default)',
-            backgroundColor: 'var(--bg-surface)',
-            color: 'var(--text-primary)',
-          }}
+          style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
         >
           <option value="">All severities</option>
           <option value="CRITICAL">Critical</option>
@@ -203,9 +216,6 @@ export function IncidentsTab() {
                       <Clock className="h-3 w-3" />
                       {timeAgo(incident.created_at)}
                     </span>
-                    {incident.assignee_id && (
-                      <span>Assigned</span>
-                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">

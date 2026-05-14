@@ -22,6 +22,12 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') || '/console';
+  const errorParam = searchParams.get('error');
+
+  // Show session-expired banner if redirected from auto-logout
+  const sessionExpiredMsg = errorParam === 'session_expired'
+    ? 'Your session has expired. Please sign in again.'
+    : null;
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,6 +178,23 @@ export default function LoginPage() {
 
           {step === 'email' ? (
             <>
+              {/* Session expired banner */}
+              {sessionExpiredMsg && (
+                <div
+                  style={{
+                    marginBottom: '16px',
+                    padding: '10px 12px',
+                    borderLeft: '4px solid var(--warning)',
+                    backgroundColor: 'var(--warning-dim)',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                    borderRadius: '2px',
+                  }}
+                >
+                  {sessionExpiredMsg}
+                </div>
+              )}
+
               <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '16px' }}>
                 Access your CloudVisor account by user type.
               </p>

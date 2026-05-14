@@ -45,9 +45,9 @@ class UserResponse(BaseModel):
     first_name: str | None
     last_name: str | None
     organization_id: str
-    role: str = "Owner"  # Default to Owner since every registrant creates their org
+    role: str = "viewer"  # B-05 fix: populated from user_roles table, not hardcoded
     mfa_enabled: bool
-    provider: str  # local, google, github
+    provider: str  # local, google, github, saml, oidc
     created_at: datetime
 
 
@@ -92,11 +92,23 @@ class ApiKeyCreateRequest(BaseModel):
 
 
 class ApiKeyResponse(BaseModel):
-    """API key response."""
+    """API key response — used for list and detail views (key value is never included)."""
 
     id: str
     name: str
-    key: str | None = None
+    scopes: list[str]
+    expires_at: datetime | None
+    created_at: datetime
+    last_used_at: datetime | None = None
+    is_active: bool = True
+
+
+class ApiKeyCreatedResponse(BaseModel):
+    """API key creation response — includes the key value (shown only once)."""
+
+    id: str
+    name: str
+    key: str  # Only returned on creation/rotation — never again
     scopes: list[str]
     expires_at: datetime | None
     created_at: datetime

@@ -1,32 +1,49 @@
 /**
  * Policy Service API Client — Foundation Service 4
- * Connects to the policy service at port 8003.
+ *
+ * All calls go through the API gateway at :8005/v1/
+ * The gateway handles JWT validation, tenant isolation, and routing.
  */
 
-const POLICY_BASE_URL =
-  process.env.NEXT_PUBLIC_POLICY_SERVICE_URL || 'http://localhost:8003';
+const API_GATEWAY_BASE_URL =
+  process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
 
 function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('access_token');
 }
 
-function getOrgId(): string | null {
+function getRefreshToken(): string | null {
   if (typeof window === 'undefined') return null;
+  return localStorage.getItem('refresh_token');
+}
+
+/** Silent token refresh on 401. */
+async function silentRefresh(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
   try {
-    const token = localStorage.getItem('access_token');
-    if (!token) return null;
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return payload.org_id || null;
+    const authBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
+    const res = await fetch(`${authBase}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.access_token && data.refresh_token) {
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
+      return data.access_token;
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-async function policyFetch(endpoint: string, options: RequestInit = {}): Promise<any> {
-  const url = `${POLICY_BASE_URL}${endpoint}`;
+async function policyFetch(endpoint: string, options: RequestInit = {}, _retry = true): Promise<any> {
+  const url = `${API_GATEWAY_BASE_URL}${endpoint}`;
   const token = getAccessToken();
 
   const response = await fetch(url, {
@@ -37,6 +54,16 @@ async function policyFetch(endpoint: string, options: RequestInit = {}): Promise
     },
     ...options,
   });
+
+  // Auto-refresh on 401
+  if (response.status === 401 && _retry) {
+    const newToken = await silentRefresh();
+    if (newToken) return policyFetch(endpoint, options, false);
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    if (typeof window !== 'undefined') window.location.href = '/login?error=session_expired';
+    throw new Error('Session expired');
+  }
 
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
@@ -92,8 +119,8 @@ export interface PolicyRule {
   is_builtin: boolean;
   is_custom: boolean;
   is_enabled: boolean;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface EvaluationFinding {
@@ -110,69 +137,153 @@ export interface EvaluationFinding {
   compliance_mapping: Array<{ framework: string; control: string }>;
 }
 
+export interface DryRunResult {
+  success: boolean;
+  findings: EvaluationFinding[];
+  metadata?: Record<string, string>;
+  error?: string;
+}
+
+export interface RuleVersionHistory {
+  version: string;
+  changed_at: string;
+  changed_by: string | null;
+  change_reason: string | null;
+}
+
 // ─── API ──────────────────────────────────────────────────────────────────────
 
 export const policyAPI = {
-  /** Get compliance posture for all frameworks */
-  async getComplianceSummary(orgId?: string): Promise<ComplianceSummary> {
-    const id = orgId || getOrgId() || 'default';
-    return policyFetch(`/policy/compliance?x_org_id=${id}`);
+  // ─── Compliance ────────────────────────────────────────────────────────────
+
+  /** GET /v1/compliance — posture for all frameworks */
+  async getComplianceSummary(): Promise<ComplianceSummary> {
+    return policyFetch('/v1/compliance');
   },
 
-  /** Get compliance posture for a specific framework */
-  async getCompliancePosture(framework: string, orgId?: string): Promise<CompliancePosture> {
-    const id = orgId || getOrgId() || 'default';
-    return policyFetch(`/policy/compliance/${encodeURIComponent(framework)}?x_org_id=${id}`);
+  /** GET /v1/compliance/{framework} — posture for a specific framework */
+  async getCompliancePosture(framework: string): Promise<CompliancePosture> {
+    return policyFetch(`/v1/compliance/${encodeURIComponent(framework)}`);
   },
 
-  /** Get evidence for a compliance control */
-  async getEvidence(framework: string, controlId: string, orgId?: string): Promise<any> {
-    const id = orgId || getOrgId() || 'default';
+  /** GET /v1/compliance/{framework}/evidence — evidence for a control */
+  async getEvidence(framework: string, controlId: string): Promise<any> {
     return policyFetch(
-      `/policy/compliance/${encodeURIComponent(framework)}/evidence?control_id=${encodeURIComponent(controlId)}&x_org_id=${id}`
+      `/v1/compliance/${encodeURIComponent(framework)}/evidence?control_id=${encodeURIComponent(controlId)}`
     );
   },
 
-  /** List all rules */
+  // ─── Rules ─────────────────────────────────────────────────────────────────
+
+  /** GET /v1/rules — list all rules with optional filters */
   async listRules(params?: {
-    orgId?: string;
     category?: string;
     provider?: string;
     severity?: string;
   }): Promise<{ rules: PolicyRule[]; total: number }> {
-    const id = params?.orgId || getOrgId() || 'default';
-    const q = new URLSearchParams({ x_org_id: id });
+    const q = new URLSearchParams();
     if (params?.category) q.set('category', params.category);
     if (params?.provider) q.set('provider', params.provider);
     if (params?.severity) q.set('severity', params.severity);
-    return policyFetch(`/policy/rules?${q}`);
+    const qs = q.toString();
+    const result = await policyFetch(`/v1/rules${qs ? `?${qs}` : ''}`);
+    // Gateway wraps in { data: [...], total: N } envelope
+    const rules = result?.data ?? result?.rules ?? [];
+    const total = result?.total ?? result?.meta?.total ?? rules.length;
+    return { rules, total };
   },
 
-  /** Evaluate resources against rules */
-  async evaluate(resources: any[], orgId?: string, category?: string): Promise<{
+  /** GET /v1/rules/{id} — get a specific rule */
+  async getRule(ruleId: string): Promise<PolicyRule> {
+    return policyFetch(`/v1/rules/${encodeURIComponent(ruleId)}`);
+  },
+
+  /** POST /v1/rules/custom — create a custom rule */
+  async createCustomRule(data: {
+    title: string;
+    rego_code: string;
+    description?: string;
+    severity?: string;
+    category?: string;
+    remediation?: string;
+    compliance_mapping?: Array<{ framework: string; control: string }>;
+    tags?: string[];
+  }): Promise<PolicyRule> {
+    return policyFetch('/v1/rules/custom', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /** PUT /v1/rules/custom/{id} — update a custom rule */
+  async updateCustomRule(ruleId: string, data: {
+    rego_code?: string;
+    title?: string;
+    description?: string;
+    remediation?: string;
+    compliance_mapping?: Array<{ framework: string; control: string }>;
+  }): Promise<PolicyRule> {
+    return policyFetch(`/v1/rules/custom/${encodeURIComponent(ruleId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /** DELETE /v1/rules/custom/{id} — delete a custom rule */
+  async deleteCustomRule(ruleId: string): Promise<void> {
+    await policyFetch(`/v1/rules/custom/${encodeURIComponent(ruleId)}`, { method: 'DELETE' });
+  },
+
+  /** POST /v1/rules/{id}/disable — disable a rule for this org */
+  async disableRule(ruleId: string, reason?: string, expiresInDays?: number): Promise<void> {
+    await policyFetch(`/v1/rules/${encodeURIComponent(ruleId)}/disable`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reason: reason || null,
+        expires_in_days: expiresInDays || null,
+      }),
+    });
+  },
+
+  /** POST /v1/rules/{id}/enable — re-enable a disabled rule */
+  async enableRule(ruleId: string): Promise<void> {
+    await policyFetch(`/v1/rules/${encodeURIComponent(ruleId)}/enable`, { method: 'POST' });
+  },
+
+  // ─── Evaluation ────────────────────────────────────────────────────────────
+
+  /** POST /v1/rules/evaluate — evaluate resources against rules */
+  async evaluate(resources: any[], category?: string, ruleIds?: string[]): Promise<{
     findings: EvaluationFinding[];
     evaluated_count: number;
   }> {
-    const id = orgId || getOrgId() || 'default';
-    return policyFetch(`/policy/evaluate?x_org_id=${id}`, {
+    return policyFetch('/v1/rules/evaluate', {
       method: 'POST',
-      body: JSON.stringify({ resources, category }),
+      body: JSON.stringify({ resources, category, rule_ids: ruleIds }),
     });
   },
 
-  /** Disable a rule for an org */
-  async disableRule(ruleId: string, reason: string, expiresInDays?: number, orgId?: string): Promise<void> {
-    const id = orgId || getOrgId() || 'default';
-    await policyFetch(`/policy/rules/${ruleId}/disable?x_org_id=${id}`, {
+  /** POST /v1/rules/evaluate/dry-run — test a custom rule without creating findings */
+  async dryRun(regoCode: string, resources: any[]): Promise<DryRunResult> {
+    return policyFetch('/v1/rules/evaluate/dry-run', {
       method: 'POST',
-      body: JSON.stringify({ reason, expires_in_days: expiresInDays }),
+      body: JSON.stringify({ rego_code: regoCode, resources }),
     });
   },
 
-  /** Re-enable a rule */
-  async enableRule(ruleId: string, orgId?: string): Promise<void> {
-    const id = orgId || getOrgId() || 'default';
-    await policyFetch(`/policy/rules/${ruleId}/enable?x_org_id=${id}`, { method: 'POST' });
+  // ─── Custom rule version history ───────────────────────────────────────────
+
+  /** GET /v1/rules/custom/{id}/history — version history for a custom rule */
+  async getRuleHistory(ruleId: string): Promise<{ rule_id: string; history: RuleVersionHistory[] }> {
+    return policyFetch(`/v1/rules/custom/${encodeURIComponent(ruleId)}/history`);
+  },
+
+  /** POST /v1/rules/custom/{id}/rollback — rollback to a previous version */
+  async rollbackRule(ruleId: string, targetVersion: string): Promise<PolicyRule> {
+    return policyFetch(`/v1/rules/custom/${encodeURIComponent(ruleId)}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ target_version: targetVersion }),
+    });
   },
 };
 

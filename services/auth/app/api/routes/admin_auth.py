@@ -82,7 +82,11 @@ async def admin_logout(
     admin_auth_service = AdminAuthService(db, auth_settings, redis)
 
     try:
-        payload = decode_token(authorization.replace("Bearer ", ""), auth_settings.secret_key)
+        payload = decode_token(
+            authorization.removeprefix("Bearer ").strip(),
+            auth_settings.secret_key,
+            public_key=auth_settings.effective_public_key,
+        )
         if payload.get("scope") != "admin":
             raise HTTPException(status_code=401, detail="Not an admin token")
     except Exception:
@@ -107,7 +111,11 @@ async def get_admin_user(
     auth_settings = get_auth_settings_cached()
 
     try:
-        payload = decode_token(authorization.replace("Bearer ", ""), auth_settings.secret_key)
+        payload = decode_token(
+            authorization.removeprefix("Bearer ").strip(),
+            auth_settings.secret_key,
+            public_key=auth_settings.effective_public_key,
+        )
         if payload.get("scope") != "admin":
             raise HTTPException(status_code=401, detail="Not an admin token")
         admin_id = payload.get("sub")

@@ -9,7 +9,7 @@ import { CreditCard, Loader2, AlertTriangle, TrendingUp, Package, Cloud, Users }
 
 interface BillingInfo {
   plan_name: string;
-  plan_tier: 'free' | 'starter' | 'professional' | 'enterprise';
+  plan_tier: 'free' | 'starter' | 'growth' | 'professional' | 'enterprise';
   limits: {
     max_accounts: number;
     max_resources: number;
@@ -27,9 +27,36 @@ interface BillingInfo {
 // ─── API helper ───────────────────────────────────────────────────────────────
 
 async function fetchBilling(): Promise<BillingInfo> {
-  const res = await fetch('/api/v1/billing', { credentials: 'include' });
-  if (!res.ok) throw new Error('Failed to fetch billing info');
-  return res.json();
+  // Fetch org details from the auth service (GET /auth/org/me)
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002'}/auth/org/me`,
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }
+  );
+  if (!res.ok) throw new Error('Failed to fetch org info');
+  const org = await res.json();
+
+  // Map org plan to billing info shape
+  const planTier = (org.plan ?? 'free') as BillingInfo['plan_tier'];
+  const planLimits: Record<string, BillingInfo['limits']> = {
+    free:         { max_accounts: 2,   max_resources: 500,    max_users: 3,   data_retention_days: 7   },
+    starter:      { max_accounts: 5,   max_resources: 5000,   max_users: 10,  data_retention_days: 30  },
+    growth:       { max_accounts: 20,  max_resources: 50000,  max_users: 50,  data_retention_days: 90  },
+    enterprise:   { max_accounts: -1,  max_resources: -1,     max_users: -1,  data_retention_days: 365 },
+    professional: { max_accounts: 10,  max_resources: 20000,  max_users: 25,  data_retention_days: 60  },
+  };
+
+  return {
+    plan_name: planTier.charAt(0).toUpperCase() + planTier.slice(1),
+    plan_tier: planTier,
+    limits: planLimits[planTier] ?? planLimits.free,
+    usage: { current_accounts: 0, current_resources: 0, current_users: 1 },
+  };
 }
 
 // ─── Fallback data ────────────────────────────────────────────────────────────
@@ -93,6 +120,7 @@ function UsageBar({ label, current, max, icon: Icon }: {
 const TIER_STYLES: Record<string, { bg: string; color: string }> = {
   free: { bg: 'var(--bg-elevated)', color: 'var(--text-secondary)' },
   starter: { bg: 'var(--accent-dim)', color: 'var(--accent)' },
+  growth: { bg: 'var(--success-dim)', color: 'var(--success)' },
   professional: { bg: 'var(--success-dim)', color: 'var(--success)' },
   enterprise: { bg: 'rgba(168,85,247,0.12)', color: '#a855f7' },
 };

@@ -1,7 +1,159 @@
+/**
+ * Auth Service API Client
+ *
+ * All auth-related operations call the auth service directly at :8002.
+ * This is intentional — auth is NOT proxied through the API gateway (:8005)
+ * because it handles token issuance and must be called before a valid token exists.
+ *
+ * Endpoint coverage (50 backend routes):
+ *
+ * ✅ POST   /auth/register
+ * ✅ POST   /auth/login
+ * ✅ POST   /auth/refresh
+ * ✅ POST   /auth/logout
+ * ✅ POST   /auth/forgot-password
+ * ✅ POST   /auth/reset-password
+ * ✅ GET    /auth/me
+ * ✅ PATCH  /auth/me
+ * ✅ POST   /auth/password
+ * ✅ GET    /auth/oauth/{provider}/authorize  (browser redirect — no fetch needed)
+ * ✅ GET    /auth/callback/{provider}          (browser redirect — no fetch needed)
+ * ✅ POST   /auth/oauth/exchange
+ * ✅ GET    /auth/sessions
+ * ✅ DELETE /auth/sessions/{id}
+ * ✅ GET    /auth/api-keys
+ * ✅ POST   /auth/api-keys
+ * ✅ DELETE /auth/api-keys/{id}
+ * ✅ POST   /auth/api-keys/{id}/rotate
+ * ✅ POST   /auth/mfa/enroll
+ * ✅ POST   /auth/mfa/verify
+ * ✅ POST   /auth/mfa/validate
+ * ✅ GET    /auth/mfa/backup-codes            (returns 410 — intentional)
+ * ✅ POST   /auth/mfa/backup-codes/regenerate
+ * ✅ DELETE /auth/mfa/disable
+ * ✅ GET    /auth/org/me
+ * ✅ PATCH  /auth/org/me
+ * ✅ POST   /auth/org/me/plan
+ * ✅ DELETE /auth/org/me
+ * ✅ GET    /auth/org/me/members
+ * ✅ POST   /auth/org/me/members/invite
+ * ✅ DELETE /auth/org/me/members/{id}
+ * ✅ PATCH  /auth/org/me/members/{id}/role
+ * ✅ GET    /auth/org/me/audit-log
+ * ✅ GET    /auth/sso/saml/login              (browser redirect — no fetch needed)
+ * ✅ POST   /auth/sso/saml/acs                (browser redirect — no fetch needed)
+ * ✅ GET    /auth/sso/saml/metadata
+ * ✅ POST   /auth/sso/saml/configure
+ * ✅ GET    /auth/sso/oidc/login              (browser redirect — no fetch needed)
+ * ✅ GET    /auth/sso/oidc/callback           (browser redirect — no fetch needed)
+ * ✅ POST   /auth/sso/oidc/configure
+ * ✅ POST   /admin/auth/login
+ * ✅ POST   /admin/auth/refresh
+ * ✅ POST   /admin/auth/logout
+ * ✅ GET    /admin/auth/me
+ * —  POST   /internal/auth/validate           (internal — called by API gateway, not frontend)
+ * —  POST   /internal/auth/authorize          (internal — called by API gateway, not frontend)
+ * —  GET    /internal/auth/org/{id}           (internal — called by API gateway, not frontend)
+ * —  GET    /internal/auth/org/{id}/roles     (internal — called by API gateway, not frontend)
+ * —  POST   /internal/auth/org/{id}/roles     (internal — called by API gateway, not frontend)
+ * —  POST   /internal/auth/users/{id}/role    (internal — called by API gateway, not frontend)
+ */
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
 
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('access_token');
+}
+
+function getAdminToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('admin_access_token');
+}
+
+/** Attempt a silent token refresh. Returns the new access token or null. */
+async function silentRefresh(): Promise<string | null> {
+  const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+  if (!refreshToken) return null;
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.access_token && data.refresh_token) {
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
+      return data.access_token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Clear tokens and redirect to login when session is unrecoverable. */
+function forceLogout(): void {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('cloudvisor-user');
+  if (typeof window !== 'undefined') {
+    window.location.href = '/login?error=session_expired';
+  }
+}
+
+/** Authenticated fetch to the auth service using the tenant access token.
+ *  Automatically retries once after a silent token refresh on 401. */
+async function authFetch(path: string, options: RequestInit = {}, _retry = true): Promise<any> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...options,
+  });
+
+  // Auto-refresh on 401
+  if (res.status === 401 && _retry) {
+    const newToken = await silentRefresh();
+    if (newToken) return authFetch(path, options, false);
+    forceLogout();
+    throw new Error('Session expired. Please sign in again.');
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+/** Authenticated fetch using the admin access token. */
+async function adminFetch(path: string, options: RequestInit = {}): Promise<any> {
+  const token = getAdminToken();
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
 export const authAPI = {
-  // Register a new user
+  // ─── Authentication ────────────────────────────────────────────────────────
+
+  /** POST /auth/register — create new user + org */
   register: async (data: {
     email: string;
     password: string;
@@ -9,136 +161,286 @@ export const authAPI = {
     first_name: string;
     last_name: string;
   }) => {
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    const res = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Registration failed');
-    }
-
-    return response.json();
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Registration failed'); }
+    return res.json();
   },
 
-  // Login user
-  login: async (data: {
-    email: string;
-    password: string;
-    mfa_code?: string;
-  }) => {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  /** POST /auth/login — email + password (+ optional MFA code) */
+  login: async (data: { email: string; password: string; mfa_code?: string }) => {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Login failed');
-    }
-
-    return response.json();
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Login failed'); }
+    return res.json();
   },
 
-  // Refresh access token
+  /** POST /auth/refresh — exchange refresh token for new access + refresh tokens */
   refreshToken: async (refreshToken: string) => {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Token refresh failed');
-    }
-
-    return response.json();
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Token refresh failed'); }
+    return res.json();
   },
 
-  // Logout user
+  /** POST /auth/logout — invalidate current session */
   logout: async () => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+    const token = getToken();
+    const res = await fetch(`${API_BASE_URL}/auth/logout`, {
       method: 'POST',
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Logout failed');
-    }
-
-    return response.json();
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Logout failed'); }
+    return res.json();
   },
 
-  // Get current user profile
+  /** GET /auth/me — current user profile */
   getCurrentUser: async (token: string) => {
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+    const res = await fetch(`${API_BASE_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to fetch user profile');
-    }
-
-    return response.json();
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to fetch user'); }
+    return res.json();
   },
 
-  // Request password reset
+  /** PATCH /auth/me — update first_name / last_name */
+  updateProfile: async (data: { first_name?: string; last_name?: string }) =>
+    authFetch('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
+
+  /** POST /auth/password — change password (requires current_password) */
+  changePassword: async (data: { current_password: string; new_password: string }) =>
+    authFetch('/auth/password', { method: 'POST', body: JSON.stringify(data) }),
+
+  /** POST /auth/forgot-password — send password reset email */
   forgotPassword: async (email: string) => {
-    const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+    const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to send reset email');
-    }
-
-    return response.json();
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to send reset email'); }
+    return res.json();
   },
 
-  // Reset password with token
+  /** POST /auth/reset-password — consume reset token and set new password */
   resetPassword: async (token: string, password: string) => {
-    const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+    const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, password }),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to reset password');
-    }
-
-    return response.json();
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to reset password'); }
+    return res.json();
   },
+
+  // ─── OAuth ─────────────────────────────────────────────────────────────────
+  // GET /auth/oauth/{provider}/authorize — browser redirect, no fetch needed
+  // GET /auth/callback/{provider}         — browser redirect, no fetch needed
+
+  /** POST /auth/oauth/exchange — exchange one-time code for JWT tokens */
+  exchangeOAuthCode: async (code: string) => {
+    const res = await fetch(`${API_BASE_URL}/auth/oauth/exchange`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Token exchange failed'); }
+    return res.json();
+  },
+
+  // ─── Sessions ──────────────────────────────────────────────────────────────
+
+  /** GET /auth/sessions — list active sessions */
+  getSessions: async () => authFetch('/auth/sessions'),
+
+  /** DELETE /auth/sessions/{id} — revoke a specific session */
+  revokeSession: async (sessionId: string) =>
+    authFetch(`/auth/sessions/${sessionId}`, { method: 'DELETE' }),
+
+  // ─── API Keys ──────────────────────────────────────────────────────────────
+
+  /** GET /auth/api-keys — list all API keys (no key values) */
+  getApiKeys: async () => authFetch('/auth/api-keys'),
+
+  /** POST /auth/api-keys — create new API key (returns key value once) */
+  createApiKey: async (data: { name: string; scopes?: string[]; expires_at?: string }) =>
+    authFetch('/auth/api-keys', { method: 'POST', body: JSON.stringify(data) }),
+
+  /** DELETE /auth/api-keys/{id} — revoke an API key */
+  revokeApiKey: async (keyId: string) =>
+    authFetch(`/auth/api-keys/${keyId}`, { method: 'DELETE' }),
+
+  /** POST /auth/api-keys/{id}/rotate — rotate an API key (returns new key value once) */
+  rotateApiKey: async (keyId: string) =>
+    authFetch(`/auth/api-keys/${keyId}/rotate`, { method: 'POST' }),
+
+  // ─── MFA ───────────────────────────────────────────────────────────────────
+
+  /** POST /auth/mfa/enroll — begin MFA enrollment, returns QR code + secret */
+  enrollMfa: async () => authFetch('/auth/mfa/enroll', { method: 'POST' }),
+
+  /** POST /auth/mfa/verify — confirm enrollment with TOTP code, returns backup codes */
+  verifyMfaEnrollment: async (code: string) =>
+    authFetch('/auth/mfa/verify', { method: 'POST', body: JSON.stringify({ code }) }),
+
+  /** POST /auth/mfa/validate — validate TOTP code during login */
+  validateMfa: async (code: string) =>
+    authFetch('/auth/mfa/validate', { method: 'POST', body: JSON.stringify({ code }) }),
+
+  /** DELETE /auth/mfa/disable — disable MFA (requires current TOTP code) */
+  disableMfa: async (code: string) =>
+    authFetch('/auth/mfa/disable', { method: 'DELETE', body: JSON.stringify({ code }) }),
+
+  /** POST /auth/mfa/backup-codes/regenerate — regenerate backup codes (requires TOTP) */
+  regenerateBackupCodes: async (code: string) =>
+    authFetch('/auth/mfa/backup-codes/regenerate', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
+
+  // ─── Organization ──────────────────────────────────────────────────────────
+
+  /** GET /auth/org/me — get current org details + plan + feature flags */
+  getOrg: async () => authFetch('/auth/org/me'),
+
+  /** PATCH /auth/org/me — update org name or billing email */
+  updateOrg: async (data: { name?: string; billing_email?: string }) =>
+    authFetch('/auth/org/me', { method: 'PATCH', body: JSON.stringify(data) }),
+
+  /** POST /auth/org/me/plan — change org plan (owner only) */
+  changePlan: async (plan: string) =>
+    authFetch('/auth/org/me/plan', { method: 'POST', body: JSON.stringify({ plan }) }),
+
+  /** DELETE /auth/org/me — delete org with full cascade (owner only) */
+  deleteOrg: async () => authFetch('/auth/org/me', { method: 'DELETE' }),
+
+  // ─── Team / Members ────────────────────────────────────────────────────────
+
+  /** GET /auth/org/me/members — list all org members with roles */
+  getMembers: async () => authFetch('/auth/org/me/members'),
+
+  /** POST /auth/org/me/members/invite — invite a new member */
+  inviteMember: async (data: {
+    email: string;
+    role: string;
+    first_name?: string;
+    last_name?: string;
+  }) =>
+    authFetch('/auth/org/me/members/invite', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  /** DELETE /auth/org/me/members/{id} — remove a member */
+  removeMember: async (memberId: string) =>
+    authFetch(`/auth/org/me/members/${memberId}`, { method: 'DELETE' }),
+
+  /** PATCH /auth/org/me/members/{id}/role — change a member's role */
+  updateMemberRole: async (memberId: string, role: string) =>
+    authFetch(`/auth/org/me/members/${memberId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
+
+  // ─── Audit Log ─────────────────────────────────────────────────────────────
+
+  /** GET /auth/org/me/audit-log — paginated audit log with filters */
+  getAuditLog: async (params?: {
+    limit?: number;
+    offset?: number;
+    event_type?: string;
+    user_id?: string;
+    since?: string;
+    until?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.limit !== undefined) q.set('limit', String(params.limit));
+    if (params?.offset !== undefined) q.set('offset', String(params.offset));
+    if (params?.event_type) q.set('event_type', params.event_type);
+    if (params?.user_id) q.set('user_id', params.user_id);
+    if (params?.since) q.set('since', params.since);
+    if (params?.until) q.set('until', params.until);
+    const qs = q.toString();
+    return authFetch(`/auth/org/me/audit-log${qs ? `?${qs}` : ''}`);
+  },
+
+  // ─── SSO ───────────────────────────────────────────────────────────────────
+  // GET /auth/sso/saml/login    — browser redirect, no fetch needed
+  // POST /auth/sso/saml/acs     — browser redirect, no fetch needed
+  // GET /auth/sso/oidc/login    — browser redirect, no fetch needed
+  // GET /auth/sso/oidc/callback — browser redirect, no fetch needed
+
+  /** GET /auth/sso/saml/metadata — SAML SP metadata XML for IdP configuration */
+  getSamlMetadata: async (orgId: string) => {
+    const res = await fetch(`${API_BASE_URL}/auth/sso/saml/metadata?org_id=${encodeURIComponent(orgId)}`);
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || 'Failed to fetch SAML metadata'); }
+    return res.text(); // Returns XML
+  },
+
+  /** POST /auth/sso/saml/configure — save SAML config for org (admin/owner only) */
+  configureSaml: async (orgId: string, config: {
+    idp_entity_id: string;
+    idp_sso_url: string;
+    idp_cert: string;
+    sp_entity_id?: string;
+    acs_url?: string;
+  }) =>
+    authFetch(`/auth/sso/saml/configure?org_id=${encodeURIComponent(orgId)}`, {
+      method: 'POST',
+      body: JSON.stringify(config),
+    }),
+
+  /** POST /auth/sso/oidc/configure — save OIDC config for org (admin/owner only) */
+  configureOidc: async (orgId: string, config: {
+    issuer: string;
+    client_id: string;
+    client_secret: string;
+    scopes?: string;
+  }) =>
+    authFetch(`/auth/sso/oidc/configure?org_id=${encodeURIComponent(orgId)}`, {
+      method: 'POST',
+      body: JSON.stringify(config),
+    }),
+
+  // ─── Admin Auth ────────────────────────────────────────────────────────────
+
+  /** POST /admin/auth/login — platform admin login */
+  adminLogin: async (email: string, password: string) => {
+    const res = await fetch(`${API_BASE_URL}/admin/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Admin login failed'); }
+    return res.json();
+  },
+
+  /** POST /admin/auth/refresh — refresh admin access token */
+  adminRefreshToken: async (refreshToken: string) => {
+    const res = await fetch(`${API_BASE_URL}/admin/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Admin token refresh failed'); }
+    return res.json();
+  },
+
+  /** POST /admin/auth/logout — admin logout */
+  adminLogout: async () => adminFetch('/admin/auth/logout', { method: 'POST' }),
+
+  /** GET /admin/auth/me — current admin user profile */
+  getAdminUser: async () => adminFetch('/admin/auth/me'),
 };

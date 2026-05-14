@@ -6,54 +6,29 @@ import { Button } from '@/components/ui/button';
 import { Shield, AlertTriangle, RefreshCw, Loader2, Globe, Lock, Server } from 'lucide-react';
 import apiClient, { Finding } from '@/lib/api/apiClient';
 import { connectorAPI, DiscoveredResource } from '@/lib/api/connector';
-
-// ─── Attack path simulation ───────────────────────────────────────────────────
-
-function buildAttackPaths(resources: DiscoveredResource[], findings: Finding[]) {
-  const publicResources = resources.filter(r => r.is_public);
-  const paths: { path: string; hops: number; risk: number; finding?: string }[] = [];
-
-  for (const pub of publicResources.slice(0, 3)) {
-    const relatedFinding = findings.find(f => f.resource_id === pub.cloud_resource_id);
-    const risk = relatedFinding
-      ? relatedFinding.severity === 'CRITICAL' ? 90 + Math.floor(Math.random() * 10)
-        : relatedFinding.severity === 'HIGH' ? 70 + Math.floor(Math.random() * 20)
-        : 50 + Math.floor(Math.random() * 20)
-      : 40 + Math.floor(Math.random() * 30);
-
-    paths.push({
-      path: `Internet → ${pub.name} (${pub.resource_type.split('::').pop()}) → Internal Resources`,
-      hops: 2 + Math.floor(Math.random() * 3),
-      risk,
-      finding: relatedFinding?.title,
-    });
-  }
-
-  if (paths.length === 0) {
-    paths.push(
-      { path: 'Internet → Public S3 Bucket → IAM Role → RDS', hops: 4, risk: 82 },
-      { path: 'Internet → EC2 (public IP) → Security Group → Lambda', hops: 4, risk: 71 },
-    );
-  }
-
-  return paths.sort((a, b) => b.risk - a.risk);
-}
+import { useAttackPaths, useCSPMStats } from '@/hooks/use-cspm';
 
 export function RiskExplorerTab() {
   const [findings, setFindings] = React.useState<Finding[]>([]);
   const [resources, setResources] = React.useState<DiscoveredResource[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [stats, setStats] = React.useState<Record<string, any>>({});
+
+  // Real attack paths from CSPM API
+  const { data: attackPathsData, isLoading: attackPathsLoading } = useAttackPaths({
+    page: 1,
+    page_size: 10,
+    sort_by: 'severity',
+    sort_dir: 'desc',
+  });
+  const { data: cspmStats } = useCSPMStats();
 
   const fetchData = React.useCallback(() => {
     setLoading(true);
     Promise.allSettled([
       apiClient.findings.list({ limit: 50 }),
-      apiClient.findings.stats(),
       connectorAPI.listResources({ limit: 200 }),
-    ]).then(([findingsRes, statsRes, resourcesRes]) => {
+    ]).then(([findingsRes, resourcesRes]) => {
       if (findingsRes.status === 'fulfilled') setFindings((findingsRes.value?.data as Finding[]) ?? []);
-      if (statsRes.status === 'fulfilled') setStats((statsRes.value?.data as any) ?? {});
       if (resourcesRes.status === 'fulfilled') setResources(resourcesRes.value.resources);
       setLoading(false);
     });
@@ -63,16 +38,47 @@ export function RiskExplorerTab() {
     fetchData();
   }, [fetchData]);
 
-  const attackPaths = React.useMemo(() => buildAttackPaths(resources, findings), [resources, findings]);
   const publicResources = resources.filter(r => r.is_public);
   const criticalFindings = findings.filter(f => f.severity === 'CRITICAL');
 
+  // Use real CSPM posture score if available, otherwise compute from findings
   const postureScore = React.useMemo(() => {
-    const total = stats?.total ?? 0;
+    if (cspmStats?.posture_score) return cspmStats.posture_score;
+    const total = findings.length;
     if (total === 0) return 95;
-    const penalty = Math.min((stats?.by_severity?.CRITICAL ?? 0) * 8 + (stats?.by_severity?.HIGH ?? 0) * 3, 95);
+    const critCount = findings.filter(f => f.severity === 'CRITICAL').length;
+    const highCount = findings.filter(f => f.severity === 'HIGH').length;
+    const penalty = Math.min(critCount * 8 + highCount * 3, 95);
     return Math.max(100 - penalty, 5);
-  }, [stats]);
+  }, [cspmStats, findings]);
+
+  // Real attack paths from CSPM API
+  const realAttackPaths = attackPathsData?.items ?? [];
+
+  // Fallback simulated paths only when no real data and we have resources
+  const simulatedPaths = React.useMemo(() => {
+    if (realAttackPaths.length > 0 || attackPathsLoading) return [];
+    if (resources.length === 0) return [];
+    // Build paths from public resources first, then any resources
+    const candidates = publicResources.length > 0 ? publicResources : resources.slice(0, 3);
+    const paths: { path: string; hops: number; risk: number; finding?: string }[] = [];
+    for (const res of candidates.slice(0, 3)) {
+      const relatedFinding = findings.find(f => f.resource_id === res.cloud_resource_id);
+      const risk = relatedFinding
+        ? relatedFinding.severity === 'CRITICAL' ? 85 + Math.floor(Math.random() * 10)
+          : relatedFinding.severity === 'HIGH' ? 65 + Math.floor(Math.random() * 20)
+          : 45 + Math.floor(Math.random() * 20)
+        : 35 + Math.floor(Math.random() * 30);
+      const resType = res.resource_type.split('::').pop() ?? res.resource_type;
+      paths.push({
+        path: `Internet → ${res.name} (${resType}) → Internal Resources`,
+        hops: 2 + Math.floor(Math.random() * 3),
+        risk,
+        finding: relatedFinding?.title,
+      });
+    }
+    return paths.sort((a, b) => b.risk - a.risk);
+  }, [realAttackPaths, attackPathsLoading, resources, publicResources, findings]);
 
   const typeBreakdown = React.useMemo(() => {
     const map = new Map<string, number>();
@@ -84,6 +90,8 @@ export function RiskExplorerTab() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8);
   }, [resources]);
+
+  const isLoadingAll = loading || attackPathsLoading;
 
   return (
     <div className="space-y-6">
@@ -124,23 +132,58 @@ export function RiskExplorerTab() {
         ))}
       </div>
 
-      {/* Attack paths */}
+      {/* Attack paths — real data from CSPM API */}
       <div className="cv-container p-6">
         <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
           <AlertTriangle className="h-4 w-4" style={{ color: 'var(--critical)' }} />
           Attack paths from internet
+          {realAttackPaths.length === 0 && simulatedPaths.length > 0 && (
+            <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-tertiary)' }}>
+              (estimated — run Attack Path Analysis for real data)
+            </span>
+          )}
         </h3>
-        {loading ? (
+        {isLoadingAll ? (
           <div className="flex h-24 items-center justify-center">
             <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--accent)' }} />
           </div>
-        ) : attackPaths.length === 0 ? (
-          <div className="flex h-24 items-center justify-center text-sm" style={{ color: 'var(--text-tertiary)' }}>
-            No internet-exposed resources found
-          </div>
-        ) : (
+        ) : realAttackPaths.length > 0 ? (
           <div className="space-y-3">
-            {attackPaths.map((path, i) => (
+            {realAttackPaths.map(path => {
+              const riskColor = path.severity === 'CRITICAL' ? 'var(--critical)'
+                : path.severity === 'HIGH' ? 'var(--high)'
+                : 'var(--medium)';
+              return (
+                <div
+                  key={path.id}
+                  className="flex items-start gap-4 rounded-lg border p-4 transition-colors"
+                  style={{ borderColor: 'var(--border-faint)' }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="mb-1 font-mono text-sm" style={{ color: 'var(--text-primary)' }}>
+                      {path.entry_resource_name || path.entry_resource_id} → {path.target_resource_name || path.target_resource_id}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                      <span>{path.path_hops} hops</span>
+                      {path.mitre_technique_name && <span>· {path.mitre_technique_name}</span>}
+                      {path.is_lateral_movement && <span style={{ color: 'var(--warning)' }}>· Lateral Movement</span>}
+                    </div>
+                  </div>
+                  <div className="flex flex-shrink-0 items-center gap-2">
+                    <Shield className="h-4 w-4" style={{ color: riskColor }} />
+                    <span className="font-mono text-sm font-bold" style={{ color: riskColor }}>
+                      {path.blast_radius_count}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : simulatedPaths.length > 0 ? (
+          <div className="space-y-3">
+            {simulatedPaths.map((path, i) => (
               <div
                 key={i}
                 className="flex items-start gap-4 rounded-lg border p-4 transition-colors"
@@ -156,23 +199,17 @@ export function RiskExplorerTab() {
                   </div>
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
-                  <Shield
-                    className="h-4 w-4"
-                    style={{
-                      color: path.risk >= 80 ? 'var(--critical)' : path.risk >= 60 ? 'var(--high)' : 'var(--medium)',
-                    }}
-                  />
-                  <span
-                    className="font-mono text-sm font-bold"
-                    style={{
-                      color: path.risk >= 80 ? 'var(--critical)' : path.risk >= 60 ? 'var(--high)' : 'var(--medium)',
-                    }}
-                  >
+                  <Shield className="h-4 w-4" style={{ color: path.risk >= 80 ? 'var(--critical)' : path.risk >= 60 ? 'var(--high)' : 'var(--medium)' }} />
+                  <span className="font-mono text-sm font-bold" style={{ color: path.risk >= 80 ? 'var(--critical)' : path.risk >= 60 ? 'var(--high)' : 'var(--medium)' }}>
                     {path.risk}
                   </span>
                 </div>
               </div>
             ))}
+          </div>
+        ) : (
+          <div className="flex h-24 items-center justify-center text-sm" style={{ color: 'var(--text-tertiary)' }}>
+            No internet-exposed resources found
           </div>
         )}
       </div>
@@ -194,10 +231,7 @@ export function RiskExplorerTab() {
                 onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
                 onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
-                <div
-                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full"
-                  style={{ backgroundColor: 'var(--critical-dim)' }}
-                >
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--critical-dim)' }}>
                   <Lock className="h-4 w-4" style={{ color: 'var(--critical)' }} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -206,10 +240,8 @@ export function RiskExplorerTab() {
                     {r.resource_type.split('::').pop()} · {r.region} · {r.provider.toUpperCase()}
                   </div>
                 </div>
-                <span
-                  className="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                  style={{ backgroundColor: 'var(--critical-dim)', color: 'var(--critical)' }}
-                >
+                <span className="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                  style={{ backgroundColor: 'var(--critical-dim)', color: 'var(--critical)' }}>
                   Public
                 </span>
               </div>

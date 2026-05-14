@@ -88,7 +88,8 @@ async def delete_suppression(
     try:
         await alert.delete(
             f"/internal/suppressions/{rule_id}",
-            headers={**user.auth_headers, "x_org_id": user.organization_id},
+            params={"organization_id": user.organization_id},
+            headers=user.auth_headers,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Alert service unavailable: {e}")

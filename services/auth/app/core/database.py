@@ -1,5 +1,6 @@
 """Database configuration for Auth service with RLS support."""
 
+import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -19,6 +20,19 @@ metadata = MetaData(
     }
 )
 
+# UUID pattern — only allow valid UUIDs in RLS context to prevent SQL injection (S-16 fix)
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
+
+def _validate_org_id(organization_id: str) -> str:
+    """Validate that organization_id is a well-formed UUID to prevent SQL injection (S-16 fix)."""
+    if not _UUID_RE.match(organization_id):
+        raise ValueError(f"Invalid organization_id format: {organization_id!r}")
+    return organization_id
+
 
 def create_engine(database_url: str) -> Any:
     """Create async SQLAlchemy engine."""
@@ -30,6 +44,11 @@ def create_engine(database_url: str) -> Any:
         echo=False,
         pool_pre_ping=True,
     )
+
+
+async def dispose_engine(engine: Any) -> None:
+    """Dispose the async engine and close all connections (M-12 fix)."""
+    await engine.dispose()
 
 
 def create_session(engine: Any) -> async_sessionmaker[AsyncSession]:
@@ -48,10 +67,20 @@ async def create_db_session(
     session_factory: async_sessionmaker[AsyncSession],
     organization_id: str | None = None,
 ) -> AsyncGenerator[AsyncSession, None]:
-    """Context manager with RLS context injection."""
+    """Context manager with RLS context injection.
+
+    S-16 fix: organization_id is validated as a UUID before being used in SQL.
+    Uses parameterized SET LOCAL to prevent SQL injection.
+    """
     async with session_factory() as session:
         if organization_id:
-            await session.execute(text(f"SET LOCAL app.current_org_id = '{organization_id}'"))
+            # Validate UUID format before injecting into SQL (S-16 fix)
+            safe_org_id = _validate_org_id(organization_id)
+            # Use parameterized form — PostgreSQL SET LOCAL supports this via execute
+            await session.execute(
+                text("SELECT set_config('app.current_org_id', :org_id, true)"),
+                {"org_id": safe_org_id},
+            )
         try:
             yield session
             await session.commit()
@@ -61,7 +90,10 @@ async def create_db_session(
 
 
 async def setup_rls_policies(engine: Any) -> None:
-    """Create RLS policies for all tenant-scoped tables."""
+    """Create RLS policies for all tenant-scoped tables.
+
+    Updated sessions policy to use direct organization_id column (Q-06 fix).
+    """
     async with engine.begin() as conn:
         rls_policies = [
             """
@@ -79,10 +111,11 @@ async def setup_rls_policies(engine: Any) -> None:
             CREATE POLICY role_org_isolation ON roles
                 USING (organization_id::text = current_setting('app.current_org_id', true)::text);
             """,
+            # Q-06 fix: sessions now has organization_id column — direct comparison, no subquery
             """
             ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
             CREATE POLICY session_org_isolation ON sessions
-                USING (user_id IN (SELECT id FROM users WHERE organization_id::text = current_setting('app.current_org_id', true)::text));
+                USING (organization_id::text = current_setting('app.current_org_id', true)::text);
             """,
             """
             ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
@@ -100,4 +133,4 @@ async def setup_rls_policies(engine: Any) -> None:
             try:
                 await conn.execute(text(policy))
             except Exception:
-                pass
+                pass  # Policy may already exist

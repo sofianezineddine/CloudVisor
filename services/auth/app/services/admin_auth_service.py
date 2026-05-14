@@ -1,5 +1,13 @@
-"""Admin authentication service."""
+"""Admin authentication service.
 
+Security fixes applied:
+- S-06/S-14: bcrypt.checkpw runs in thread pool executor (non-blocking)
+- S-15/Q-07: AdminUserModel.updated_at is now set correctly (model has the column)
+- B-02: Failed login no longer updates last_login_at
+- B-03: Specific exception types caught instead of bare Exception
+"""
+
+import asyncio
 import hashlib
 import secrets
 import uuid
@@ -7,7 +15,8 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import bcrypt
-from sqlalchemy import select, text
+from jose import JWTError
+from sqlalchemy import select
 
 from ..core.config import AuthSettings
 from ..models.admin import AdminUserModel, AdminSessionModel
@@ -17,7 +26,7 @@ from ..services.utils import create_access_token, create_refresh_token, decode_t
 class AdminAuthService:
     """Authentication service for platform admins - completely separate from tenant auth."""
 
-    def __init__(self, db, settings: AuthSettings, redis_client: Any = None):
+    def __init__(self, db: Any, settings: AuthSettings, redis_client: Any = None):
         self._db = db
         self._settings = settings
         self._redis = redis_client
@@ -42,13 +51,15 @@ class AdminAuthService:
         if not admin.is_active:
             raise ValueError("Admin account is disabled")
 
+        # S-14 fix: async bcrypt check (non-blocking)
         if not await self._check_password(password, admin.password_hash):
-            admin.last_login_at = datetime.utcnow()
-            await self._db.commit()
+            # B-02 fix: do NOT update last_login_at on failed login
             raise ValueError("Invalid credentials")
 
-        admin.last_login_at = datetime.utcnow()
-        admin.updated_at = datetime.utcnow()
+        # Only update timestamps on successful login
+        now = datetime.utcnow()
+        admin.last_login_at = now
+        admin.updated_at = now  # Q-07 fix: model now has updated_at column
         await self._db.commit()
 
         session = await self._create_session(admin, device_info, ip_address, user_agent)
@@ -63,7 +74,11 @@ class AdminAuthService:
     async def refresh_tokens(self, refresh_token: str) -> dict[str, Any]:
         """Refresh admin access token."""
         try:
-            payload = decode_token(refresh_token, self._settings.secret_key)
+            payload = decode_token(
+                refresh_token,
+                self._settings.secret_key,
+                public_key=self._settings.effective_public_key,
+            )
             if payload.get("type") != "refresh" or payload.get("scope") != "admin":
                 raise ValueError("Invalid token type")
 
@@ -81,7 +96,7 @@ class AdminAuthService:
             result = await self._db.execute(
                 select(AdminSessionModel).where(
                     AdminSessionModel.id == session_id,
-                    AdminSessionModel.is_active == True,
+                    AdminSessionModel.is_active == True,  # noqa: E712
                 )
             )
             session = result.scalar_one_or_none()
@@ -92,8 +107,15 @@ class AdminAuthService:
             tokens = await self._create_tokens(admin, session.id)
             return {"admin": admin, "tokens": tokens}
 
-        except Exception:
-            raise ValueError("Invalid or expired refresh token")
+        except JWTError as e:
+            raise ValueError(f"Invalid or expired refresh token: {e}")
+        except ValueError:
+            raise
+        except Exception as e:
+            # B-03 fix: log unexpected errors rather than silently swallowing them
+            import logging
+            logging.getLogger("auth.admin").error(f"Unexpected error during token refresh: {e}")
+            raise ValueError("Token refresh failed")
 
     async def logout(self, admin_id: str, session_id: str | None = None) -> bool:
         """Logout admin and invalidate session."""
@@ -111,9 +133,15 @@ class AdminAuthService:
 
         return True
 
-    async def _check_password(self, plain: str, hashed: str) -> bool:
-        """Verify password."""
-        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    async def _check_password(self, plain: str, hashed: str | None) -> bool:
+        """Verify password in a thread pool to avoid blocking the event loop (S-14 fix)."""
+        if not hashed:
+            return False
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8")),
+        )
 
     async def _create_tokens(self, admin: AdminUserModel, session_id: str) -> dict[str, str]:
         """Create admin-scoped JWT tokens."""
@@ -127,6 +155,7 @@ class AdminAuthService:
             secret_key=self._settings.secret_key,
             algorithm=self._settings.algorithm,
             expires_delta=timedelta(minutes=self._settings.access_token_expire_minutes),
+            private_key=self._settings.effective_private_key,
         )
 
         refresh_token = create_refresh_token(
@@ -138,6 +167,7 @@ class AdminAuthService:
             secret_key=self._settings.secret_key,
             algorithm=self._settings.algorithm,
             expires_delta=timedelta(days=self._settings.refresh_token_expire_days),
+            private_key=self._settings.effective_private_key,
         )
 
         return {

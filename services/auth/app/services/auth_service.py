@@ -1,14 +1,15 @@
 """Authentication service - handles login, registration, tokens."""
 
+import asyncio
 import hashlib
 import secrets
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
-from jose import JWTError, jwt
 import bcrypt
-from sqlalchemy import select, and_
+from jose import JWTError, jwt
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import AuthSettings
@@ -35,12 +36,19 @@ class AuthService:
         organization_name: str | None = None,
     ) -> dict[str, Any]:
         """Login or register user via OAuth provider."""
-        # Check if user exists
-        existing = await self._db.execute(select(UserModel).where(UserModel.email == email))
+        # Check if user exists by email
+        existing = await self._db.execute(
+            select(UserModel).where(UserModel.email == email)
+        )
         user = existing.scalar_one_or_none()
 
         if user:
-            # Existing user - just log them in
+            # Existing user — prevent silent account takeover (B-07 fix)
+            if user.provider == "local" and provider != "local":
+                raise ValueError(
+                    f"This email is registered with a password. "
+                    f"Please log in with your email and password."
+                )
             user.last_login_at = datetime.utcnow()
             user.updated_at = datetime.utcnow()
             await self._db.commit()
@@ -83,6 +91,7 @@ class AuthService:
                 is_active=True,
                 is_superuser=True,
                 provider=provider,
+                provider_id=provider_id,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
             )
@@ -109,6 +118,18 @@ class AuthService:
                 await self._db.refresh(cv_client)
                 user.cv_client_id = cv_client.id
                 await self._db.commit()
+
+            # Emit org.created Kafka event for OAuth registrations too (M-17 fix)
+            if self._kafka_producer:
+                try:
+                    await self._kafka_producer.emit_org_event(
+                        organization_id=org_id,
+                        event_type="org.created",
+                        data={"name": organization_name, "plan": "free", "slug": slug},
+                    )
+                except Exception as e:
+                    import logging
+                    logging.getLogger("auth").debug(f"org.created event failed (non-fatal): {e}")
 
         session = await self._create_session(user, None, None, None)
         tokens = await self._create_tokens(user, session.id)
@@ -163,7 +184,7 @@ class AuthService:
             id=user_id,
             organization_id=org_id,
             email=email,
-            password_hash=self._hash_password(password),
+            password_hash=await self._hash_password(password),
             first_name=first_name,
             last_name=last_name,
             is_active=True,
@@ -193,7 +214,7 @@ class AuthService:
             self._db.add(cv_client)
             await self._db.commit()
             await self._db.refresh(cv_client)
-            
+
             # Link user to cv_client
             user.cv_client_id = cv_client.id
             await self._db.commit()
@@ -232,6 +253,10 @@ class AuthService:
         if not user:
             raise ValueError("Invalid credentials")
 
+        # Check account lock BEFORE password verification (B-01 fix)
+        if user.locked_until and user.locked_until > datetime.utcnow():
+            raise ValueError("Account is locked. Please try again later.")
+
         if not await self._check_password(password, user.password_hash):
             await self._record_failed_login(user)
             await self._audit_log(
@@ -240,27 +265,70 @@ class AuthService:
                 "auth.login.failed",
                 {"email": email, "reason": "invalid_password"},
                 success=False,
+                failure_reason="invalid_password",
+                ip_address=ip_address,
             )
             raise ValueError("Invalid credentials")
 
-        if user.mfa_enabled and not mfa_code:
+        # Enforce MFA for enterprise orgs if configured (M-04 fix)
+        org = await self._db.get(OrganizationModel, user.organization_id)
+        mfa_required = user.mfa_enabled or (
+            self._settings.require_mfa_enterprise
+            and org
+            and org.plan in ("growth", "enterprise")
+        )
+
+        if mfa_required and not mfa_code:
             raise ValueError("MFA required")
 
-        if user.mfa_enabled:
-            from .mfa import verify_totp
+        if mfa_required and mfa_code:
+            from .mfa import verify_totp, verify_backup_code
+            import json as _json
 
-            if not verify_totp(user.mfa_secret, mfa_code):
-                await self._audit_log(
-                    user.organization_id,
-                    user.id,
-                    "auth.login.failed",
-                    {"email": email, "reason": "invalid_mfa"},
-                    success=False,
-                )
-                raise ValueError("Invalid MFA code")
+            # Try TOTP first
+            totp_valid = verify_totp(user.mfa_secret, mfa_code) if user.mfa_secret else False
 
-        if user.locked_until and user.locked_until > datetime.utcnow():
-            raise ValueError("Account is locked")
+            if not totp_valid:
+                # Try backup code (single-use — M-10 fix)
+                if user.mfa_backup_codes:
+                    try:
+                        stored_hashes = _json.loads(user.mfa_backup_codes)
+                    except (ValueError, TypeError):
+                        stored_hashes = [h for h in user.mfa_backup_codes.split(",") if h]
+
+                    matched, matched_hash = verify_backup_code(mfa_code, stored_hashes)
+                    if matched and matched_hash:
+                        # Consume the backup code (single-use)
+                        remaining = [h for h in stored_hashes if h != matched_hash]
+                        user.mfa_backup_codes = _json.dumps(remaining)
+                        await self._db.commit()
+                        await self._audit_log(
+                            user.organization_id, user.id,
+                            "auth.mfa.backup_code_used",
+                            {"email": email, "remaining_codes": len(remaining)},
+                            success=True,
+                            ip_address=ip_address,
+                        )
+                    else:
+                        await self._audit_log(
+                            user.organization_id, user.id,
+                            "auth.login.failed",
+                            {"email": email, "reason": "invalid_mfa"},
+                            success=False,
+                            failure_reason="invalid_mfa",
+                            ip_address=ip_address,
+                        )
+                        raise ValueError("Invalid MFA code")
+                else:
+                    await self._audit_log(
+                        user.organization_id, user.id,
+                        "auth.login.failed",
+                        {"email": email, "reason": "invalid_mfa"},
+                        success=False,
+                        failure_reason="invalid_mfa",
+                        ip_address=ip_address,
+                    )
+                    raise ValueError("Invalid MFA code")
 
         user.failed_login_attempts = 0
         user.last_login_at = datetime.utcnow()
@@ -271,7 +339,8 @@ class AuthService:
         tokens = await self._create_tokens(user, session.id)
 
         await self._audit_log(
-            user.organization_id, user.id, "auth.login.success", {"email": email}, success=True
+            user.organization_id, user.id, "auth.login.success",
+            {"email": email}, success=True, ip_address=ip_address
         )
 
         return {"user": user, "session": session, "tokens": tokens}
@@ -280,7 +349,11 @@ class AuthService:
         self,
         refresh_token: str,
     ) -> dict[str, Any]:
-        """Refresh access token using refresh token."""
+        """Refresh access token using refresh token.
+
+        Spec §3.3: Refresh token rotation — every use issues a new refresh token
+        and invalidates the old one (M-01 fix).
+        """
         try:
             payload = decode_token(
                 refresh_token,
@@ -301,7 +374,24 @@ class AuthService:
             if not session or not session.is_active:
                 raise ValueError("Session expired")
 
-            tokens = await self._create_tokens(user, session.id)
+            # Refresh token rotation: invalidate old session, create new one (M-01 fix)
+            session.is_active = False
+            await self._db.commit()
+
+            new_session = await self._create_session(
+                user,
+                session.device_info,
+                session.ip_address,
+                session.user_agent,
+            )
+            tokens = await self._create_tokens(user, new_session.id)
+
+            # Audit log for token refresh (M-08 fix)
+            await self._audit_log(
+                user.organization_id, user.id, "auth.token.refreshed",
+                {"new_session_id": new_session.id}, success=True
+            )
+
             return {"user": user, "tokens": tokens}
 
         except JWTError:
@@ -311,8 +401,11 @@ class AuthService:
         self,
         user_id: str,
         session_id: str | None = None,
+        ip_address: str | None = None,
     ) -> bool:
         """Logout user and invalidate session."""
+        org_id: str | None = None
+
         if session_id:
             session = await self._db.get(SessionModel, session_id)
             if session:
@@ -322,6 +415,18 @@ class AuthService:
         if self._redis:
             await self._redis.delete(f"token:{user_id}:{session_id}")
 
+        # Audit log for logout (M-18 fix)
+        try:
+            user = await self._db.get(UserModel, user_id)
+            if user:
+                org_id = user.organization_id
+                await self._audit_log(
+                    org_id, user_id, "auth.logout",
+                    {"session_id": session_id}, success=True, ip_address=ip_address
+                )
+        except Exception:
+            pass
+
         return True
 
     async def invalidate_all_sessions(self, user_id: str, except_session_id: str | None = None) -> int:
@@ -330,8 +435,6 @@ class AuthService:
         Spec §3.3: Force-expire all sessions on password change or suspicious activity.
         Returns the number of sessions invalidated.
         """
-        from sqlalchemy import update
-
         stmt = (
             update(SessionModel)
             .where(
@@ -363,6 +466,13 @@ class AuthService:
         )
         return count
 
+    async def update_session_activity(self, session_id: str) -> None:
+        """Update session last_active_at timestamp (M-11 fix)."""
+        session = await self._db.get(SessionModel, session_id)
+        if session and session.is_active:
+            session.last_active_at = datetime.utcnow()
+            await self._db.commit()
+
     def _validate_password(self, password: str) -> None:
         """Validate password against configured policy."""
         if len(password) < self._settings.password_min_length:
@@ -380,13 +490,29 @@ class AuthService:
         ):
             raise ValueError("Password must contain at least one special character")
 
-    def _hash_password(self, password: str) -> str:
-        """Hash password using bcrypt."""
-        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    async def _hash_password(self, password: str) -> str:
+        """Hash password using bcrypt in a thread pool to avoid blocking the event loop (S-06 fix)."""
+        loop = asyncio.get_event_loop()
+        rounds = getattr(self._settings, "bcrypt_rounds", 12)
+        return await loop.run_in_executor(
+            None,
+            lambda: bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)).decode("utf-8"),
+        )
 
-    async def _check_password(self, plain: str, hashed: str) -> bool:
-        """Verify password against hash."""
-        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    def _hash_password_sync(self, password: str) -> str:
+        """Synchronous bcrypt hash — only for use in non-async contexts (e.g. seeding)."""
+        rounds = getattr(self._settings, "bcrypt_rounds", 12)
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)).decode("utf-8")
+
+    async def _check_password(self, plain: str, hashed: str | None) -> bool:
+        """Verify password against hash in a thread pool to avoid blocking the event loop (S-06 fix)."""
+        if not hashed:
+            return False
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8")),
+        )
 
     async def _get_user_by_email(self, email: str) -> UserModel | None:
         """Get user by email."""
@@ -431,6 +557,7 @@ class AuthService:
         session = SessionModel(
             id=str(uuid.uuid4()),
             user_id=user.id,
+            organization_id=user.organization_id,
             refresh_token_hash=refresh_hash,
             device_info=device_info,
             ip_address=ip_address,
@@ -465,6 +592,8 @@ class AuthService:
         event_data: dict,
         success: bool = True,
         failure_reason: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> None:
         """Create audit log entry in PostgreSQL and publish to Kafka audit.events topic."""
         log = AuditLogModel(
@@ -474,6 +603,8 @@ class AuthService:
             event_data=event_data,
             success=success,
             failure_reason=failure_reason,
+            ip_address=ip_address,
+            user_agent=user_agent,
             timestamp=datetime.utcnow(),
         )
         self._db.add(log)

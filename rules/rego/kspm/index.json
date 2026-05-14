@@ -1,0 +1,53 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "kspm-privileged-container",
+      "file": "privileged_container.rego",
+      "title": "Kubernetes container runs in privileged mode",
+      "severity": "CRITICAL",
+      "category": "kspm",
+      "resource_type": "kubernetes::pod",
+      "compliance": [
+        {"framework": "CIS-AWS", "control": "5.2"},
+        {"framework": "NIST-800-53", "control": "AC-6"},
+        {"framework": "SOC2", "control": "CC6.6"}
+      ]
+    },
+    {
+      "id": "kspm-host-network",
+      "file": "host_network.rego",
+      "title": "Kubernetes Pod uses host network",
+      "severity": "HIGH",
+      "category": "kspm",
+      "resource_type": "kubernetes::pod",
+      "compliance": [
+        {"framework": "NIST-800-53", "control": "SC-7"},
+        {"framework": "SOC2", "control": "CC6.6"}
+      ]
+    },
+    {
+      "id": "kspm-no-resource-limits",
+      "file": "no_resource_limits.rego",
+      "title": "Kubernetes container has no resource limits",
+      "severity": "MEDIUM",
+      "category": "kspm",
+      "resource_type": "kubernetes::pod",
+      "compliance": [
+        {"framework": "NIST-800-53", "control": "SC-5"}
+      ]
+    },
+    {
+      "id": "kspm-pod-security",
+      "file": "pod_security.rego",
+      "title": "Kubernetes Pod runs as root",
+      "severity": "HIGH",
+      "category": "kspm",
+      "resource_type": "kubernetes::pod",
+      "compliance": [
+        {"framework": "NIST-800-53", "control": "AC-6"},
+        {"framework": "SOC2", "control": "CC6.3"}
+      ]
+    }
+  ]
+}

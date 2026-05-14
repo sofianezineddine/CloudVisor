@@ -7,6 +7,7 @@ from .alert import (
     NotificationChannelModel,
     NotificationLogModel,
     AuditLogModel,
+    WebhookModel,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "NotificationChannelModel",
     "NotificationLogModel",
     "AuditLogModel",
+    "WebhookModel",
 ]

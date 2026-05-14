@@ -37,6 +37,8 @@ T = TypeVar("T")
 
 class Meta(BaseModel):
     request_id: str = Field(default_factory=lambda: f"req_{uuid.uuid4().hex[:12]}")
+    page: int | None = None
+    per_page: int | None = None
     next_cursor: str | None = None
     total: int | None = None
     took_ms: int | None = None

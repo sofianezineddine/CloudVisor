@@ -8,6 +8,7 @@ from ...core.dependencies import get_db, get_redis, get_auth_settings_cached
 from ...schemas import (
     ApiKeyCreateRequest,
     ApiKeyResponse,
+    ApiKeyCreatedResponse,
     ApiKeyListResponse,
     SessionResponse,
     SessionListResponse,
@@ -21,12 +22,16 @@ router = APIRouter(prefix="/auth", tags=["sessions", "api-keys"])
 
 
 def get_current_user_id(authorization: str | None) -> str:
-    """Extract user ID from authorization token."""
+    """Extract user ID from authorization token (S-09 fix: pass public_key for RS256)."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
         auth_settings = get_auth_settings_cached()
-        payload = decode_token(authorization.replace("Bearer ", ""), auth_settings.secret_key)
+        payload = decode_token(
+            authorization.removeprefix("Bearer ").strip(),
+            auth_settings.secret_key,
+            public_key=auth_settings.effective_public_key,  # S-09 fix
+        )
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -109,14 +114,14 @@ async def list_api_keys(
     return ApiKeyListResponse(keys=keys)
 
 
-@router.post("/api-keys", response_model=ApiKeyResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/api-keys", response_model=ApiKeyCreatedResponse, status_code=status.HTTP_201_CREATED)
 async def create_api_key(
     data: ApiKeyCreateRequest,
     authorization: str | None = Header(default=None, alias="Authorization"),
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
-) -> ApiKeyResponse:
-    """Create a new API key."""
+) -> ApiKeyCreatedResponse:
+    """Create a new API key. Returns the key value only once — store it securely."""
     user_id = get_current_user_id(authorization)
     auth_settings = get_auth_settings_cached()
 
@@ -128,7 +133,7 @@ async def create_api_key(
         expires_at=data.expires_at,
     )
 
-    return ApiKeyResponse(**key)
+    return ApiKeyCreatedResponse(**key)
 
 
 @router.delete("/api-keys/{key_id}")
@@ -151,18 +156,18 @@ async def revoke_api_key(
     return {"message": "API key revoked"}
 
 
-@router.post("/api-keys/{key_id}/rotate", response_model=ApiKeyResponse)
+@router.post("/api-keys/{key_id}/rotate", response_model=ApiKeyCreatedResponse)
 async def rotate_api_key(
     key_id: str,
     authorization: str | None = Header(default=None, alias="Authorization"),
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
-) -> ApiKeyResponse:
-    """Rotate an API key."""
+) -> ApiKeyCreatedResponse:
+    """Rotate an API key. Returns the new key value only once — store it securely."""
     user_id = get_current_user_id(authorization)
     auth_settings = get_auth_settings_cached()
 
     api_key_service = ApiKeyService(db, auth_settings, redis)
     key = await api_key_service.rotate_api_key(key_id, user_id)
 
-    return ApiKeyResponse(**key)
+    return ApiKeyCreatedResponse(**key)

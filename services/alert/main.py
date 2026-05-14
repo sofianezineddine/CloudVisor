@@ -14,7 +14,7 @@ from app.core.dependencies import (
     get_alert_settings_cached,
 )
 from app.core.config import get_alert_settings
-from app.api.routes import findings_router, suppressions_router, notifications_router, notifications_test_router, incidents_router
+from app.api.routes import findings_router, suppressions_router, notifications_router, notifications_test_router, incidents_router, webhooks_router
 
 
 def create_app() -> FastAPI:
@@ -39,7 +39,12 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=[
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://localhost:3002",
+            "http://localhost:8005",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -86,8 +91,9 @@ def create_app() -> FastAPI:
     app.include_router(findings_router, prefix="/internal")
     app.include_router(suppressions_router, prefix="/internal")
     app.include_router(notifications_router, prefix="/internal")
-    app.include_router(notifications_test_router, prefix="/internal")  # GAP 8: POST /internal/notifications/test
+    app.include_router(notifications_test_router, prefix="/internal")
     app.include_router(incidents_router, prefix="/internal")
+    app.include_router(webhooks_router, prefix="/internal")
 
     return app
 

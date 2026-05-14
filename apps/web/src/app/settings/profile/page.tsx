@@ -19,29 +19,7 @@ import {
   CheckCircle2 as CheckCircle2Icon,
 } from 'lucide-react';
 import { toast } from 'sonner';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
-
-function getToken() {
-  return typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-}
-
-async function authFetch(path: string, options: RequestInit = {}) {
-  const token = getToken();
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...options,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  if (res.status === 204) return null;
-  return res.json();
-}
+import { authAPI } from '@/lib/api/auth';
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
@@ -76,21 +54,10 @@ export default function ProfilePage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-        }),
+      await authAPI.updateProfile({
+        first_name: formData.firstName,
+        last_name: formData.lastName,
       });
-
-      if (!response.ok) throw new Error('Failed to update profile');
-
       await refreshUser();
       setIsEditing(false);
       toast.success('Profile updated successfully');
@@ -117,24 +84,10 @@ export default function ProfilePage() {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE_URL}/auth/password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          current_password: passwordData.currentPassword,
-          new_password: passwordData.newPassword,
-        }),
+      await authAPI.changePassword({
+        current_password: passwordData.currentPassword,
+        new_password: passwordData.newPassword,
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to change password');
-      }
-
       toast.success('Password changed successfully');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
@@ -151,8 +104,8 @@ export default function ProfilePage() {
     role: user?.role || 'Viewer',
     organization: user?.organization_name || '',
     orgId: user?.organization_id || '',
-    joinedAt: (user as any)?.created_at ? new Date((user as any).created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown',
-    mfaEnabled: (user as any)?.mfa_enabled || false,
+    joinedAt: user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown',
+    mfaEnabled: user?.mfa_enabled ?? false,
   };
 
   return (
@@ -343,7 +296,7 @@ function MfaSection({ mfaEnabled }: { mfaEnabled: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      const resp = await authFetch('/auth/mfa/enroll', { method: 'POST' });
+      const resp = await authAPI.enrollMfa() as any;
       setQrCode(resp?.qr_code ?? null);
       setSecret(resp?.secret ?? null);
       setEnrolling(true);
@@ -362,10 +315,7 @@ function MfaSection({ mfaEnabled }: { mfaEnabled: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      const resp = await authFetch('/auth/mfa/verify', {
-        method: 'POST',
-        body: JSON.stringify({ code: verifyCode }),
-      });
+      const resp = await authAPI.verifyMfaEnrollment(verifyCode) as any;
       setBackupCodes(resp?.backup_codes ?? []);
       setEnrolling(false);
       toast.success('MFA enabled successfully');
@@ -482,13 +432,12 @@ function SessionsSection() {
 
   const { data: sessionsData, isLoading } = useQuery({
     queryKey: ['auth-sessions'],
-    queryFn: () => authFetch('/auth/sessions'),
-    select: (d) => d?.sessions ?? [],
+    queryFn: () => authAPI.getSessions(),
+    select: (d: any) => d?.sessions ?? [],
   });
 
   const revokeMutation = useMutation({
-    mutationFn: (sessionId: string) =>
-      authFetch(`/auth/sessions/${sessionId}`, { method: 'DELETE' }),
+    mutationFn: (sessionId: string) => authAPI.revokeSession(sessionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth-sessions'] });
       toast.success('Session revoked');

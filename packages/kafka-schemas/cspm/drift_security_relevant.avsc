@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "DriftSecurityRelevant",
+  "namespace": "com.cloudvisor.cspm",
+  "doc": "Emitted when a security-relevant configuration drift is detected",
+  "fields": [
+    {"name": "organization_id", "type": "string"},
+    {"name": "resource_id", "type": "string"},
+    {"name": "resource_type", "type": "string"},
+    {"name": "field_name", "type": "string"},
+    {"name": "environment", "type": "string"},
+    {"name": "severity", "type": "string"},
+    {"name": "drift_event_id", "type": "string"},
+    {"name": "timestamp", "type": "string"}
+  ]
+}

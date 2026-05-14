@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "cicd-secrets-in-env",
+      "file": "secrets_in_env.rego",
+      "title": "Secrets detected in CI/CD environment variables",
+      "severity": "CRITICAL",
+      "category": "cicd",
+      "resource_type": "cicd::pipeline",
+      "compliance": [
+        {"framework": "SOC2", "control": "CC6.1"},
+        {"framework": "PCI-DSS", "control": "3.4"},
+        {"framework": "NIST-800-53", "control": "IA-5"}
+      ]
+    }
+  ]
+}

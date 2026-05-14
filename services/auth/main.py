@@ -12,7 +12,7 @@ from app.core.dependencies import (
     get_auth_settings_cached,
 )
 from app.core.config import get_auth_settings
-from app.api.routes import auth_router, mfa_router, sessions_router, internal_router, admin_router
+from app.api.routes import auth_router, mfa_router, sessions_router, internal_router, admin_router, org_router
 from app.api.routes.sso import router as sso_router
 from app.core import dependencies as deps
 
@@ -107,6 +107,7 @@ def create_app() -> FastAPI:
     app.include_router(internal_router)
     app.include_router(admin_router)
     app.include_router(sso_router)
+    app.include_router(org_router)
 
     return app
 

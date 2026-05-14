@@ -1,0 +1,31 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "oci-bucket-public-access",
+      "file": "bucket_public_access.rego",
+      "title": "OCI Object Storage bucket has public access",
+      "severity": "CRITICAL",
+      "provider": "oci",
+      "category": "cspm",
+      "resource_type": "oci::objectstorage::bucket",
+      "compliance": [
+        {"framework": "CIS-OCI", "control": "4.1"},
+        {"framework": "SOC2", "control": "CC6.1"}
+      ]
+    },
+    {
+      "id": "oci-instance-public-ip",
+      "file": "instance_public_ip.rego",
+      "title": "OCI Compute instance has public IP address",
+      "severity": "MEDIUM",
+      "provider": "oci",
+      "category": "cspm",
+      "resource_type": "oci::compute::instance",
+      "compliance": [
+        {"framework": "CIS-OCI", "control": "2.1"},
+        {"framework": "NIST-800-53", "control": "SC-7"}
+      ]
+    }
+  ]
+}

@@ -87,16 +87,18 @@ class PasswordResetService:
         svc = AuthService(self._db, self._settings, self._redis)
         svc._validate_password(new_password)
 
-        # Update password
-        import bcrypt
-        user.password_hash = bcrypt.hashpw(
-            new_password.encode("utf-8"), bcrypt.gensalt(rounds=self._settings.bcrypt_rounds)
-        ).decode("utf-8")
+        # Update password using async bcrypt (S-06 fix)
+        svc2 = AuthService(self._db, self._settings, self._redis)
+        user.password_hash = await svc2._hash_password(new_password)
         user.updated_at = datetime.utcnow()
         await self._db.commit()
 
         # Consume the token (delete from Redis)
         await self._redis.delete(key)
+
+        # Invalidate all sessions after password reset (spec §3.3)
+        auth_svc = AuthService(self._db, self._settings, self._redis)
+        await auth_svc.invalidate_all_sessions(user_id=user_id)
 
         logger.info(f"Password reset completed for user {user_id}")
         return True

@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "AnomalyDetected",
+  "namespace": "com.cloudvisor.cspm",
+  "doc": "Emitted when a behavioral anomaly is detected on a resource",
+  "fields": [
+    {"name": "organization_id", "type": "string"},
+    {"name": "resource_id", "type": "string"},
+    {"name": "resource_type", "type": "string"},
+    {"name": "anomaly_score", "type": "double"},
+    {"name": "deviating_fields", "type": {"type": "array", "items": "string"}},
+    {"name": "severity", "type": "string"},
+    {"name": "timestamp", "type": "string"}
+  ]
+}

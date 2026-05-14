@@ -1,5 +1,6 @@
 """
-Rule Seeder — seeds built-in CSPM rules from index.json files into the policy DB.
+Rule Seeder — seeds built-in rules from index.json files into the policy DB.
+Covers CSPM (all providers), KSPM, CDR, and CICD categories.
 Runs on startup. Uses upsert logic so it's safe to run multiple times.
 """
 import json
@@ -18,9 +19,7 @@ import os
 logger = logging.getLogger(__name__)
 
 # Rules are at /app/rules/rego/ inside the container (copied by Dockerfile)
-# Fall back to relative path for local development
 _THIS_FILE = Path(__file__).resolve()
-# Try env var first, then container path, then relative
 _RULES_ENV = os.environ.get("POLICY_RULES_REPO_PATH", "")
 if _RULES_ENV:
     RULES_BASE = Path(_RULES_ENV)
@@ -31,18 +30,31 @@ else:
     RULES_BASE = _THIS_FILE.parent.parent.parent.parent.parent / "rules" / "rego"
 
 
+# All index.json locations to seed from
+_INDEX_LOCATIONS = [
+    # CSPM per provider
+    ("cspm", "aws",   RULES_BASE / "cspm" / "aws"   / "index.json"),
+    ("cspm", "azure", RULES_BASE / "cspm" / "azure" / "index.json"),
+    ("cspm", "gcp",   RULES_BASE / "cspm" / "gcp"   / "index.json"),
+    ("cspm", "oci",   RULES_BASE / "cspm" / "oci"   / "index.json"),
+    # Non-CSPM categories
+    ("kspm", None,    RULES_BASE / "kspm"  / "index.json"),
+    ("cdr",  None,    RULES_BASE / "cdr"   / "index.json"),
+    ("cicd", None,    RULES_BASE / "cicd"  / "index.json"),
+]
+
+
 async def seed_builtin_rules(session_factory) -> None:
     """
-    Read all index.json files from rules/rego/cspm/{provider}/
-    and upsert them into the rules table.
+    Read all index.json files and upsert them into the rules table.
+    Covers CSPM (AWS/Azure/GCP/OCI), KSPM, CDR, and CICD.
     """
     total_seeded = 0
     total_skipped = 0
 
-    for provider in ("aws", "azure", "gcp", "oci"):
-        index_path = RULES_BASE / "cspm" / provider / "index.json"
+    for category, provider, index_path in _INDEX_LOCATIONS:
         if not index_path.exists():
-            logger.debug(f"No index.json for {provider}, skipping")
+            logger.debug(f"No index.json at {index_path}, skipping")
             continue
 
         try:
@@ -53,7 +65,14 @@ async def seed_builtin_rules(session_factory) -> None:
             continue
 
         rules = index_data.get("rules", [])
-        logger.info(f"Seeding {len(rules)} {provider.upper()} rules into policy DB")
+        label = f"{provider.upper()} " if provider else ""
+        logger.info(f"Seeding {len(rules)} {label}{category.upper()} rules into policy DB")
+
+        # Determine the rego files base directory
+        if provider:
+            rego_dir = RULES_BASE / category / provider
+        else:
+            rego_dir = RULES_BASE / category
 
         for rule_info in rules:
             rule_id = rule_info.get("id")
@@ -62,15 +81,16 @@ async def seed_builtin_rules(session_factory) -> None:
 
             # Read the rego file content
             rego_file = rule_info.get("file", "")
-            rego_path = RULES_BASE / "cspm" / provider / rego_file
+            rego_path = rego_dir / rego_file
             rego_code = ""
             if rego_path.exists():
                 try:
                     rego_code = rego_path.read_text(encoding="utf-8")
                 except Exception:
-                    rego_code = f"# Rule: {rule_id}\npackage cloudvisor.cspm.{provider}.{rule_id.replace('-', '_')}\n"
-            else:
-                rego_code = f"# Rule: {rule_id}\npackage cloudvisor.cspm.{provider}.{rule_id.replace('-', '_')}\n"
+                    pass
+            if not rego_code:
+                pkg_suffix = rule_id.replace("-", "_")
+                rego_code = f"# Rule: {rule_id}\npackage cloudvisor.{category}.{pkg_suffix}\n"
 
             compliance = rule_info.get("compliance", [])
 
@@ -86,7 +106,6 @@ async def seed_builtin_rules(session_factory) -> None:
                     now = datetime.utcnow()
 
                     if existing:
-                        # Update title/severity/compliance if changed
                         existing.title = rule_info.get("title", existing.title)
                         existing.severity = rule_info.get("severity", existing.severity)
                         existing.compliance_mapping = compliance
@@ -102,8 +121,8 @@ async def seed_builtin_rules(session_factory) -> None:
                             title=rule_info.get("title", rule_id),
                             description=rule_info.get("description", ""),
                             severity=rule_info.get("severity", "MEDIUM"),
-                            category=rule_info.get("category", "cspm"),
-                            provider=provider,
+                            category=category,
+                            provider=provider or rule_info.get("provider"),
                             resource_type=rule_info.get("resource_type", ""),
                             remediation=rule_info.get("remediation", ""),
                             rego_code=rego_code,

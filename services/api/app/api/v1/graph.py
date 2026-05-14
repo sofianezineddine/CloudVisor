@@ -96,10 +96,37 @@ async def execute_graph_query(
     data: CypherQueryRequest,
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Execute a read-only Cypher query against the asset graph."""
+    """
+    Execute a read-only Cypher query against the asset graph.
+
+    Security: Only MATCH/RETURN queries are allowed. Write operations
+    (CREATE, MERGE, SET, DELETE, DETACH, REMOVE, DROP) are rejected.
+    The org_id parameter is always injected server-side for tenant isolation.
+    """
     t0 = time.monotonic()
+
+    # ── Security: reject write operations ─────────────────────────────────────
+    _FORBIDDEN_KEYWORDS = [
+        "CREATE", "MERGE", "SET", "DELETE", "DETACH", "REMOVE",
+        "DROP", "CALL", "LOAD CSV", "FOREACH",
+    ]
+    query_upper = data.query.upper().strip()
+    for keyword in _FORBIDDEN_KEYWORDS:
+        if keyword in query_upper:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Write operations are not allowed in public API queries. Forbidden keyword: {keyword}",
+            )
+
+    # Ensure query starts with MATCH or RETURN (read-only)
+    if not query_upper.startswith(("MATCH", "RETURN", "OPTIONAL", "WITH", "UNWIND")):
+        raise HTTPException(
+            status_code=400,
+            detail="Query must start with MATCH, RETURN, OPTIONAL, WITH, or UNWIND",
+        )
+
     graph = get_graph_proxy()
-    # Inject org_id into parameters for tenant isolation
+    # Inject org_id into parameters for tenant isolation — cannot be overridden by client
     params = {**data.parameters, "org_id": user.organization_id}
     try:
         result = await graph.post(

@@ -11,6 +11,29 @@ import {
 } from '@/hooks/use-cspm';
 import { cspmAPI } from '@/lib/api/cspm';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
+
+/** Download a report file with the auth token attached. */
+async function downloadReportWithAuth(reportId: string, filename: string) {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const url = `${API_BASE}/v1/cspm/reports/${reportId}/download`;
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new Error(`Download failed: ${res.status} ${res.statusText}`);
+  }
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
+}
+
 const COMPLIANCE_FRAMEWORKS = ['CIS-AWS', 'SOC2', 'PCI-DSS', 'HIPAA', 'NIST-800-53', 'ISO27001', 'GDPR'];
 
 function timeAgo(isoDate: string | null | undefined): string {
@@ -72,6 +95,8 @@ export function ReportsTab() {
   const [format, setFormat] = React.useState('csv');
   const [pollingId, setPollingId] = React.useState<string | null>(null);
   const { data: polledReport } = useCSPMReport(pollingId);
+  const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
+  const [downloadError, setDownloadError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (polledReport && (polledReport as any).status === 'ready') setPollingId(null);
@@ -100,6 +125,7 @@ export function ReportsTab() {
   return (
     <div>
       {error && <ErrorBanner message="Failed to load reports" />}
+      {downloadError && <ErrorBanner message={downloadError} />}
       <div className="mb-4 flex items-center justify-between">
         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{items.length} reports</span>
         <Button onClick={() => setShowModal(true)} className="gap-2 h-8 px-3 text-sm">
@@ -142,11 +168,29 @@ export function ReportsTab() {
                 <td style={cellStyle}><span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{report.file_size_bytes ? `${Math.round(report.file_size_bytes / 1024)}KB` : ''}</span></td>
                 <td style={cellStyle}>
                   {report.status === 'ready' ? (
-                    <a href={cspmAPI.getReportDownloadUrl(report.id)} download={`report-${report.id}.csv`}
-                      className="rounded px-2 py-0.5 text-xs"
-                      style={{ color: 'var(--text-link)', border: '1px solid var(--border-default)', textDecoration: 'none' }}>
-                      Download
-                    </a>
+                    <button
+                      onClick={async () => {
+                        setDownloadError(null);
+                        setDownloadingId(report.id);
+                        try {
+                          const filename = `cloudvisor-${report.report_type}-${report.id.slice(0, 8)}.${report.format}`;
+                          await downloadReportWithAuth(report.id, filename);
+                        } catch (e: unknown) {
+                          setDownloadError(e instanceof Error ? e.message : 'Download failed');
+                        } finally {
+                          setDownloadingId(null);
+                        }
+                      }}
+                      disabled={downloadingId === report.id}
+                      className="rounded px-2 py-0.5 text-xs flex items-center gap-1"
+                      style={{ color: 'var(--text-link)', border: '1px solid var(--border-default)', backgroundColor: 'transparent', cursor: 'pointer' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      {downloadingId === report.id ? (
+                        <><Loader2 className="h-3 w-3 animate-spin" /> Downloading…</>
+                      ) : 'Download'}
+                    </button>
                   ) : <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}></span>}
                 </td>
               </tr>

@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "PolicyAutoRemediate",
+  "namespace": "com.cloudvisor.cspm",
+  "doc": "Emitted when a policy triggers auto-remediation for a resource",
+  "fields": [
+    {"name": "organization_id", "type": "string"},
+    {"name": "resource_id", "type": "string"},
+    {"name": "rule_id", "type": "string"},
+    {"name": "remediation_action", "type": "string"},
+    {"name": "enforcement_mode", "type": "string"},
+    {"name": "timestamp", "type": "string"}
+  ]
+}

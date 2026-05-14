@@ -34,8 +34,9 @@ async def get_modules_summary(
     alert = get_alert_proxy()
     cspm = get_cspm_proxy()
 
-    # Get finding stats (includes by_module breakdown)
+    # Get finding stats (includes by_module and by_severity breakdown)
     stats: dict[str, Any] = {}
+    by_severity: dict[str, int] = {}
     try:
         stats_result = await alert.get(
             "/internal/findings/stats",
@@ -43,6 +44,7 @@ async def get_modules_summary(
             headers=user.auth_headers,
         )
         stats = stats_result.get("by_module", {})
+        by_severity = stats_result.get("by_severity", {})
     except Exception:
         pass  # Non-fatal
 
@@ -60,11 +62,15 @@ async def get_modules_summary(
     modules_summary = []
     for module in MODULES:
         finding_count = stats.get(module, 0)
+        # Estimate critical count proportionally from overall severity distribution
+        total_findings = sum(by_severity.values()) or 1
+        critical_ratio = by_severity.get("CRITICAL", 0) / total_findings
+        critical_count = round(finding_count * critical_ratio)
         modules_summary.append({
             "module": module,
             "display_name": module.upper(),
             "finding_count": finding_count,
-            "critical_count": 0,  # Would need per-module severity breakdown
+            "critical_count": critical_count,
             "last_scan_at": last_scan_at,
             "status": "active" if finding_count >= 0 else "inactive",
         })

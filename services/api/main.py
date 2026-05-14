@@ -29,22 +29,53 @@ logger = logging.getLogger("api")
 
 settings = get_api_settings()
 
-# ── In-process rate-limit state (per org, per minute window) ─────────────────
-# For production use Redis; this is a lightweight in-process fallback.
+# ── Redis-backed rate limiter (falls back to in-process if Redis unavailable) ─
+from typing import Any as _Any
+_redis_client: _Any = None
+
+def _get_redis():
+    global _redis_client
+    if _redis_client is None:
+        try:
+            import redis.asyncio as _aioredis
+            import os as _os
+            redis_url = _os.environ.get("REDIS_URL", "redis://cv-redis:6379/4")
+            _redis_client = _aioredis.from_url(redis_url, decode_responses=True)
+        except Exception:
+            pass
+    return _redis_client
+
+# ── In-process rate-limit fallback (per org, per minute window) ───────────────
 _rate_counters: dict[str, tuple[int, float]] = defaultdict(lambda: (0, 0.0))
 _RATE_LIMIT = settings.rate_limit_requests_per_minute
 _WINDOW = 60.0  # seconds
 
 
-def _check_rate_limit(key: str) -> tuple[int, int, float]:
-    """
-    Returns (limit, remaining, reset_ts).
-    Increments the counter for `key` within the current 1-minute window.
-    """
+async def _check_rate_limit_redis(key: str) -> tuple[int, int, float]:
+    """Redis sliding window rate limiter. Returns (limit, remaining, reset_ts)."""
+    redis = _get_redis()
+    if redis:
+        try:
+            now = time.time()
+            window_key = f"ratelimit:{key}:{int(now // _WINDOW)}"
+            pipe = redis.pipeline()
+            pipe.incr(window_key)
+            pipe.expire(window_key, int(_WINDOW) + 5)
+            results = await pipe.execute()
+            count = results[0]
+            remaining = max(0, _RATE_LIMIT - count)
+            reset_ts = (int(now // _WINDOW) + 1) * _WINDOW
+            return _RATE_LIMIT, remaining, reset_ts
+        except Exception:
+            pass  # Fall through to in-process
+    return _check_rate_limit_inprocess(key)
+
+
+def _check_rate_limit_inprocess(key: str) -> tuple[int, int, float]:
+    """In-process fallback rate limiter."""
     now = time.time()
     count, window_start = _rate_counters[key]
     if now - window_start >= _WINDOW:
-        # New window
         count = 0
         window_start = now
     count += 1
@@ -77,12 +108,21 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # ── Security headers ──────────────────────────────────────────────────────
+    from app.middleware.security import SecurityHeadersMiddleware
+    app.add_middleware(SecurityHeadersMiddleware)
+
     # ── Request ID + timing + rate-limit headers middleware ───────────────────
     @app.middleware("http")
     async def request_middleware(request: Request, call_next) -> Response:
         request_id = f"req_{uuid.uuid4().hex[:12]}"
         request.state.request_id = request_id
         request.state.start_time = time.monotonic()
+
+        # Propagate or generate correlation ID for distributed tracing
+        from app.core.proxy import correlation_id_var
+        correlation_id = request.headers.get("x-correlation-id", request_id)
+        correlation_id_var.set(correlation_id)
 
         # Derive a rate-limit key: prefer org from JWT/API-key, fall back to IP
         rate_key = request.client.host if request.client else "unknown"
@@ -94,7 +134,7 @@ def create_app() -> FastAPI:
             # Use first 20 chars of token as key (fast, no decode needed)
             rate_key = f"jwt:{auth_header[7:27]}"
 
-        limit, remaining, reset_ts = _check_rate_limit(rate_key)
+        limit, remaining, reset_ts = await _check_rate_limit_redis(rate_key)
 
         if remaining == 0:
             return JSONResponse(
@@ -121,6 +161,7 @@ def create_app() -> FastAPI:
 
         # Attach standard headers to every response
         response.headers["X-Request-ID"] = request_id
+        response.headers["X-Correlation-ID"] = correlation_id
         response.headers["X-Took-Ms"] = str(
             int((time.monotonic() - request.state.start_time) * 1000)
         )

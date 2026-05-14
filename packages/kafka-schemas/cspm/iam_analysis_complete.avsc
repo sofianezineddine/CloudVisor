@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "IAMAnalysisComplete",
+  "namespace": "com.cloudvisor.cspm",
+  "doc": "Emitted when IAM analysis completes for an account",
+  "fields": [
+    {"name": "organization_id", "type": "string"},
+    {"name": "account_id", "type": "string"},
+    {"name": "identities_analyzed", "type": "int"},
+    {"name": "escalation_paths_found", "type": "int"},
+    {"name": "timestamp", "type": "string"}
+  ]
+}

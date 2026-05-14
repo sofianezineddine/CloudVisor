@@ -139,6 +139,45 @@ async def get_assets_summary(
     return ok(data=result, took_ms=int((time.monotonic() - t0) * 1000))
 
 
+@router.get("/search")
+async def search_assets(
+    q: str = Query(..., min_length=1, description="Full-text search query"),
+    provider: str | None = Query(None),
+    region: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """
+    Full-text search across all assets (Elasticsearch-backed).
+    Searches asset name, ID, tags, and resource type.
+    """
+    t0 = time.monotonic()
+    proxy = get_graph_proxy()
+    params: dict[str, Any] = {
+        "q": q,
+        "org_id": user.organization_id,
+        "limit": limit,
+    }
+    if provider:
+        params["provider"] = provider
+    if region:
+        params["region"] = region
+    try:
+        result = await proxy.get(
+            "/internal/assets/search",
+            params=params,
+            headers=user.auth_headers,
+        )
+        resources = result.get("assets", result.get("results", []))
+        return ok(
+            data=resources,
+            total=result.get("total", len(resources)),
+            took_ms=int((time.monotonic() - t0) * 1000),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Asset service unavailable: {e}")
+
+
 @router.get("/{asset_id}")
 async def get_asset(
     asset_id: str,

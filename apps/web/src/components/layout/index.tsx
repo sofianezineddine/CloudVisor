@@ -102,18 +102,30 @@ export function AppLayout({
   breadcrumbs,
   flashbarItems,
   splitPanelContent,
+  cspmActiveTab,
   splitPanelHeader,
   splitPanelOpen,
   onSplitPanelClose,
-  cspmActiveTab,
   onCspmTabChange,
 }: AppLayoutProps) {
+  const pathname = usePathname();
+
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     if (_sidebarOpen !== null) return _sidebarOpen;
     const open = getInitialSidebarOpen();
     _sidebarOpen = open;
     return open;
   });
+
+  // Open sidebar automatically when a service tab is active
+  // (i.e. when we are inside a service page — not on the console/home)
+  React.useEffect(() => {
+    const isServicePage = pathname !== '/console' && pathname !== '/' && pathname !== '/services';
+    if (isServicePage && !_sidebarOpen) {
+      setSidebarOpen(true);
+      _sidebarOpen = true;
+    }
+  }, [pathname]);
 
   // Get Q panel state
   const qPanelOpen = useCloudVisorQStore((state) => state.isOpen);

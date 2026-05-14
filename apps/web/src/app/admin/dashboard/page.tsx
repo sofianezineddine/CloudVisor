@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Users, CreditCard, Cloud, TrendingUp, AlertTriangle, Activity, LogOut, LayoutDashboard, Shield, ChevronRight } from 'lucide-react';
-
-const ADMIN_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
+import { authAPI } from '@/lib/api/auth';
 
 interface AdminUser {
   id: string;
@@ -35,14 +34,8 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    fetch(`${ADMIN_API_BASE_URL}/admin/auth/me`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error('Not authenticated');
-        return res.json();
-      })
-      .then((data) => {
+    authAPI.getAdminUser()
+      .then((data: any) => {
         setUser(data);
         setLoading(false);
       })
@@ -54,16 +47,10 @@ export default function AdminDashboardPage() {
   }, [router]);
 
   const handleLogout = async () => {
-    const token = localStorage.getItem('admin_access_token');
-    if (token) {
-      try {
-        await fetch(`${ADMIN_API_BASE_URL}/admin/auth/logout`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-      } catch (e) {
-        // Ignore logout errors
-      }
+    try {
+      await authAPI.adminLogout();
+    } catch {
+      // Ignore logout errors
     }
     localStorage.removeItem('admin_access_token');
     localStorage.removeItem('admin_refresh_token');

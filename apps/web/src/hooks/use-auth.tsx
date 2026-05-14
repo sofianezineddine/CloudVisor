@@ -11,7 +11,9 @@ interface User {
   organization_id: string;
   organization_name?: string;
   role?: string;
-  provider: 'local' | 'google' | 'github';
+  mfa_enabled: boolean;
+  provider: 'local' | 'google' | 'github' | 'saml' | 'oidc';
+  created_at?: string;
 }
 
 interface AuthContextType {
@@ -35,6 +37,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 
+// SECURITY NOTE: Tokens are stored in localStorage for compatibility with the
+// current architecture. This is acceptable for a development/demo environment.
+// For production hardening, migrate to httpOnly cookies set by the auth service
+// to eliminate XSS token theft risk. The auth service already supports this via
+// the Set-Cookie header on /auth/login and /auth/refresh.
+
 function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -46,6 +54,8 @@ function getRefreshToken(): string | null {
 }
 
 function setTokens(accessToken: string, refreshToken: string) {
+  // Validate tokens are non-empty strings before storing
+  if (!accessToken || !refreshToken) return;
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
@@ -69,9 +79,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const userData = await authAPI.getCurrentUser(token);
       setUser(userData);
-      // Persist user data for org ID resolution in other components (e.g. CloudVisor Q)
+      // Persist only non-sensitive user fields needed for org ID resolution.
+      // Do NOT store sensitive fields like mfa_secret or full profile in localStorage.
       if (typeof window !== 'undefined') {
-        localStorage.setItem('cloudvisor-user', JSON.stringify(userData));
+        const safeUserData = {
+          id: userData.id,
+          organization_id: userData.organization_id,
+          organization_name: userData.organization_name,
+          role: userData.role,
+        };
+        localStorage.setItem('cloudvisor-user', JSON.stringify(safeUserData));
       }
     } catch {
       const refreshToken = getRefreshToken();
@@ -82,7 +99,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const newUserData = await authAPI.getCurrentUser(tokens.access_token);
           setUser(newUserData);
           if (typeof window !== 'undefined') {
-            localStorage.setItem('cloudvisor-user', JSON.stringify(newUserData));
+            const safeUserData = {
+              id: newUserData.id,
+              organization_id: newUserData.organization_id,
+              organization_name: newUserData.organization_name,
+              role: newUserData.role,
+            };
+            localStorage.setItem('cloudvisor-user', JSON.stringify(safeUserData));
           }
         } catch {
           clearTokens();

@@ -55,6 +55,7 @@ const tableStyle: React.CSSProperties = {
 export function PoliciesTab() {
   const { data, isLoading, error } = useCSPMRules();
   const toggleRule = useToggleRule();
+  const [toggleError, setToggleError] = React.useState<string | null>(null);
   const [severityFilter, setSeverityFilter] = React.useState('');
   const [showCreateModal, setShowCreateModal] = React.useState(false);
   const REGO_TEMPLATE = `# METADATA
@@ -95,7 +96,12 @@ deny[finding] {
   const severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 
   async function handleToggle(rule: CSPMRule) {
-    await toggleRule.mutateAsync({ ruleId: rule.rule_id, enable: !rule.is_enabled });
+    setToggleError(null);
+    try {
+      await toggleRule.mutateAsync({ ruleId: rule.rule_id, enable: !rule.is_enabled });
+    } catch (e: unknown) {
+      setToggleError(e instanceof Error ? e.message : 'Failed to update rule');
+    }
   }
 
   async function handleTestRule() {

@@ -14,10 +14,51 @@
 const API_GATEWAY_BASE_URL =
   process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
 
+const AUTH_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
+
 /** Read the access token from localStorage (set by use-auth.tsx on login). */
 function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('access_token');
+}
+
+function getRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('refresh_token');
+}
+
+/** Attempt a silent token refresh. Returns the new access token or null. */
+async function silentRefresh(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const res = await fetch(`${AUTH_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.access_token && data.refresh_token) {
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
+      return data.access_token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Clear tokens and redirect to login. */
+function forceLogout(): void {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('cloudvisor-user');
+  if (typeof window !== 'undefined') {
+    window.location.href = '/login?error=session_expired';
+  }
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -115,7 +156,8 @@ export interface ComplianceResult {
 
 async function apiFetch<T = unknown>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  _retry = true,
 ): Promise<T> {
   const url = `${API_GATEWAY_BASE_URL}${endpoint}`;
   const token = getAccessToken();
@@ -128,6 +170,18 @@ async function apiFetch<T = unknown>(
     },
     ...options,
   });
+
+  // ── Auto-refresh on 401 ───────────────────────────────────────────────────
+  if (response.status === 401 && _retry) {
+    const newToken = await silentRefresh();
+    if (newToken) {
+      // Retry once with the new token
+      return apiFetch<T>(endpoint, options, false);
+    }
+    // Refresh failed — session is dead, force logout
+    forceLogout();
+    throw new Error('Session expired. Please sign in again.');
+  }
 
   if (!response.ok) {
     let errorData: { detail?: unknown };
@@ -467,6 +521,36 @@ export const modulesAPI = {
   },
 };
 
+// ─── Reports ──────────────────────────────────────────────────────────────────
+
+export const reportsAPI = {
+  async list(params?: { report_type?: string; limit?: number }): Promise<ApiEnvelope<any[]>> {
+    const query = new URLSearchParams();
+    if (params?.report_type) query.set('report_type', params.report_type);
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return apiFetch(`/v1/reports${qs ? `?${qs}` : ''}`);
+  },
+
+  async get(reportId: string): Promise<ApiEnvelope<any>> {
+    return apiFetch(`/v1/reports/${reportId}`);
+  },
+
+  async generate(data: {
+    report_type: string;
+    framework?: string;
+    format?: string;
+    date_from?: string;
+    date_to?: string;
+    account_ids?: string[];
+  }): Promise<ApiEnvelope<any>> {
+    return apiFetch('/v1/reports', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 // ─── Accounts ─────────────────────────────────────────────────────────────────
 
 export const accountsAPI = {
@@ -514,6 +598,7 @@ const apiClient = {
   assets: assetsAPI,
   compliance: complianceAPI,
   accounts: accountsAPI,
+  reports: reportsAPI,
   risk: riskAPI,
   activity: activityAPI,
   modules: modulesAPI,

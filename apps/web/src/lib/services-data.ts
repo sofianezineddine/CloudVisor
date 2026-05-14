@@ -90,6 +90,7 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
       { name: 'Cloud Accounts', href: '/settings',               desc: 'Manage cloud environments' },
       { name: 'Notifications',  href: '/settings/notifications', desc: 'Configure alert channels' },
       { name: 'Team',           href: '/settings/team',          desc: 'Team members and RBAC' },
+      { name: 'Reports',        href: '/reports',                desc: 'Generate compliance and security reports' },
     ],
   },
 ];

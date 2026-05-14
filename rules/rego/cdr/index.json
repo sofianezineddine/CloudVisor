@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "cdr-root-account-usage",
+      "file": "root_account_usage.rego",
+      "title": "AWS root account API usage detected",
+      "severity": "CRITICAL",
+      "provider": "aws",
+      "category": "cdr",
+      "resource_type": "aws::cloudtrail::event",
+      "compliance": [
+        {"framework": "CIS-AWS", "control": "1.7"},
+        {"framework": "SOC2", "control": "CC6.1"},
+        {"framework": "PCI-DSS", "control": "7.1"}
+      ]
+    },
+    {
+      "id": "cdr-iam-privilege-escalation",
+      "file": "iam_privilege_escalation.rego",
+      "title": "IAM privilege escalation attempt detected",
+      "severity": "CRITICAL",
+      "provider": "aws",
+      "category": "cdr",
+      "resource_type": "aws::cloudtrail::event",
+      "compliance": [
+        {"framework": "SOC2", "control": "CC6.3"},
+        {"framework": "NIST-800-53", "control": "AC-6"}
+      ]
+    },
+    {
+      "id": "cdr-suspicious-api-calls",
+      "file": "suspicious_api_calls.rego",
+      "title": "Suspicious IAM privilege escalation detected",
+      "severity": "CRITICAL",
+      "provider": "aws",
+      "category": "cdr",
+      "resource_type": "aws::cloudtrail::event",
+      "compliance": [
+        {"framework": "SOC2", "control": "CC7.2"},
+        {"framework": "NIST-800-53", "control": "AU-6"}
+      ]
+    }
+  ]
+}

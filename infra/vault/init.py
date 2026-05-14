@@ -9,9 +9,21 @@ Runs on every container start (restart: always).
 4. Enables cloudvisor/ KV v2 mount
 5. Writes root token to /vault/data/vault_token for the connector service
 6. Loops every 10 seconds — re-unseals automatically if Vault restarts
+
+SECURITY WARNING: This script uses a single-key unseal (secret_shares=1, threshold=1)
+and stores the unseal key and root token on disk. This is intentional for a
+development/demo environment where Vault auto-unseal is not configured.
+
+For PRODUCTION deployments:
+  - Use Vault Auto Unseal with AWS KMS, Azure Key Vault, or GCP Cloud KMS
+  - Use multiple key shares (e.g., 5 shares, threshold 3) for Shamir's Secret Sharing
+  - Never store the root token on disk — use AppRole or Kubernetes auth instead
+  - Rotate the root token immediately after initial setup
+  - Use a dedicated service token with minimal policies instead of the root token
 """
 import json
 import os
+import stat
 import sys
 import time
 
@@ -55,7 +67,11 @@ def wait_for_vault(retries=60):
 
 
 def initialize_vault(client):
-    """Initialize Vault and save keys. Only runs once."""
+    """Initialize Vault and save keys. Only runs once.
+
+    SECURITY: Uses 1 key share for development convenience.
+    Production should use multiple shares with a higher threshold.
+    """
     print("Initializing Vault (1 key share, threshold 1)...")
     result = client.sys.initialize(secret_shares=1, secret_threshold=1)
     keys = {
@@ -65,8 +81,10 @@ def initialize_vault(client):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(KEYS_FILE, "w") as f:
         json.dump(keys, f)
-    os.chmod(KEYS_FILE, 0o600)
+    # Restrict to owner read/write only (no group or other access)
+    os.chmod(KEYS_FILE, stat.S_IRUSR | stat.S_IWUSR)
     print(f"Initialized. Keys saved to {KEYS_FILE}")
+    print("WARNING: Root token and unseal key stored on disk — development mode only.")
     return keys
 
 
@@ -112,7 +130,7 @@ def write_token(root_token):
     with open(TOKEN_FILE, "w") as f:
         f.write(root_token)
     try:
-        os.chmod(TOKEN_FILE, 0o600)
+        os.chmod(TOKEN_FILE, stat.S_IRUSR | stat.S_IWUSR)
     except Exception:
         pass
     print(f"Token written to {TOKEN_FILE} ✓")

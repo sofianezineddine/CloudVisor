@@ -22,6 +22,11 @@ import { RiskExplorerTab } from './tabs/risk-explorer-tab';
 import { PoliciesTab } from './tabs/policies-tab';
 import { ReportsTab } from './tabs/reports-tab';
 import { ScanHistoryTab } from './tabs/scan-history-tab';
+import { IAMSecurityTab } from './tabs/iam-security-tab';
+import { AttackPathsTab } from './tabs/attack-paths-tab';
+import { IaCSecurityTab } from './tabs/iac-security-tab';
+import { DriftDetectionTab } from './tabs/drift-detection-tab';
+import { PolicyEngineTab } from './tabs/policy-engine-tab';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -32,6 +37,11 @@ const CSPM_TABS = [
   { id: 'assets', label: 'Assets' },
   { id: 'compliance', label: 'Compliance' },
   { id: 'risk-map', label: 'Risk Map' },
+  { id: 'iam-security', label: 'IAM Security' },
+  { id: 'attack-paths', label: 'Attack Paths' },
+  { id: 'iac-security', label: 'IaC Security' },
+  { id: 'drift-detection', label: 'Drift Detection' },
+  { id: 'policy-engine', label: 'Policy Engine' },
   { id: 'policies', label: 'Policies' },
   { id: 'reports', label: 'Reports' },
   { id: 'scan-history', label: 'Scan History' },
@@ -85,7 +95,6 @@ export default function CSPMPage() {
   return (
     <ProtectedRoute>
       <AppLayout
-        breadcrumbs={[{ text: 'Home', href: '/console' }, { text: 'CSPM' }]}
         cspmActiveTab={activeTab}
         onCspmTabChange={setActiveTab}
       >
@@ -145,6 +154,11 @@ export default function CSPMPage() {
           {activeTab === 'assets' && <AssetsTab />}
           {activeTab === 'compliance' && <ComplianceTab />}
           {activeTab === 'risk-map' && <RiskExplorerTab />}
+          {activeTab === 'iam-security' && <IAMSecurityTab />}
+          {activeTab === 'attack-paths' && <AttackPathsTab />}
+          {activeTab === 'iac-security' && <IaCSecurityTab />}
+          {activeTab === 'drift-detection' && <DriftDetectionTab />}
+          {activeTab === 'policy-engine' && <PolicyEngineTab />}
           {activeTab === 'policies' && <PoliciesTab />}
           {activeTab === 'reports' && <ReportsTab />}
           {activeTab === 'scan-history' && <ScanHistoryTab />}

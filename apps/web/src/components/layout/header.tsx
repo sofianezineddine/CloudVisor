@@ -295,27 +295,106 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
 }
 
 // ─── Service breadcrumb mapping ──────────────────────────────────────────────
+// Maps service paths to their display names and all known tab labels.
+// The activeTab prop from the page is used to resolve the second breadcrumb segment.
 const SERVICE_BREADCRUMBS: Record<string, { service: string; tabs?: Record<string, string> }> = {
-  '/cspm': { 
+  '/cspm': {
     service: 'CSPM',
     tabs: {
       'overview': 'Overview',
-      'misconfigurations': 'Misconfigurations', 
+      'findings': 'Findings',
+      'incidents': 'Incidents',
+      'assets': 'Assets',
+      'risk-map': 'Risk Explorer',
+      'iam-security': 'IAM Security',
+      'attack-paths': 'Attack Paths',
+      'iac-security': 'IaC Security',
+      'drift-detection': 'Drift Detection',
+      'policy-engine': 'Policy Engine',
       'compliance': 'Compliance',
       'policies': 'Policies',
-      'inventory': 'Inventory',
       'reports': 'Reports',
-      'scan-history': 'Scan History'
-    }
+      'scan-history': 'Scan History',
+    },
   },
-  '/cwpp': { service: 'CWPP' },
-  '/ciem': { service: 'CIEM' },
-  '/kspm': { service: 'KSPM' },
-  '/dspm': { service: 'DSPM' },
-  '/cicd': { service: 'CI/CD Security' },
-  '/cdr': { service: 'CDR' },
-  '/aiops': { service: 'AIOps' },
-  '/copilot': { service: 'AI Copilot' },
+  '/cwpp': {
+    service: 'CWPP',
+    tabs: {
+      'overview': 'Overview',
+      'findings': 'Findings',
+      'assets': 'Assets',
+      'policies': 'Policies',
+      'reports': 'Reports',
+    },
+  },
+  '/ciem': {
+    service: 'CIEM',
+    tabs: {
+      'overview': 'Overview',
+      'findings': 'Findings',
+      'assets': 'Assets',
+      'policies': 'Policies',
+      'reports': 'Reports',
+    },
+  },
+  '/kspm': {
+    service: 'KSPM',
+    tabs: {
+      'overview': 'Overview',
+      'findings': 'Findings',
+      'assets': 'Assets',
+      'policies': 'Policies',
+      'reports': 'Reports',
+    },
+  },
+  '/dspm': {
+    service: 'DSPM',
+    tabs: {
+      'overview': 'Overview',
+      'findings': 'Findings',
+      'assets': 'Assets',
+      'policies': 'Policies',
+      'reports': 'Reports',
+    },
+  },
+  '/cicd': {
+    service: 'CI/CD Security',
+    tabs: {
+      'overview': 'Overview',
+      'findings': 'Findings',
+      'assets': 'Assets',
+      'policies': 'Policies',
+      'reports': 'Reports',
+    },
+  },
+  '/cdr': {
+    service: 'CDR',
+    tabs: {
+      'overview': 'Overview',
+      'findings': 'Findings',
+      'assets': 'Assets',
+      'policies': 'Policies',
+      'reports': 'Reports',
+    },
+  },
+  '/aiops': {
+    service: 'AIOps',
+    tabs: {
+      'overview': 'Overview',
+      'insights': 'Insights',
+      'correlations': 'Correlations',
+      'rules': 'Rules',
+      'reports': 'Reports',
+    },
+  },
+  '/copilot': {
+    service: 'CloudVisor Q',
+    tabs: {
+      'chat': 'Chat',
+      'conversations': 'Conversations',
+      'saved': 'Saved Responses',
+    },
+  },
   '/findings': { service: 'Findings' },
   '/incidents': { service: 'Incidents' },
   '/assets': { service: 'Assets' },
@@ -323,45 +402,47 @@ const SERVICE_BREADCRUMBS: Record<string, { service: string; tabs?: Record<strin
   '/risk-map': { service: 'Risk Explorer' },
 };
 
-// Generate AWS-style breadcrumbs based on pathname
+// Generate breadcrumbs: always "ServiceName > ActiveTabName" when a tab is active.
 function generateServiceBreadcrumbs(pathname: string, activeTab?: string): BreadcrumbItem[] {
-  // Check if this is a service page
-  const serviceConfig = SERVICE_BREADCRUMBS[pathname];
-  if (serviceConfig) {
-    const breadcrumbs: BreadcrumbItem[] = [{ text: serviceConfig.service }];
-    
-    // Add tab if specified and exists
-    if (activeTab && serviceConfig.tabs && serviceConfig.tabs[activeTab]) {
-      breadcrumbs.push({ text: serviceConfig.tabs[activeTab] });
-    }
-    
-    return breadcrumbs;
-  }
-  
-  // Check for nested service paths (e.g., /cspm/policies)
-  for (const [basePath, config] of Object.entries(SERVICE_BREADCRUMBS)) {
-    if (pathname.startsWith(basePath + '/')) {
-      const breadcrumbs: BreadcrumbItem[] = [{ text: config.service, href: basePath }];
-      
-      // Extract the sub-path
-      const subPath = pathname.slice(basePath.length + 1);
-      if (config.tabs && config.tabs[subPath]) {
-        breadcrumbs.push({ text: config.tabs[subPath] });
-      } else {
-        // Capitalize the sub-path as fallback
-        breadcrumbs.push({ text: subPath.charAt(0).toUpperCase() + subPath.slice(1) });
+  // Find matching service config
+  let serviceConfig: { service: string; tabs?: Record<string, string> } | undefined;
+  let basePath = '';
+
+  // Exact match first
+  if (SERVICE_BREADCRUMBS[pathname]) {
+    serviceConfig = SERVICE_BREADCRUMBS[pathname];
+    basePath = pathname;
+  } else {
+    // Prefix match for nested paths
+    for (const [path, config] of Object.entries(SERVICE_BREADCRUMBS)) {
+      if (pathname.startsWith(path + '/')) {
+        serviceConfig = config;
+        basePath = path;
+        break;
       }
-      
-      return breadcrumbs;
     }
   }
-  
-  // Default breadcrumbs for non-service pages
-  if (pathname.startsWith('/settings')) {
-    return [{ text: 'Settings' }];
+
+  if (!serviceConfig) {
+    if (pathname.startsWith('/settings')) return [{ text: 'Settings' }];
+    return [];
   }
-  
-  return [];
+
+  // Resolve the active tab label
+  // Priority: activeTab prop > URL segment after basePath
+  const tabId = activeTab || pathname.slice(basePath.length).replace(/^\//, '') || '';
+  const tabLabel = tabId && serviceConfig.tabs ? serviceConfig.tabs[tabId] : undefined;
+
+  if (tabLabel) {
+    // "ServiceName > TabName" — service name is a link back to the service root
+    return [
+      { text: serviceConfig.service, href: basePath },
+      { text: tabLabel },
+    ];
+  }
+
+  // No tab — just show service name
+  return [{ text: serviceConfig.service }];
 }
 
 // ─── Breadcrumbs ──────────────────────────────────────────────────────────────

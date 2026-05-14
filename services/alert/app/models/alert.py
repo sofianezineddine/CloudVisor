@@ -137,6 +137,34 @@ class NotificationLogModel(Base):
     sent_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
+class WebhookModel(Base):
+    """Outbound webhook endpoint registration.
+
+    CloudVisor delivers signed JSON payloads to the registered URL
+    when matching events occur. Payloads are signed with HMAC-SHA256
+    using the optional secret.
+    """
+
+    __tablename__ = "webhooks"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    organization_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    # Optional HMAC-SHA256 signing secret — stored hashed in production
+    secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Empty list = subscribe to all events
+    events: Mapped[list] = mapped_column(ARRAY(String), default=list)
+    # Empty list = all severities
+    severity_filter: Mapped[list] = mapped_column(ARRAY(String), default=list)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class AuditLogModel(Base):
     """GAP 1: Audit log table — pass-through storage for audit.events Kafka topic.
     Matches spec §5.1 schema exactly.

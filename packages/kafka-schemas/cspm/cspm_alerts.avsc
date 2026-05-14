@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "CSPMAlert",
+  "namespace": "com.cloudvisor.cspm",
+  "doc": "Emitted when a correlated CSPM alert is generated",
+  "fields": [
+    {"name": "alert_id", "type": "string"},
+    {"name": "organization_id", "type": "string"},
+    {"name": "correlation_rule_id", "type": "string"},
+    {"name": "combined_severity", "type": "string"},
+    {"name": "contributing_events", "type": {"type": "array", "items": "string"}},
+    {"name": "timestamp", "type": "string"}
+  ]
+}
