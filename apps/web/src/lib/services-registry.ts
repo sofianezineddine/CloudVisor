@@ -113,8 +113,10 @@ export const SERVICES: ServiceDefinition[] = [
     defaultTab: 'overview',
     sections: [
       { label: null, tabs: [{ id: 'overview', label: 'Overview' }] },
-      { label: 'Intelligence', tabs: [{ id: 'insights', label: 'Insights' }, { id: 'correlations', label: 'Correlations' }] },
-      { label: 'Configuration', tabs: [{ id: 'rules', label: 'Rules' }, { id: 'reports', label: 'Reports' }] },
+      { label: 'Alert Management', tabs: [{ id: 'alerts', label: 'Alerts' }, { id: 'incidents', label: 'Incidents' }] },
+      { label: 'Automation', tabs: [{ id: 'workflows', label: 'Workflows' }] },
+      { label: 'Infrastructure', tabs: [{ id: 'providers', label: 'Providers' }, { id: 'topology', label: 'Topology' }] },
+      { label: 'Analytics', tabs: [{ id: 'dashboards', label: 'Dashboards' }] },
     ],
   },
   {

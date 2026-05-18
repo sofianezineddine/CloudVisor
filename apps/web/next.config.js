@@ -24,9 +24,15 @@ const nextConfig = {
   },
   async rewrites() {
     return [
+      // Keep UI backend API — proxied to AIOps service
       {
         source: '/api/:path*',
-        destination: 'http://localhost:8080/:path*',
+        destination: 'http://localhost:8011/:path*',
+      },
+      // Keep UI backend route (used by Keep UI client via /backend prefix)
+      {
+        source: '/backend/:path*',
+        destination: 'http://localhost:8011/:path*',
       },
     ];
   },

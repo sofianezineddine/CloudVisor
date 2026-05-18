@@ -28,6 +28,7 @@ class APISettings(BaseSettings):
     alert_service_url: str = Field(default="http://cv-alert:8004")
     cspm_service_url: str = Field(default="http://cv-cspm:8006")
     copilot_service_url: str = Field(default="http://cv-copilot:8010")
+    keep_service_url: str = Field(default="http://cv-keep:8007")
 
     # Rate limiting
     rate_limit_requests_per_minute: int = Field(default=600)

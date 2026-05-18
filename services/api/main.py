@@ -217,7 +217,21 @@ def create_app() -> FastAPI:
     # ── Health / ready ────────────────────────────────────────────────────────
     @app.get("/health", include_in_schema=False)
     async def health() -> dict:
-        return {"status": "healthy", "service": "api"}
+        """Aggregated health check including upstream services."""
+        import httpx as _httpx
+
+        services_health: dict[str, str] = {"api": "healthy"}
+
+        # Check Keep service health
+        try:
+            async with _httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{settings.keep_service_url.rstrip('/')}/health")
+                services_health["keep"] = "healthy" if resp.status_code == 200 else "unhealthy"
+        except Exception:
+            services_health["keep"] = "unreachable"
+
+        overall = "healthy" if all(v == "healthy" for v in services_health.values()) else "degraded"
+        return {"status": overall, "service": "api", "services": services_health}
 
     @app.get("/ready", include_in_schema=False)
     async def ready() -> dict:

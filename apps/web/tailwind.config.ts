@@ -6,6 +6,13 @@ const config: Config = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/entities/**/*.{js,ts,jsx,tsx}',
+    './src/features/**/*.{js,ts,jsx,tsx}',
+    './src/widgets/**/*.{js,ts,jsx,tsx}',
+    './src/shared/**/*.{js,ts,jsx,tsx}',
+    './src/utils/**/*.{js,ts,jsx,tsx}',
+    './src/keep/**/*.{js,ts,jsx,tsx}',
+    './node_modules/@tremor/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
     extend: {
@@ -46,6 +53,20 @@ const config: Config = {
         lg: '4px',
         md: '2px',
         sm: '2px',
+        'tremor-small': '0.375rem',
+        'tremor-default': '0.5rem',
+        'tremor-full': '9999px',
+      },
+      fontSize: {
+        'tremor-label': ['0.75rem'],
+        'tremor-default': ['0.875rem', { lineHeight: '1.25rem' }],
+        'tremor-title': ['1.125rem', { lineHeight: '1.75rem' }],
+        'tremor-metric': ['1.875rem', { lineHeight: '2.25rem' }],
+      },
+      boxShadow: {
+        'tremor-input': '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+        'tremor-card': '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
+        'tremor-dropdown': '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
       },
       fontFamily: {
         sans: ['Open Sans', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
@@ -77,7 +98,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [require('tailwindcss-animate'), require('@headlessui/tailwindcss')],
 };
 
 export default config;

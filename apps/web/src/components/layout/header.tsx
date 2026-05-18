@@ -381,10 +381,13 @@ const SERVICE_BREADCRUMBS: Record<string, { service: string; tabs?: Record<strin
     service: 'AIOps',
     tabs: {
       'overview': 'Overview',
-      'insights': 'Insights',
-      'correlations': 'Correlations',
-      'rules': 'Rules',
-      'reports': 'Reports',
+      'alerts': 'Alerts',
+      'incidents': 'Incidents',
+      'workflows': 'Workflows',
+      'providers': 'Providers',
+      'topology': 'Topology',
+      'maintenance': 'Maintenance',
+      'dashboards': 'Dashboards',
     },
   },
   '/copilot': {

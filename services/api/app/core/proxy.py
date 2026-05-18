@@ -177,3 +177,6 @@ def get_auth_proxy() -> ServiceProxy:
 
 def get_copilot_proxy() -> ServiceProxy:
     return ServiceProxy(_settings.copilot_service_url)
+
+def get_keep_proxy() -> ServiceProxy:
+    return ServiceProxy(_settings.keep_service_url)

@@ -1,0 +1,337 @@
+/*
+ * AIOps Theme Override — CloudVisor Design System
+ *
+ * This file overrides Tremor UI default theme variables with CloudVisor's
+ * dark-mode design tokens. All overrides are scoped to `.aiops-scope` to
+ * prevent collisions with Radix UI components used elsewhere in the app.
+ *
+ * Uses CSS @layer to control specificity and ensure Tremor styles don't
+ * bleed into the rest of the CloudVisor platform.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ─── Layer: tremor-overrides ──────────────────────────────────────────────
+   Scoped below the base and components layers so that CloudVisor's global
+   styles take precedence outside .aiops-scope, while Tremor components
+   inside .aiops-scope receive the correct dark-theme tokens.
+   ────────────────────────────────────────────────────────────────────────── */
+@layer tremor-overrides {
+
+  /* ─── CloudVisor Design Tokens (AIOps scope) ─────────────────────────────── */
+  .aiops-scope {
+    /* ── Backgrounds ── */
+    --color-bg-base: #0f1117;
+    --color-bg-surface: #1a1d27;
+    --color-bg-raised: #21242f;
+    --color-bg-hover: #2a2d3a;
+
+    /* ── Borders ── */
+    --color-border: #2e3140;
+    --color-border-focus: #4a90d9;
+
+    /* ── Brand & Semantic Colors ── */
+    --color-primary: #4a90d9;
+    --color-primary-hover: #5ba3f5;
+    --color-danger: #e05252;
+    --color-warning: #e8a838;
+    --color-success: #3db87a;
+    --color-info: #4a90d9;
+
+    /* ── Text ── */
+    --color-text-primary: #e8eaf0;
+    --color-text-secondary: #9099b0;
+    --color-text-disabled: #50566a;
+
+    /* ── Typography ── */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    /* ── Base appearance ── */
+    color: var(--color-text-primary);
+    background-color: var(--color-bg-base);
+  }
+
+  /* ─── Tremor CSS Variable Overrides ──────────────────────────────────────── */
+
+  /* Tremor brand colors */
+  .aiops-scope {
+    --tremor-brand-subtle: rgba(74, 144, 217, 0.15);
+    --tremor-brand-DEFAULT: #4a90d9;
+    --tremor-brand-emphasis: #5ba3f5;
+    --tremor-brand-inverted: #ffffff;
+    --tremor-brand-muted: rgba(74, 144, 217, 0.10);
+    --tremor-brand-faint: rgba(74, 144, 217, 0.05);
+  }
+
+  /* Tremor background colors */
+  .aiops-scope {
+    --tremor-background-subtle: #1a1d27;
+    --tremor-background-DEFAULT: #0f1117;
+    --tremor-background-emphasis: #21242f;
+    --tremor-background-muted: #1a1d27;
+  }
+
+  /* Tremor border colors */
+  .aiops-scope {
+    --tremor-border-DEFAULT: #2e3140;
+  }
+
+  /* Tremor ring (focus) colors */
+  .aiops-scope {
+    --tremor-ring-DEFAULT: #4a90d9;
+  }
+
+  /* Tremor content (text) colors */
+  .aiops-scope {
+    --tremor-content-subtle: #50566a;
+    --tremor-content-DEFAULT: #9099b0;
+    --tremor-content-emphasis: #e8eaf0;
+    --tremor-content-strong: #ffffff;
+    --tremor-content-inverted: #0f1117;
+  }
+
+  /* ─── Tremor Component Overrides ─────────────────────────────────────────── */
+
+  /* Cards and panels */
+  .aiops-scope [class*="tremor-Card"],
+  .aiops-scope [class*="tremor-card"] {
+    background-color: var(--color-bg-surface);
+    border-color: var(--color-border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.30);
+  }
+
+  /* Inputs and selects */
+  .aiops-scope input,
+  .aiops-scope select,
+  .aiops-scope textarea,
+  .aiops-scope [class*="tremor-TextInput"],
+  .aiops-scope [class*="tremor-Select"] {
+    background-color: var(--color-bg-raised);
+    border-color: var(--color-border);
+    color: var(--color-text-primary);
+  }
+
+  .aiops-scope input:focus,
+  .aiops-scope select:focus,
+  .aiops-scope textarea:focus,
+  .aiops-scope [class*="tremor-TextInput"]:focus-within,
+  .aiops-scope [class*="tremor-Select"]:focus-within {
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+    outline: none;
+  }
+
+  .aiops-scope input::placeholder,
+  .aiops-scope textarea::placeholder {
+    color: var(--color-text-disabled);
+  }
+
+  /* Buttons */
+  .aiops-scope [class*="tremor-Button"][data-variant="primary"],
+  .aiops-scope button[class*="tremor"][class*="primary"] {
+    background-color: var(--color-primary);
+    color: #ffffff;
+  }
+
+  .aiops-scope [class*="tremor-Button"][data-variant="primary"]:hover,
+  .aiops-scope button[class*="tremor"][class*="primary"]:hover {
+    background-color: var(--color-primary-hover);
+  }
+
+  /* Dropdown menus */
+  .aiops-scope [class*="tremor-Dropdown"],
+  .aiops-scope [role="listbox"],
+  .aiops-scope [role="menu"] {
+    background-color: var(--color-bg-raised);
+    border-color: var(--color-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.40);
+  }
+
+  .aiops-scope [class*="tremor-Dropdown"] [role="option"]:hover,
+  .aiops-scope [role="listbox"] [role="option"]:hover,
+  .aiops-scope [role="menu"] [role="menuitem"]:hover {
+    background-color: var(--color-bg-hover);
+  }
+
+  /* Tabs */
+  .aiops-scope [class*="tremor-Tab"] {
+    color: var(--color-text-secondary);
+  }
+
+  .aiops-scope [class*="tremor-Tab"][aria-selected="true"],
+  .aiops-scope [class*="tremor-Tab"].active {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+
+  /* Dividers */
+  .aiops-scope hr,
+  .aiops-scope [class*="tremor-Divider"] {
+    border-color: var(--color-border);
+  }
+
+  /* Text overrides for Tremor typography */
+  .aiops-scope [class*="tremor-Title"],
+  .aiops-scope [class*="tremor-Metric"] {
+    color: var(--color-text-primary);
+  }
+
+  .aiops-scope [class*="tremor-Text"],
+  .aiops-scope [class*="tremor-Subtitle"] {
+    color: var(--color-text-secondary);
+  }
+
+  /* List items */
+  .aiops-scope [class*="tremor-List"] [class*="tremor-ListItem"] {
+    border-color: var(--color-border);
+  }
+
+  /* Dialog / Modal */
+  .aiops-scope [class*="tremor-Dialog"],
+  .aiops-scope [role="dialog"] {
+    background-color: var(--color-bg-surface);
+    border-color: var(--color-border);
+  }
+
+  /* Callout */
+  .aiops-scope [class*="tremor-Callout"] {
+    border-color: var(--color-border);
+    background-color: var(--color-bg-surface);
+  }
+
+  /* ─── Scrollbar Styling (AIOps scope) ────────────────────────────────────── */
+  .aiops-scope *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .aiops-scope *::-webkit-scrollbar-track {
+    background: var(--color-bg-base);
+  }
+
+  .aiops-scope *::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: 5px;
+    border: 2px solid var(--color-bg-base);
+  }
+
+  .aiops-scope *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-text-disabled);
+  }
+
+  .aiops-scope * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) var(--color-bg-base);
+  }
+
+  /* ─── Selection ──────────────────────────────────────────────────────────── */
+  .aiops-scope ::selection {
+    background-color: rgba(74, 144, 217, 0.25);
+    color: var(--color-text-primary);
+  }
+
+  /* ─── Focus Visible ──────────────────────────────────────────────────────── */
+  .aiops-scope :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  /* ─── Transitions ────────────────────────────────────────────────────────── */
+  .aiops-scope [class*="tremor-"] {
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  }
+
+  /* ─── Badge & Severity Pill Styles ───────────────────────────────────────── */
+  /* Base badge styling for all AIOps badges and Tremor Badge overrides.
+     Uses CloudVisor severity color mappings with 15% opacity backgrounds. */
+
+  .aiops-scope .aiops-severity-badge,
+  .aiops-scope .aiops-status-badge,
+  .aiops-scope .aiops-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+    text-transform: capitalize;
+    letter-spacing: 0.01em;
+  }
+
+  /* Tremor Badge overrides within AIOps scope */
+  .aiops-scope [class*="tremor-Badge"],
+  .aiops-scope [data-testid*="badge"] {
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+    border-width: 1px;
+    border-style: solid;
+  }
+
+  /* Severity: Critical / High — #e05252 with 15% opacity background */
+  .aiops-scope [class*="tremor-Badge"][class*="red"],
+  .aiops-scope [class*="tremor-Badge"][class*="rose"],
+  .aiops-scope [data-severity="critical"],
+  .aiops-scope [data-severity="high"] {
+    color: #e05252;
+    background-color: rgba(224, 82, 82, 0.15);
+    border-color: rgba(224, 82, 82, 0.2);
+  }
+
+  /* Severity: Warning — #e8a838 with 15% opacity background */
+  .aiops-scope [class*="tremor-Badge"][class*="amber"],
+  .aiops-scope [class*="tremor-Badge"][class*="yellow"],
+  .aiops-scope [class*="tremor-Badge"][class*="orange"],
+  .aiops-scope [data-severity="warning"],
+  .aiops-scope [data-severity="medium"] {
+    color: #e8a838;
+    background-color: rgba(232, 168, 56, 0.15);
+    border-color: rgba(232, 168, 56, 0.2);
+  }
+
+  /* Severity: Success / Low — #3db87a with 15% opacity background */
+  .aiops-scope [class*="tremor-Badge"][class*="green"],
+  .aiops-scope [class*="tremor-Badge"][class*="emerald"],
+  .aiops-scope [data-severity="success"],
+  .aiops-scope [data-severity="low"] {
+    color: #3db87a;
+    background-color: rgba(61, 184, 122, 0.15);
+    border-color: rgba(61, 184, 122, 0.2);
+  }
+
+  /* Severity: Info — #4a90d9 with 15% opacity background */
+  .aiops-scope [class*="tremor-Badge"][class*="blue"],
+  .aiops-scope [class*="tremor-Badge"][class*="cyan"],
+  .aiops-scope [data-severity="info"] {
+    color: #4a90d9;
+    background-color: rgba(74, 144, 217, 0.15);
+    border-color: rgba(74, 144, 217, 0.2);
+  }
+
+  /* Neutral / default badge color */
+  .aiops-scope [class*="tremor-Badge"][class*="gray"],
+  .aiops-scope [class*="tremor-Badge"][class*="slate"],
+  .aiops-scope [data-severity="neutral"] {
+    color: #9099b0;
+    background-color: rgba(144, 153, 176, 0.15);
+    border-color: rgba(144, 153, 176, 0.2);
+  }
+
+  /* Badge icon sizing */
+  .aiops-scope [class*="tremor-Badge"] svg,
+  .aiops-scope .aiops-severity-badge svg,
+  .aiops-scope .aiops-status-badge svg {
+    width: 12px;
+    height: 12px;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+}

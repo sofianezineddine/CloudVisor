@@ -76,7 +76,7 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
     bg: '#f0f8ff',
     iconText: 'AI',
     services: [
-      { name: 'AIOps',      href: '/aiops',   desc: 'ML-powered noise reduction' },
+      { name: 'AIOps',      href: '/aiops',   desc: 'ML-powered alert management, noise reduction, and incident correlation' },
       { name: 'AI Copilot', href: '/copilot', desc: 'GenAI security assistant' },
     ],
   },

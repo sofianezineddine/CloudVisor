@@ -1,0 +1,35 @@
+# Keep service Docker build ignore
+# Build context is the monorepo root, so these paths are relative to root
+
+# Exclude Keep files not needed for the build
+keep/docs/
+keep/tests/
+keep/examples/
+keep/keep-ui/
+keep/.git/
+keep/.github/
+keep/assets/
+keep/grafana/
+keep/prometheus/
+keep/elk/
+keep/otel-shared/
+keep/keycloak/
+keep/oauth2proxy/
+keep/proxy/
+keep/scripts/
+keep/templates/
+keep/docker/
+
+# Exclude other monorepo directories not needed
+apps/
+.git/
+.kiro/
+.kilo/
+.vscode/
+n8n/
+packages/
+progress/
+rules/
+scripts/
+Instructions/
+infra/

@@ -28,3 +28,6 @@ export type { FindingCardProps } from './finding-card';
 export type { FilterGroup, FilterOption, FilterSidebarProps, FilterButtonProps, MobileFilterSheetProps } from './filter-sidebar';
 export type { CloudProvider, CloudServiceIconProps, ProviderLogoProps } from './cloud-service-icon';
 export type { AttackPathNode, AttackPathEdge, AttackPathGraphProps } from './attack-path-graph';
+
+export { default as Link } from './Link';
+export { default as Modal } from './Modal';

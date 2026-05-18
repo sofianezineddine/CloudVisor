@@ -494,7 +494,7 @@ export const copilotAPI = {
   },
 };
 
-// ─── Risk / AIOps ─────────────────────────────────────────────────────────────
+// ─── Risk ─────────────────────────────────────────────────────────────────────
 
 export const riskAPI = {
   async topAssets(limit = 10): Promise<ApiEnvelope<Asset[]>> {
