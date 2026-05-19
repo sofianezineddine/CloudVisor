@@ -96,7 +96,7 @@ export function useWorkflowActions(): UseWorkflowActionsReturn {
       try {
         const body = getBodyFromStringOrDefinitionOrObject(definition);
         const response = await api.request<CreateOrUpdateWorkflowResponse>(
-          "/workflows/json",
+          "/aiops/workflows/json",
           {
             method: "POST",
             body,

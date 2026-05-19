@@ -568,7 +568,7 @@ export function AlertTableServerSide({
                     color="orange"
                     variant="primary"
                     onClick={() => {
-                      router.push("/providers?labels=alert");
+                      router.push("/aiops/providers?labels=alert");
                     }}
                   >
                     Connect Data Source

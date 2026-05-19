@@ -7,9 +7,9 @@ type WorkflowRawResponse = {
 };
 
 export default async function PageWithId(props: {
-  params: Promise<{ workflowId: string }>;
+  params: { workflowId: string };
 }) {
-  const params = await props.params;
+  const params = props.params;
   const api = await createServerApiClient();
   const text = await api.get<WorkflowRawResponse>(
     `/workflows/${params.workflowId}/raw`,

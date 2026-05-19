@@ -10,7 +10,7 @@ export const useMappings = (
   const api = useApi();
 
   return useSWR<MappingRule[]>(
-    api.isReady() ? "/mapping" : null,
+    api.isReady() ? "/aiops/mapping" : null,
     (url) => api.get(url),
     options
   );

@@ -77,7 +77,7 @@ export function ChangeSameIncidentInThePastForm({
             <Button
               className="flex-1"
               color="orange"
-              onClick={() => router.push("/incidents")}
+              onClick={() => router.push("/aiops/incidents")}
             >
               Incidents page
             </Button>

@@ -47,7 +47,7 @@ export function useAIOpsTopology() {
   return useQuery({
     queryKey: aiopsTopologyKeys.graph(),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: TopologyGraph }>('/topology');
+      const { data } = await keepApi.get<{ data: TopologyGraph }>('/aiops/topology');
       return data.data;
     },
     staleTime: 60_000,

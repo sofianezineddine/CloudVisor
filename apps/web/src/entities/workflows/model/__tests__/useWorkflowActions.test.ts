@@ -54,7 +54,7 @@ describe("useWorkflowActions", () => {
 
     await uploadWorkflowFiles(mockFileList);
 
-    expect(mockRequest).toHaveBeenCalledWith("/workflows", expect.any(Object));
+    expect(mockRequest).toHaveBeenCalledWith("/aiops/workflows", expect.any(Object));
     expect(mockRevalidateWorkflow).toHaveBeenCalledWith(
       mockResponse.workflow_id
     );
@@ -76,7 +76,7 @@ describe("useWorkflowActions", () => {
     await createWorkflow("<fake-workflow-yaml>");
 
     expect(mockRequest).toHaveBeenCalledWith(
-      "/workflows/json",
+      "/aiops/workflows/json",
       expect.any(Object)
     );
     expect(mockRevalidateWorkflow).toHaveBeenCalledWith(
@@ -91,7 +91,7 @@ describe("useWorkflowActions", () => {
     await updateWorkflow("123", "<fake-workflow-yaml>");
 
     expect(mockRequest).toHaveBeenCalledWith(
-      "/workflows/123",
+      "/aiops/workflows/123",
       expect.any(Object)
     );
     expect(mockRevalidateWorkflow).toHaveBeenCalledWith("123");
@@ -114,7 +114,7 @@ describe("useWorkflowActions", () => {
     (window.confirm as jest.Mock).mockImplementation(() => true);
     await deleteWorkflow("123");
 
-    expect(mockDelete).toHaveBeenCalledWith("/workflows/123");
+    expect(mockDelete).toHaveBeenCalledWith("/aiops/workflows/123");
     // NOTE: revalidateWorkflow calls revalidateLists
     expect(mockRevalidateWorkflow).toHaveBeenCalledWith("123");
   });

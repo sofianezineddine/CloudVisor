@@ -1,3 +1,5 @@
+'use client';
+
 export { Input } from "./Input";
 export { TablePagination } from "./TablePagination";
 export { TabLinkNavigation, TabNavigationLink } from "./TabLinkNavigation";

@@ -40,7 +40,7 @@ describe("Preset Navigation Logic", () => {
     }
     
     expect(isNameChanged).toBe(false);
-    expect(mockRouter.push).toHaveBeenCalledWith("/alerts/test-preset");
+    expect(mockRouter.push).toHaveBeenCalledWith("/aiops/alerts/test-preset");
     expect(window.location.href).toBe("");
   });
 
@@ -67,7 +67,7 @@ describe("Preset Navigation Logic", () => {
     
     expect(isNameChanged).toBe(true);
     expect(mockMutatePresets).toHaveBeenCalled();
-    expect(window.location.href).toBe("/alerts/new-preset");
+    expect(window.location.href).toBe("/aiops/alerts/new-preset");
     expect(mockRouter.push).not.toHaveBeenCalled();
   });
 
@@ -96,7 +96,7 @@ describe("Preset Navigation Logic", () => {
     
     expect(isNameChanged).toBe(true);
     expect(mockMutatePresets).toHaveBeenCalled();
-    expect(mockRouter.push).toHaveBeenCalledWith("/alerts/new-preset");
+    expect(mockRouter.push).toHaveBeenCalledWith("/aiops/alerts/new-preset");
     expect(window.location.href).toBe(""); // Should remain empty due to fallback
   });
 

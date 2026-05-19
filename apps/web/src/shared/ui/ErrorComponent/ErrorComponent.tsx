@@ -8,7 +8,6 @@ import { useEffect, useMemo } from "react";
 import { Title, Subtitle } from "@tremor/react";
 import { Button, Text } from "@tremor/react";
 import { KeepApiError } from "@/shared/api";
-import * as Sentry from "@sentry/nextjs";
 import { useSignOut } from "@/shared/lib/hooks/useSignOut";
 import { KeepApiHealthError } from "@/shared/api/KeepApiError";
 import { useHealth } from "@/shared/lib/hooks/useHealth";
@@ -34,7 +33,7 @@ export function ErrorComponent({
     config?.KEEP_CONTACT_US_URL || "https://slack.keephq.dev/";
 
   useEffect(() => {
-    Sentry.captureException(originalError);
+    console.error('AIOps Error:', originalError);
   }, [originalError]);
 
   const error = useMemo(() => {

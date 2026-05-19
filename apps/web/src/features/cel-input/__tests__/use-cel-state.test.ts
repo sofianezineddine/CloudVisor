@@ -5,7 +5,7 @@ import { renderHook, act } from "@testing-library/react";
 jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
   useSearchParams: jest.fn(),
-  usePathname: jest.fn(() => "/alerts/feed"),
+  usePathname: jest.fn(() => "/aiops/alerts/feed"),
 }));
 jest.useFakeTimers();
 

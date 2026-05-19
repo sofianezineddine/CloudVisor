@@ -11,5 +11,5 @@ import { InternalConfig } from "@/types/internal-config";
  * fetch(`${apiUrl}/alerts`);
  */
 export function getApiUrlFromConfig(config: InternalConfig | null) {
-  return config?.API_URL_CLIENT || "/v1/keep";
+  return config?.API_URL_CLIENT || "http://localhost:8007";
 }

@@ -79,7 +79,7 @@ export function useIncidentActions(): UseIncidentActionsValue {
   const mutateIncidentsList = useCallback(
     () =>
       // Adding "?" to the key because the list always has a query param
-      mutate((key) => typeof key === "string" && key.startsWith("/incidents?")),
+      mutate((key) => typeof key === "string" && key.startsWith("/aiops/incidents?")),
     [mutate]
   );
   const mutateIncident = useCallback(
@@ -129,7 +129,7 @@ export function useIncidentActions(): UseIncidentActionsValue {
   const addIncident = useCallback(
     async (incident: IncidentCreateDto) => {
       try {
-        const result = await api.post("/incidents", incident);
+        const result = await api.post("/aiops/incidents", incident);
         mutateIncidentsList();
         toast.success("Incident created successfully");
         return result as IncidentDto;
@@ -179,7 +179,7 @@ export function useIncidentActions(): UseIncidentActionsValue {
       }
 
       try {
-        const result = await api.post("/incidents/merge", {
+        const result = await api.post("/aiops/incidents/merge", {
           source_incident_ids: sourceIncidents.map((incident) => incident.id),
           destination_incident_id: destinationIncident.id,
         });
@@ -229,7 +229,7 @@ export function useIncidentActions(): UseIncidentActionsValue {
         return false;
       }
       try {
-        const result = await api.delete("/incidents/bulk", {
+        const result = await api.delete("/aiops/incidents/bulk", {
           incident_ids: incidentIds,
         });
         mutateIncidentsList();

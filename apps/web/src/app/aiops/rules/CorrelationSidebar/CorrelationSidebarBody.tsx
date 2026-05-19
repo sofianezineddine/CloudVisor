@@ -103,11 +103,11 @@ export const CorrelationSidebarBody = ({
     try {
       selectedId
         ? await api.put(`/rules/${selectedId}`, body)
-        : await api.post("/rules", body);
+        : await api.post("/aiops/rules", body);
 
       toggle();
       mutate();
-      router.replace("/rules");
+      router.replace("/aiops/rules");
     } catch (error) {
       showErrorToast(error, "Failed to create correlation rule");
     }

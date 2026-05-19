@@ -56,7 +56,7 @@ const WorkflowsEmptyState = () => {
             color="orange"
             variant="primary"
             onClick={() => {
-              router.push("/workflows/builder");
+              router.push("/aiops/workflows/builder");
             }}
           >
             Create New Workflow

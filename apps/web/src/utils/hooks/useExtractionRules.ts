@@ -10,7 +10,7 @@ export const useExtractions = (
   const api = useApi();
 
   return useSWR<ExtractionRule[]>(
-    api.isReady() ? "/extraction" : null,
+    api.isReady() ? "/aiops/extraction" : null,
     (url) => api.get(url),
     options
   );

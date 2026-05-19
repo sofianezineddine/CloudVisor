@@ -275,7 +275,7 @@ export const useIncidentsMeta = (
   const api = useApi();
 
   return useSWR<IncidentsMetaDto>(
-    api.isReady() ? "/incidents/meta" : null,
+    api.isReady() ? "/aiops/incidents/meta" : null,
     (url) => api.get(url),
     options
   );

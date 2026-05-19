@@ -35,7 +35,7 @@ export function useAIOpsProviders() {
   return useQuery({
     queryKey: aiopsProviderKeys.list(),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: AIOpsProvider[] }>('/providers');
+      const { data } = await keepApi.get<{ data: AIOpsProvider[] }>('/aiops/providers');
       return data.data;
     },
     staleTime: 30_000,

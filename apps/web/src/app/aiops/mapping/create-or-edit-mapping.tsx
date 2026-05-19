@@ -184,7 +184,7 @@ export default function CreateOrEditMapping({
   const addRule = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await api.post("/mapping", {
+      await api.post("/aiops/mapping", {
         priority: priority,
         name: mapName,
         description: mapDescription,

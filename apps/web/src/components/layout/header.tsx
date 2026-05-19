@@ -399,7 +399,7 @@ const SERVICE_BREADCRUMBS: Record<string, { service: string; tabs?: Record<strin
     },
   },
   '/findings': { service: 'Findings' },
-  '/incidents': { service: 'Incidents' },
+  '/aiops/incidents': { service: 'Incidents' },
   '/assets': { service: 'Assets' },
   '/compliance': { service: 'Compliance' },
   '/risk-map': { service: 'Risk Explorer' },

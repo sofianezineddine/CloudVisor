@@ -23,7 +23,7 @@ const SERVICE_DEFINITIONS: Record<string, Omit<RecentlyVisitedItem, 'href' | 'vi
   '/dspm': { label: 'Data (DSPM)', color: 'var(--success)' },
   '/cdr': { label: 'Detection (CDR)', color: 'var(--critical)' },
   '/compliance': { label: 'Compliance', color: 'var(--info)' },
-  '/incidents': { label: 'Incidents', color: 'var(--warning)' },
+  '/aiops/incidents': { label: 'Incidents', color: 'var(--warning)' },
   '/settings': { label: 'Settings', color: 'var(--text-secondary)' },
   '/profile': { label: 'Profile', color: 'var(--text-secondary)' },
   '/risk-map': { label: 'Risk Map', color: 'var(--critical)' },

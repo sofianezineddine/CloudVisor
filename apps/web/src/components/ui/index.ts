@@ -1,3 +1,5 @@
+'use client';
+
 export { Button } from './button';
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './card';
 export { SeverityBadge } from './severity-badge';
@@ -29,5 +31,13 @@ export type { FilterGroup, FilterOption, FilterSidebarProps, FilterButtonProps, 
 export type { CloudProvider, CloudServiceIconProps, ProviderLogoProps } from './cloud-service-icon';
 export type { AttackPathNode, AttackPathEdge, AttackPathGraphProps } from './attack-path-graph';
 
-export { default as Link } from './Link';
+export { Link } from './Link';
 export { default as Modal } from './Modal';
+
+export { TextInput } from './TextInput';
+export { DynamicImageProviderIcon } from './DynamicImageProviderIcon';
+export { ShortNumber } from './ShortNumber';
+export { AutocompleteInput } from './AutocompleteInput';
+export { Textarea } from './Textarea';
+export { default as DateRangePickerV2 } from './DateRangePickerV2';
+export { default as DateRangePicker } from './DateRangePicker';

@@ -49,5 +49,5 @@ export async function getTopology(
 }
 
 export async function pullTopology(api: ApiClient) {
-  return await api.post("/topology/pull");
+  return await api.post("/aiops/topology/pull");
 }

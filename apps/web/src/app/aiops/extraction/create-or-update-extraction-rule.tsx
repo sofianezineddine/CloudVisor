@@ -79,7 +79,7 @@ export default function CreateOrUpdateExtractionRule({
   const addExtraction = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const response = await api.post("/extraction", {
+      const response = await api.post("/aiops/extraction", {
         priority: priority,
         name: extractionName,
         description: mapDescription,

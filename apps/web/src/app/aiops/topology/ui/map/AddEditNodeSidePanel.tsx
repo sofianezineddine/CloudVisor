@@ -40,7 +40,7 @@ export function AddEditNodeSidePanel({
 
   const handleSave = async () => {
     try {
-      const result = await api.post("/topology/service", {
+      const result = await api.post("/aiops/topology/service", {
         ...formData,
         tags: formData.tags
           ?.split(",")
@@ -57,7 +57,7 @@ export function AddEditNodeSidePanel({
 
   const handleUpdate = async () => {
     try {
-      const result = await api.put("/topology/service", {
+      const result = await api.put("/aiops/topology/service", {
         ...formData,
         tags: formData.tags
           ?.split(",")

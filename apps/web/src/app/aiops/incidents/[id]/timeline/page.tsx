@@ -3,11 +3,11 @@ import { getIncidentWithErrorHandling } from "../getIncidentWithErrorHandling";
 import IncidentTimeline from "./incident-timeline";
 
 type PageProps = {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 };
 
 export default async function IncidentTimelinePage(props: PageProps) {
-  const params = await props.params;
+  const params = props.params;
 
   const { id } = params;
 
@@ -16,7 +16,7 @@ export default async function IncidentTimelinePage(props: PageProps) {
 }
 
 export async function generateMetadata(props: PageProps) {
-  const params = await props.params;
+  const params = props.params;
   const incident = await getIncidentWithErrorHandling(params.id);
   const incidentName = getIncidentName(incident);
   const incidentDescription =

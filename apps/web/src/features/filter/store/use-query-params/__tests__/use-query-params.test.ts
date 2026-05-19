@@ -10,7 +10,7 @@ import { useSearchParams } from "next/navigation";
 
 jest.mock("next/navigation", () => ({
   useSearchParams: jest.fn(),
-  usePathname: jest.fn(() => "/alerts/feed"),
+  usePathname: jest.fn(() => "/aiops/alerts/feed"),
 }));
 jest.useFakeTimers();
 
@@ -230,7 +230,7 @@ describe("useQueryParams", () => {
       // Simulate path change
       (
         jest.requireMock("next/navigation").usePathname as jest.Mock
-      ).mockReturnValue("/alerts/details");
+      ).mockReturnValue("/aiops/alerts/details");
       act(() => {
         unmount();
       });

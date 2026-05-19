@@ -3,11 +3,11 @@ import { cookies } from "next/headers";
 import { createServerApiClient } from "@/shared/api/server";
 
 export default async function InstallFromOAuth(props: {
-  params: Promise<{ providerType: string }>;
-  searchParams: Promise<{ [key: string]: string }>;
+  params: { providerType: string };
+  searchparams: { [key: string]: string };
 }) {
-  const searchParams = await props.searchParams;
-  const params = await props.params;
+  const searchParams = props.searchParams;
+  const params = props.params;
   const api = await createServerApiClient();
   const cookieStore = await cookies();
   const verifier = cookieStore.get("verifier");

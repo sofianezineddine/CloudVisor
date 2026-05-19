@@ -76,7 +76,7 @@ export default function CreateOrUpdateMaintenanceRule({
     setSuppress(false);
     setEnabled(true);
     setIgnoreStatuses([]);
-    router.replace("/maintenance");
+    router.replace("/aiops/maintenance");
   };
 
   const calculateDurationInSeconds = () => {
@@ -103,7 +103,7 @@ export default function CreateOrUpdateMaintenanceRule({
   const addMaintenanceRule = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const response = await api.post("/maintenance", {
+      const response = await api.post("/aiops/maintenance", {
         name: maintenanceName,
         description: description,
         cel_query: celQuery,

@@ -38,7 +38,7 @@ export function SameIncidentField({ incident }: { incident: IncidentDto }) {
                 status={same_incident_in_the_past.status}
               />
             )}
-            href={"/incidents/" + same_incident_in_the_past.id}
+            href={"/aiops/incidents/" + same_incident_in_the_past.id}
           >
             {getIncidentName(same_incident_in_the_past)}
           </Link>

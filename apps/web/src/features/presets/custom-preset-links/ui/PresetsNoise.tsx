@@ -42,7 +42,7 @@ export const PresetsNoise = ({ presets }: PresetsNoiseProps) => {
         };
 
         const { count: matchingAlertsCount } = await api.post(
-          "/alerts/query",
+          "/aiops/alerts/query",
           query
         );
         shouldDoNoise = !!matchingAlertsCount;

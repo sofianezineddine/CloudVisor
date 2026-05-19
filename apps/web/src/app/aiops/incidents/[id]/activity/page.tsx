@@ -5,9 +5,9 @@ import { IncidentActivity } from "./incident-activity";
 import { getIncidentName } from "@/entities/incidents/lib/utils";
 
 export default async function IncidentActivityPage(props: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const params = await props.params;
+  const params = props.params;
 
   const { id } = params;
 
@@ -20,9 +20,9 @@ export default async function IncidentActivityPage(props: {
 }
 
 export async function generateMetadata(props: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }): Promise<Metadata> {
-  const params = await props.params;
+  const params = props.params;
   const incident = await getIncidentWithErrorHandling(params.id);
   const incidentName = getIncidentName(incident);
   return {

@@ -109,7 +109,7 @@ export const AlertsLinks = ({ session }: AlertsLinksProps) => {
               {shouldShowFeed && (
                 <li>
                   <LinkWithIcon
-                    href="/alerts/feed"
+                    href="/aiops/alerts/feed"
                     icon={AiOutlineSwap}
                     count={feedAlertsTotalCount}
                     testId="menu-alerts-feed"
@@ -117,10 +117,10 @@ export const AlertsLinks = ({ session }: AlertsLinksProps) => {
                       // If we're already on the feed page, force a reload
                       if (
                         decodeURIComponent(window.location.pathname) ===
-                        "/alerts/feed"
+                        "/aiops/alerts/feed"
                       ) {
                         e.preventDefault();
-                        window.location.href = "/alerts/feed";
+                        window.location.href = "/aiops/alerts/feed";
                       }
                     }}
                   >

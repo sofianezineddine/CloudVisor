@@ -75,7 +75,7 @@ export const DeduplicationTable: React.FC<DeduplicationTableProps> = ({
   const onCloseDeduplication = () => {
     setIsSidebarOpen(false);
     setSelectedDeduplicationRule(null);
-    router.push("/deduplication");
+    router.push("/aiops/deduplication");
   };
 
   const handleDeleteRule = async (
@@ -110,7 +110,7 @@ export const DeduplicationTable: React.FC<DeduplicationTableProps> = ({
 
   useEffect(() => {
     if (!isSidebarOpen && selectedId) {
-      router.push("/deduplication");
+      router.push("/aiops/deduplication");
     }
   }, [isSidebarOpen, selectedId, router]);
 

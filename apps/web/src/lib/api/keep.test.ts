@@ -91,9 +91,9 @@ describe('Keep API Client', () => {
   describe('Request interceptor - JWT attachment', () => {
     it('should attach JWT in Authorization header when token exists', async () => {
       localStorageMock.setItem('access_token', 'test-jwt-token');
-      mock.onGet('/alerts').reply(200, { data: [] });
+      mock.onGet('/aiops/alerts').reply(200, { data: [] });
 
-      const response = await keepApi.get('/alerts');
+      const response = await keepApi.get('/aiops/alerts');
 
       expect(mock.history.get[0].headers?.Authorization).toBe(
         'Bearer test-jwt-token',
@@ -101,9 +101,9 @@ describe('Keep API Client', () => {
     });
 
     it('should not attach Authorization header when no token exists', async () => {
-      mock.onGet('/alerts').reply(200, { data: [] });
+      mock.onGet('/aiops/alerts').reply(200, { data: [] });
 
-      await keepApi.get('/alerts');
+      await keepApi.get('/aiops/alerts');
 
       // Authorization should not be set (or undefined)
       const authHeader = mock.history.get[0].headers?.Authorization;
@@ -113,17 +113,17 @@ describe('Keep API Client', () => {
 
   describe('Request interceptor - X-Correlation-ID', () => {
     it('should include X-Correlation-ID header on every request', async () => {
-      mock.onGet('/alerts').reply(200, { data: [] });
+      mock.onGet('/aiops/alerts').reply(200, { data: [] });
 
-      await keepApi.get('/alerts');
+      await keepApi.get('/aiops/alerts');
 
       expect(mock.history.get[0].headers?.['X-Correlation-ID']).toBe(mockUUID);
     });
 
     it('should generate a UUID for X-Correlation-ID', async () => {
-      mock.onGet('/incidents').reply(200, { data: [] });
+      mock.onGet('/aiops/incidents').reply(200, { data: [] });
 
-      await keepApi.get('/incidents');
+      await keepApi.get('/aiops/incidents');
 
       expect(crypto.randomUUID).toHaveBeenCalled();
       expect(mock.history.get[0].headers?.['X-Correlation-ID']).toBe(mockUUID);
@@ -136,9 +136,9 @@ describe('Keep API Client', () => {
       localStorageMock.setItem('refresh_token', 'valid-refresh-token');
 
       // First request returns 401
-      mock.onGet('/alerts').replyOnce(401);
+      mock.onGet('/aiops/alerts').replyOnce(401);
       // After refresh, retry succeeds
-      mock.onGet('/alerts').replyOnce(200, { data: [] });
+      mock.onGet('/aiops/alerts').replyOnce(200, { data: [] });
 
       // Mock the refresh endpoint
       mockFetch.mockResolvedValueOnce({
@@ -149,7 +149,7 @@ describe('Keep API Client', () => {
         }),
       });
 
-      const response = await keepApi.get('/alerts');
+      const response = await keepApi.get('/aiops/alerts');
 
       expect(response.status).toBe(200);
       expect(mockFetch).toHaveBeenCalledWith(
@@ -165,8 +165,8 @@ describe('Keep API Client', () => {
       localStorageMock.setItem('access_token', 'expired-token');
       localStorageMock.setItem('refresh_token', 'valid-refresh-token');
 
-      mock.onGet('/alerts').replyOnce(401);
-      mock.onGet('/alerts').replyOnce(200, { data: [] });
+      mock.onGet('/aiops/alerts').replyOnce(401);
+      mock.onGet('/aiops/alerts').replyOnce(200, { data: [] });
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -176,7 +176,7 @@ describe('Keep API Client', () => {
         }),
       });
 
-      await keepApi.get('/alerts');
+      await keepApi.get('/aiops/alerts');
 
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
         'access_token',
@@ -192,7 +192,7 @@ describe('Keep API Client', () => {
       localStorageMock.setItem('access_token', 'expired-token');
       localStorageMock.setItem('refresh_token', 'invalid-refresh-token');
 
-      mock.onGet('/alerts').replyOnce(401);
+      mock.onGet('/aiops/alerts').replyOnce(401);
 
       // Refresh fails
       mockFetch.mockResolvedValueOnce({
@@ -200,7 +200,7 @@ describe('Keep API Client', () => {
         json: async () => ({ detail: 'Invalid refresh token' }),
       });
 
-      await keepApi.get('/alerts').catch(() => {});
+      await keepApi.get('/aiops/alerts').catch(() => {});
 
       expect(locationMock.href).toBe('/login?error=session_expired');
     });
@@ -210,11 +210,11 @@ describe('Keep API Client', () => {
       localStorageMock.setItem('refresh_token', 'invalid-refresh-token');
       localStorageMock.setItem('cloudvisor-user', '{}');
 
-      mock.onGet('/alerts').replyOnce(401);
+      mock.onGet('/aiops/alerts').replyOnce(401);
 
       mockFetch.mockResolvedValueOnce({ ok: false });
 
-      await keepApi.get('/alerts').catch(() => {});
+      await keepApi.get('/aiops/alerts').catch(() => {});
 
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
@@ -227,9 +227,9 @@ describe('Keep API Client', () => {
       localStorageMock.setItem('access_token', 'expired-token');
       // No refresh token set
 
-      mock.onGet('/alerts').replyOnce(401);
+      mock.onGet('/aiops/alerts').replyOnce(401);
 
-      await keepApi.get('/alerts').catch(() => {});
+      await keepApi.get('/aiops/alerts').catch(() => {});
 
       expect(locationMock.href).toBe('/login?error=session_expired');
     });
@@ -239,7 +239,7 @@ describe('Keep API Client', () => {
       localStorageMock.setItem('refresh_token', 'valid-refresh-token');
 
       // Both requests return 401
-      mock.onGet('/alerts').reply(401);
+      mock.onGet('/aiops/alerts').reply(401);
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -249,7 +249,7 @@ describe('Keep API Client', () => {
         }),
       });
 
-      const error = await keepApi.get('/alerts').catch((e) => e);
+      const error = await keepApi.get('/aiops/alerts').catch((e) => e);
 
       // The request should ultimately fail (rejected)
       expect(error).toBeDefined();
@@ -259,16 +259,16 @@ describe('Keep API Client', () => {
 
   describe('Non-401 errors', () => {
     it('should pass through non-401 errors without refresh attempt', async () => {
-      mock.onGet('/alerts').reply(500, { detail: 'Internal server error' });
+      mock.onGet('/aiops/alerts').reply(500, { detail: 'Internal server error' });
 
-      await expect(keepApi.get('/alerts')).rejects.toThrow();
+      await expect(keepApi.get('/aiops/alerts')).rejects.toThrow();
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('should pass through 403 errors without refresh attempt', async () => {
-      mock.onGet('/alerts').reply(403, { detail: 'Forbidden' });
+      mock.onGet('/aiops/alerts').reply(403, { detail: 'Forbidden' });
 
-      await expect(keepApi.get('/alerts')).rejects.toThrow();
+      await expect(keepApi.get('/aiops/alerts')).rejects.toThrow();
       expect(mockFetch).not.toHaveBeenCalled();
     });
   });

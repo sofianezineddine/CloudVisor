@@ -53,7 +53,7 @@ export const IncidentsLinks = ({ session }: IncidentsLinksProps) => {
       <Disclosure.Panel as="ul" className="space-y-0.5 p-1 pr-1">
         <li className="relative">
           <LinkWithIcon
-            href="/incidents"
+            href="/aiops/incidents"
             icon={MdFlashOn}
             count={incidents?.count}
             testId="incidents"

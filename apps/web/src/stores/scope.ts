@@ -181,7 +181,7 @@ export const GLOBAL_ROUTES = [
   '/settings/billing',
   '/settings/notifications',
   '/settings/team',
-  '/rules',
+  '/aiops/rules',
   '/services',
   '/profile',
   '/login',

@@ -42,7 +42,7 @@ export const CorrelationTable = ({ rules }: CorrelationTableProps) => {
 
   const onCloseCorrelation = () => {
     setIsRuleCreation(false);
-    router.replace("/rules");
+    router.replace("/aiops/rules");
   };
 
   const CORRELATION_TABLE_COLS = useMemo(

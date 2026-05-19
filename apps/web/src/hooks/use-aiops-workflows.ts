@@ -44,7 +44,7 @@ export function useAIOpsWorkflows() {
   return useQuery({
     queryKey: aiopsWorkflowKeys.list(),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: AIOpsWorkflow[] }>('/workflows');
+      const { data } = await keepApi.get<{ data: AIOpsWorkflow[] }>('/aiops/workflows');
       return data.data;
     },
     staleTime: 30_000,
@@ -55,7 +55,7 @@ export function useCreateWorkflow() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { name: string; yaml_definition: string; trigger_config?: Record<string, unknown> }) => {
-      const { data } = await keepApi.post<{ data: AIOpsWorkflow }>('/workflows', payload);
+      const { data } = await keepApi.post<{ data: AIOpsWorkflow }>('/aiops/workflows', payload);
       return data.data;
     },
     onSuccess: () => {

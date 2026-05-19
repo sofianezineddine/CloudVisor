@@ -96,7 +96,7 @@ export const AlertAssignTicketModal = ({
 
   const handleOnChange = (option: any) => {
     if (option.value === "add_provider") {
-      window.open("/providers?labels=ticketing", "_blank");
+      window.open("/aiops/providers?labels=ticketing", "_blank");
     }
   };
 
@@ -248,7 +248,7 @@ export const AlertAssignTicketModal = ({
             </Text>
             <Button
               onClick={() =>
-                window.open("/providers?labels=ticketing", "_blank")
+                window.open("/aiops/providers?labels=ticketing", "_blank")
               }
               color="orange"
               className="mt-4 mr-4"

@@ -43,7 +43,7 @@ export function useAIOpsMaintenanceWindows() {
   return useQuery({
     queryKey: aiopsMaintenanceKeys.list(),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: AIOpsMaintenanceWindow[] }>('/maintenance');
+      const { data } = await keepApi.get<{ data: AIOpsMaintenanceWindow[] }>('/aiops/maintenance');
       return data.data;
     },
     staleTime: 30_000,
@@ -54,7 +54,7 @@ export function useCreateMaintenanceWindow() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: CreateMaintenanceWindowPayload) => {
-      const { data } = await keepApi.post<{ data: AIOpsMaintenanceWindow }>('/maintenance', payload);
+      const { data } = await keepApi.post<{ data: AIOpsMaintenanceWindow }>('/aiops/maintenance', payload);
       return data.data;
     },
     onSuccess: () => {

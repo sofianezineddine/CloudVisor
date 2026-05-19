@@ -394,10 +394,10 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
       if (!orgId) throw new Error('Unable to determine your organization. Please log in again.');
 
       const pageMap: Record<string, string> = {
-        '/console': 'Home Console', '/dashboard': 'Dashboard', '/findings': 'Findings',
+        '/console': 'Home Console', '/aiops/dashboard': 'Dashboard', '/findings': 'Findings',
         '/assets': 'Assets', '/cspm': 'CSPM', '/cwpp': 'CWPP', '/ciem': 'CIEM',
         '/kspm': 'KSPM', '/dspm': 'DSPM', '/cdr': 'CDR', '/cicd': 'CI/CD',
-        '/aiops': 'AIOps', '/compliance': 'Compliance', '/incidents': 'Incidents',
+        '/aiops': 'AIOps', '/compliance': 'Compliance', '/aiops/incidents': 'Incidents',
         '/risk-map': 'Risk Map', '/settings': 'Settings',
       };
       const currentPage = Object.entries(pageMap).find(([r]) => pathname === r || pathname.startsWith(r + '/'))?.[1] ?? pathname;

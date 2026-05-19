@@ -73,7 +73,7 @@ export function useAIOpsAlerts(filters: AIOpsAlertFilters = {}) {
       if (filters.sort_order) params.sort_order = filters.sort_order;
       if (filters.search) params.search = filters.search;
 
-      const { data } = await keepApi.get<PaginatedResponse<AIOpsAlert>>('/alerts', { params });
+      const { data } = await keepApi.get<PaginatedResponse<AIOpsAlert>>('/aiops/alerts', { params });
       return data;
     },
     staleTime: 30_000,

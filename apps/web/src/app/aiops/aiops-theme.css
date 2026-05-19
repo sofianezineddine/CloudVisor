@@ -335,3 +335,54 @@
     flex-shrink: 0;
   }
 }
+
+
+/* ─── Override Tremor Orange → CloudVisor Blue ─────────────────────────────── */
+/* Tremor uses orange-500 as its default brand color. Override globally. */
+
+.aiops-scope [class*="bg-orange"] {
+  background-color: #4a90d9 !important;
+}
+
+.aiops-scope [class*="text-orange"] {
+  color: #4a90d9 !important;
+}
+
+.aiops-scope [class*="border-orange"] {
+  border-color: #4a90d9 !important;
+}
+
+.aiops-scope [class*="ring-orange"] {
+  --tw-ring-color: #4a90d9 !important;
+}
+
+.aiops-scope [class*="hover:bg-orange"]:hover {
+  background-color: #5ba3f5 !important;
+}
+
+.aiops-scope button[class*="orange"] {
+  background-color: #4a90d9 !important;
+  border-color: #4a90d9 !important;
+}
+
+.aiops-scope button[class*="orange"]:hover {
+  background-color: #5ba3f5 !important;
+  border-color: #5ba3f5 !important;
+}
+
+/* ─── Fix content area to match CloudVisor's page background ───────────────── */
+.aiops-scope {
+  background-color: var(--bg-base, #f9fafb);
+  color: var(--text-primary, #333333);
+}
+
+/* When CloudVisor is in dark mode */
+[data-theme="dark"] .aiops-scope {
+  background-color: #0f1117;
+  color: #e8eaf0;
+}
+
+/* ─── Remove Keep's own page title since CloudVisor breadcrumbs handle it ──── */
+.aiops-scope .page-container > h1:first-child {
+  display: none;
+}

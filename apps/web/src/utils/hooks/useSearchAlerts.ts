@@ -27,7 +27,7 @@ export const useSearchAlerts = (
 
   const key =
     api.isReady() && !doesTimeframExceed90Days
-      ? ["/alerts/search", debouncedArgsString]
+      ? ["/aiops/alerts/search", debouncedArgsString]
       : null;
 
   const { mutate, ...rest } = useSWR<AlertDto[]>(

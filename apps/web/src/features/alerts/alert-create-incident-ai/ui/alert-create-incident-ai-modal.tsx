@@ -114,7 +114,7 @@ export const CreateIncidentWithAIModal = ({
           controller: AbortController
         ) => {
           return await api.post(
-            "/incidents/ai/suggest",
+            "/aiops/incidents/ai/suggest",
             alertsToProcess.map((alert) => alert.fingerprint),
             { signal: controller.signal }
           );
@@ -287,7 +287,7 @@ export const CreateIncidentWithAIModal = ({
       toast.success("Incidents created successfully");
       await mutateIncidents();
       handleCloseAIModal();
-      router.push("/incidents");
+      router.push("/aiops/incidents");
     } catch (error) {
       console.error("Error creating incidents:", error);
       if (error instanceof KeepApiError) {

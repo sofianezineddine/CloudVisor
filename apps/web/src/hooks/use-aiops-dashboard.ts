@@ -43,7 +43,7 @@ export function useAIOpsDashboardMetrics() {
   return useQuery({
     queryKey: aiopsDashboardKeys.metrics(),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: AIOpsDashboardMetrics }>('/dashboard/metrics');
+      const { data } = await keepApi.get<{ data: AIOpsDashboardMetrics }>('/aiops/dashboard/metrics');
       return data.data;
     },
     staleTime: 30_000,
@@ -55,7 +55,7 @@ export function useAIOpsDashboardTrend() {
   return useQuery({
     queryKey: aiopsDashboardKeys.trend(),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: AIOpsAlertTrendPoint[] }>('/dashboard/trend');
+      const { data } = await keepApi.get<{ data: AIOpsAlertTrendPoint[] }>('/aiops/dashboard/trend');
       return data.data;
     },
     staleTime: 60_000,
@@ -66,7 +66,7 @@ export function useAIOpsProviderHealth() {
   return useQuery({
     queryKey: aiopsDashboardKeys.providerHealth(),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: AIOpsProviderHealth[] }>('/dashboard/provider-health');
+      const { data } = await keepApi.get<{ data: AIOpsProviderHealth[] }>('/aiops/dashboard/provider-health');
       return data.data;
     },
     staleTime: 30_000,

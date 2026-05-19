@@ -20,6 +20,17 @@ const config: Config = {
         border: 'var(--border-default)',
         background: 'var(--bg-base)',
         foreground: 'var(--text-primary)',
+        // Override Tremor's orange brand with CloudVisor blue
+        tremor: {
+          brand: {
+            faint: 'rgb(239 246 255)',
+            muted: 'rgb(219 234 254)',
+            subtle: 'rgb(96 165 250)',
+            DEFAULT: '#4a90d9',
+            emphasis: '#374151',
+            inverted: '#ffffff',
+          },
+        },
         primary: {
           DEFAULT: 'var(--btn-primary-bg)',
           foreground: '#ffffff',

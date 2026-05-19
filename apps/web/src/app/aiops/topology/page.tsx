@@ -1,3 +1,4 @@
+'use client';
 import React from "react";
 import { getApplications, getTopology } from "./api";
 import { TopologyPageClient } from "./topology-client";

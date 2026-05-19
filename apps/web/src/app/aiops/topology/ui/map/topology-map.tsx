@@ -178,7 +178,7 @@ export function TopologyMap({
     formData.set("file", file);
 
     try {
-      const response = await api.request("/topology/import", {
+      const response = await api.request("/aiops/topology/import", {
         method: "POST",
         body: formData,
       });
@@ -210,7 +210,7 @@ export function TopologyMap({
       icon: ArrowDownTrayIcon,
       onClick: async () => {
         try {
-          const response = await api.get("/topology/export", {
+          const response = await api.get("/aiops/topology/export", {
             headers: {
               Accept: "application/x-yaml",
             },
@@ -272,7 +272,7 @@ export function TopologyMap({
       ) {
         setEdges((eds) => addEdge(params, eds));
         try {
-          const response = await api.post("/topology/dependency", {
+          const response = await api.post("/aiops/topology/dependency", {
             service_id: sourceService.id,
             depends_on_service_id: targetService.id,
           });
@@ -313,7 +313,7 @@ export function TopologyMap({
       } else {
         setEdges((els) => reconnectEdge(oldEdge, newConnection, els));
         try {
-          const response = await api.put("/topology/dependency", {
+          const response = await api.put("/aiops/topology/dependency", {
             id: oldEdge.id,
             service_id: newConnection.source,
             depends_on_service_id: newConnection.target,
@@ -635,7 +635,7 @@ export function TopologyMap({
                 icon={ArrowUpRightIcon}
                 iconPosition="right"
                 className="mr-2"
-                href="/topology"
+                href="/aiops/topology"
               >
                 Full topology map
               </Link>
@@ -702,7 +702,7 @@ export function TopologyMap({
                           variant="primary"
                           size="md"
                           onClick={() =>
-                            router.push("/providers?labels=topology")
+                            router.push("/aiops/providers?labels=topology")
                           }
                         >
                           Connect Providers

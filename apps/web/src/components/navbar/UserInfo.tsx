@@ -95,7 +95,7 @@ export const UserInfo = ({ session }: UserInfoProps) => {
     <>
       <ul className="space-y-2 p-2">
         <li>
-          <LinkWithIcon href="/providers" icon={VscDebugDisconnect}>
+          <LinkWithIcon href="/aiops/providers" icon={VscDebugDisconnect}>
             <Subtitle className="text-xs">Providers</Subtitle>
           </LinkWithIcon>
         </li>

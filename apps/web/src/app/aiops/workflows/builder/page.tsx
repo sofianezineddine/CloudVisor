@@ -2,12 +2,12 @@ import { WorkflowBuilderWidget } from "@/widgets/workflow-builder";
 import { Metadata } from "next";
 
 type PageProps = {
-  params: Promise<{ workflow: string; workflowId: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  params: { workflow: string; workflowId: string };
+  searchparams: { [key: string]: string | string[] | undefined };
 };
 
 export default async function WorkflowBuilderPage(props: PageProps) {
-  const params = await props.params;
+  const params = props.params;
   return (
     <WorkflowBuilderWidget
       workflowRaw={params.workflow}

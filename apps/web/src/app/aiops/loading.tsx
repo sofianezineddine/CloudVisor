@@ -1,5 +1,7 @@
-import { KeepLoader } from "@/shared/ui";
-
 export default function Loading() {
-  return <KeepLoader />;
+  return (
+    <div className="flex items-center justify-center h-full p-8">
+      <span style={{ color: 'var(--color-text-secondary)' }}>Loading...</span>
+    </div>
+  );
 }

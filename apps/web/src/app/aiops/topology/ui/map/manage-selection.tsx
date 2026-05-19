@@ -50,7 +50,7 @@ export function ManageSelection({
   const api = useApi();
   const handleServicesDelete = async () => {
     try {
-      const response = await api.delete("/topology/services", {
+      const response = await api.delete("/aiops/topology/services", {
         service_ids: selectedServices.map((service) => service.id),
       });
       selectedServices[0].topologyMutator();
@@ -170,7 +170,7 @@ export function ManageSelection({
     );
     if (protocol !== null) {
       try {
-        const response = await api.put("/topology/dependency", {
+        const response = await api.put("/aiops/topology/dependency", {
           id: edge.id,
           protocol: protocol,
         });

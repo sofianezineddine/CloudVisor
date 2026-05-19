@@ -3,19 +3,18 @@ import { Session } from "next-auth";
 import { KeepApiError, KeepApiReadOnlyError } from "./KeepApiError";
 import { getApiUrlFromConfig } from "@/shared/lib/getApiUrlFromConfig";
 import { getApiURL } from "@/utils/apiUrl";
-import * as Sentry from "@sentry/nextjs";
 import { signOut as signOutClient } from "next-auth/react";
 import { GuestSession } from "@/types/auth";
 import { AuthType } from "@/utils/authenticationType";
 
 const READ_ONLY_ALLOWED_METHODS = ["GET", "OPTIONS"];
 const READ_ONLY_ALWAYS_ALLOWED_URLS = [
-  "/alerts/audit",
-  "/alerts/facets/options",
-  "/alerts/query",
-  "/incidents/facets/options",
-  "/workflows/query",
-  "/workflows/facets/options",
+  "/aiops/alerts/audit",
+  "/aiops/alerts/facets/options",
+  "/aiops/alerts/query",
+  "/aiops/incidents/facets/options",
+  "/aiops/workflows/query",
+  "/aiops/workflows/facets/options",
 ];
 
 interface ApiClientOptions {
@@ -36,20 +35,24 @@ export class ApiClient {
   }
 
   isReady() {
-    return !!this.session && !!this.config;
+    return !!this.config;
   }
 
   getHeaders() {
-    if (!this.session || !this.session.accessToken) {
-      throw new Error("No valid session or access token found");
+    // CloudVisor integration: get token from session or localStorage
+    let token = this.session?.accessToken;
+    if (!token && typeof window !== 'undefined') {
+      token = localStorage.getItem('access_token') || '';
     }
-    // Guest session
-    if (this.session.accessToken === "unauthenticated") {
+    if (!token) {
+      // Allow unauthenticated requests (the API gateway will reject if needed)
+      return this.additionalHeaders;
+    }
+    if (token === "unauthenticated") {
       return this.additionalHeaders;
     }
     return {
-      Authorization: `Bearer ${this.session.accessToken}`,
-      "ngrok-skip-browser-warning": true,
+      Authorization: `Bearer ${token}`,
       ...this.additionalHeaders,
     };
   }
@@ -125,9 +128,7 @@ export class ApiClient {
       return await response.text();
     } catch (error) {
       console.error(error);
-      if (!this.config?.SENTRY_DISABLED) {
-        Sentry.captureException(error);
-      }
+      
       return null;
     }
   }

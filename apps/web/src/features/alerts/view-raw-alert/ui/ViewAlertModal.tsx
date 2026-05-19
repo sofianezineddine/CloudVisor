@@ -564,7 +564,7 @@ export const ViewAlertModal: React.FC<ViewAlertModalProps> = ({
 
       // Handle un-enrichments first if there are any
       if (keysToUnenrich.length > 0) {
-        await api.post("/alerts/unenrich", {
+        await api.post("/aiops/alerts/unenrich", {
           fingerprint: alert.fingerprint,
           enrichments: keysToUnenrich,
         });
@@ -572,7 +572,7 @@ export const ViewAlertModal: React.FC<ViewAlertModalProps> = ({
 
       // Handle enrichments if there are any
       if (Object.keys(enrichments).length > 0) {
-        await api.post("/alerts/enrich", {
+        await api.post("/aiops/alerts/enrich", {
           fingerprint: alert.fingerprint,
           enrichments: enrichments,
         });

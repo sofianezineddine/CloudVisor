@@ -99,7 +99,7 @@ describe('useAIOpsWebSocket', () => {
   });
 
   it('should not connect when pathname is not under /aiops', async () => {
-    currentPathname = '/dashboard';
+    currentPathname = '/aiops/dashboard';
     const { useAIOpsWebSocket } = await import('./use-aiops-websocket');
 
     renderHook(() => useAIOpsWebSocket());
@@ -157,7 +157,7 @@ describe('useAIOpsWebSocket', () => {
     expect(mockSubscribe).toHaveBeenCalledWith('private-org-123');
 
     // Simulate navigation away — change pathname and rerender
-    currentPathname = '/dashboard';
+    currentPathname = '/aiops/dashboard';
     rerender();
 
     // Should disconnect
@@ -165,7 +165,7 @@ describe('useAIOpsWebSocket', () => {
   });
 
   it('should return disconnected status initially when not on AIOps page', async () => {
-    currentPathname = '/dashboard';
+    currentPathname = '/aiops/dashboard';
     const { useAIOpsWebSocket } = await import('./use-aiops-websocket');
 
     const { result } = renderHook(() => useAIOpsWebSocket());
