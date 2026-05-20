@@ -173,7 +173,7 @@ export const alertSidebarFieldsConfig: Record<
             <Button
               icon={ClipboardDocumentIcon}
               size="xs"
-              color="orange"
+              color="blue"
               variant="light"
               onClick={(e) => {
                 e.preventDefault();
@@ -206,7 +206,7 @@ export const alertSidebarFieldsConfig: Record<
             <Button
               icon={ClipboardDocumentIcon}
               size="xs"
-              color="orange"
+              color="blue"
               variant="light"
               onClick={(e) => {
                 e.preventDefault();

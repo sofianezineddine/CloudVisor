@@ -138,7 +138,7 @@ export function WorkflowYAMLEditorStandalone({
           data-testid="wf-yaml-editor-test-run-button"
         />
         <Button
-          color="orange"
+          color="blue"
           size="sm"
           className="min-w-28 relative disabled:opacity-70"
           disabled={!hasUnsavedChanges || isSaving}

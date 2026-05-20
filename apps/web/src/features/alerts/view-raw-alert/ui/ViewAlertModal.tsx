@@ -564,7 +564,7 @@ export const ViewAlertModal: React.FC<ViewAlertModalProps> = ({
 
       // Handle un-enrichments first if there are any
       if (keysToUnenrich.length > 0) {
-        await api.post("/aiops/alerts/unenrich", {
+        await api.post("/alerts/unenrich", {
           fingerprint: alert.fingerprint,
           enrichments: keysToUnenrich,
         });
@@ -572,7 +572,7 @@ export const ViewAlertModal: React.FC<ViewAlertModalProps> = ({
 
       // Handle enrichments if there are any
       if (Object.keys(enrichments).length > 0) {
-        await api.post("/aiops/alerts/enrich", {
+        await api.post("/alerts/enrich", {
           fingerprint: alert.fingerprint,
           enrichments: enrichments,
         });
@@ -674,7 +674,7 @@ export const ViewAlertModal: React.FC<ViewAlertModalProps> = ({
             <h2 className="text-lg font-semibold mr-2">Alert Payload</h2>
             <Button
               onClick={toggleEditMode}
-              color="orange"
+              color="blue"
               variant="light"
               size="xs"
               icon={isEditable ? Unlock : Lock}
@@ -685,7 +685,7 @@ export const ViewAlertModal: React.FC<ViewAlertModalProps> = ({
         <div className="flex gap-x-2">
           <div className="flex items-center space-x-2 pr-2">
             <Switch
-              color="orange"
+              color="blue"
               id="showHighlightedOnly"
               checked={showHighlightedOnly}
               onChange={() => setShowHighlightedOnly(!showHighlightedOnly)}
@@ -701,20 +701,20 @@ export const ViewAlertModal: React.FC<ViewAlertModalProps> = ({
           </div>
           <Button
             onClick={saveChanges}
-            color="orange"
+            color="blue"
             icon={Save}
             disabled={!hasChanges || validationErrors.length > 0}
             title={!hasChanges ? "No changes in the alert payload" : ""}
           ></Button>
           <Button
             onClick={handleCopy}
-            color="orange"
+            color="blue"
             variant="secondary"
             icon={Copy}
           ></Button>
           <Button
             onClick={handleClose}
-            color="orange"
+            color="blue"
             variant="secondary"
             icon={X}
           ></Button>
@@ -725,7 +725,7 @@ export const ViewAlertModal: React.FC<ViewAlertModalProps> = ({
         <Callout
           className="mb-4"
           title="Edit with caution"
-          color="orange"
+          color="blue"
           icon={AlertTriangle}
         >
           Keep in mind that some of the fields are used in ways that editing may

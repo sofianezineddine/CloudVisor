@@ -109,7 +109,7 @@ export default function GroupsTab() {
         </div>
         <div className="flex space-x-2">
           <Button
-            color="orange"
+            color="blue"
             size="md"
             onClick={handleAddGroupClick}
             icon={MdGroupAdd}
@@ -146,12 +146,12 @@ export default function GroupsTab() {
                   <TableCell className="w-4/12">
                     <div className="flex flex-wrap gap-1">
                       {group.members.slice(0, 4).map((member, index) => (
-                        <Badge key={index} color="orange" className="text-xs">
+                        <Badge key={index} color="blue" className="text-xs">
                           {member}
                         </Badge>
                       ))}
                       {group.members.length > 4 && (
-                        <Badge color="orange" className="text-xs">
+                        <Badge color="blue" className="text-xs">
                           +{group.members.length - 4} more
                         </Badge>
                       )}
@@ -160,12 +160,12 @@ export default function GroupsTab() {
                   <TableCell className="w-4/12">
                     <div className="flex flex-wrap gap-1">
                       {group.roles.slice(0, 4).map((role, index) => (
-                        <Badge key={index} color="orange" className="text-xs">
+                        <Badge key={index} color="blue" className="text-xs">
                           {role}
                         </Badge>
                       ))}
                       {group.roles.length > 4 && (
-                        <Badge color="orange" className="text-xs">
+                        <Badge color="blue" className="text-xs">
                           +{group.roles.length - 4} more
                         </Badge>
                       )}
@@ -175,7 +175,7 @@ export default function GroupsTab() {
                     <Button
                       icon={TrashIcon}
                       variant="light"
-                      color="orange"
+                      color="blue"
                       className="opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={(e) => handleDeleteGroup(group.name, e)}
                     />

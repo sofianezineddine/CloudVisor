@@ -63,7 +63,7 @@ export const ProviderSemiAutomated = ({ provider }: Props) => {
           alt={provider.type}
           className="mt-5 mb-9 mr-2.5"
         />
-        <Icon icon={ArrowLongRightIcon} size="xl" color="orange" />
+        <Icon icon={ArrowLongRightIcon} size="xl" color="blue" />
         <Image
           src={`/keep.png`}
           width={55}

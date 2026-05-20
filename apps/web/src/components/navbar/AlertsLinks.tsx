@@ -109,7 +109,7 @@ export const AlertsLinks = ({ session }: AlertsLinksProps) => {
               {shouldShowFeed && (
                 <li>
                   <LinkWithIcon
-                    href="/aiops/alerts/feed"
+                    href="/alerts/feed"
                     icon={AiOutlineSwap}
                     count={feedAlertsTotalCount}
                     testId="menu-alerts-feed"
@@ -117,10 +117,10 @@ export const AlertsLinks = ({ session }: AlertsLinksProps) => {
                       // If we're already on the feed page, force a reload
                       if (
                         decodeURIComponent(window.location.pathname) ===
-                        "/aiops/alerts/feed"
+                        "/alerts/feed"
                       ) {
                         e.preventDefault();
-                        window.location.href = "/aiops/alerts/feed";
+                        window.location.href = "/alerts/feed";
                       }
                     }}
                   >
@@ -141,7 +141,7 @@ export const AlertsLinks = ({ session }: AlertsLinksProps) => {
       >
         <div className="space-y-2">
           <Subtitle>Select tags to watch</Subtitle>
-          <Callout title="" color="orange">
+          <Callout title="" color="blue">
             Customize your presets list by watching specific tags.
           </Callout>
           <CreatableMultiSelect
@@ -161,7 +161,7 @@ export const AlertsLinks = ({ session }: AlertsLinksProps) => {
             <Button
               size="lg"
               variant="secondary"
-              color="orange"
+              color="blue"
               onClick={() => setIsTagModalOpen(false)}
               tooltip="Close Modal"
             >
@@ -169,7 +169,7 @@ export const AlertsLinks = ({ session }: AlertsLinksProps) => {
             </Button>
             <Button
               size="lg"
-              color="orange"
+              color="blue"
               onClick={handleApplyTags}
               tooltip="Apply Tags"
             >

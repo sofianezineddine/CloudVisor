@@ -155,14 +155,14 @@ export function AlertDismissModal({
             Are you sure you want to restore this alert?
           </Subtitle>
           <div className="flex justify-center mt-4 space-x-2">
-            <Button onClick={handleDismissChange} color="orange">
+            <Button onClick={handleDismissChange} color="blue">
               Restore
             </Button>
           </div>
         </>
       ) : (
         <>
-          <Callout color="orange" title="Dismissing Alerts" className="mb-2.5">
+          <Callout color="blue" title="Dismissing Alerts" className="mb-2.5">
             {`This will dismiss the alert until an alert with the same fingerprint comes in${
               selectedTab === 1 ? ` or until ${selectedDateTime}.` : "."
             }`}
@@ -224,12 +224,12 @@ export function AlertDismissModal({
             />
           </div>
           <div className="mt-4 flex justify-end gap-2">
-            <Button variant="secondary" color="orange" onClick={clearAndClose}>
+            <Button variant="secondary" color="blue" onClick={clearAndClose}>
               Cancel
             </Button>
             <Button
               onClick={handleDismissChange}
-              color="orange"
+              color="blue"
               loading={isLoading}
             >
               Dismiss

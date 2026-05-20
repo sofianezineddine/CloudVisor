@@ -50,7 +50,7 @@ export function ManageSelection({
   const api = useApi();
   const handleServicesDelete = async () => {
     try {
-      const response = await api.delete("/aiops/topology/services", {
+      const response = await api.delete("/topology/services", {
         service_ids: selectedServices.map((service) => service.id),
       });
       selectedServices[0].topologyMutator();
@@ -170,7 +170,7 @@ export function ManageSelection({
     );
     if (protocol !== null) {
       try {
-        const response = await api.put("/aiops/topology/dependency", {
+        const response = await api.put("/topology/dependency", {
           id: edge.id,
           protocol: protocol,
         });
@@ -191,7 +191,7 @@ export function ManageSelection({
         <p className="text-lg font-bold">{selectedApplication.name}</p>
         <div className="flex gap-2">
           <Button
-            color="orange"
+            color="blue"
             size="xs"
             variant="secondary"
             onClick={() => setIsModalOpen(true)}
@@ -223,7 +223,7 @@ export function ManageSelection({
         <div className="">
           {selectedServices.length === 1 && selectedServices[0].is_manual && (
             <Button
-              color="orange"
+              color="blue"
               size="xs"
               variant="secondary"
               className="mr-3"
@@ -248,7 +248,7 @@ export function ManageSelection({
               </Button>
             )}
           <Button
-            color="orange"
+            color="blue"
             size="xs"
             variant="primary"
             onClick={() => setIsModalOpen(true)}
@@ -297,7 +297,7 @@ export function ManageSelection({
         <div></div>
         <div className="flex gap-2">
           <Button
-            color="orange"
+            color="blue"
             size="xs"
             variant="secondary"
             onClick={() => editEdgeProtocol(selectedEdges[0])}

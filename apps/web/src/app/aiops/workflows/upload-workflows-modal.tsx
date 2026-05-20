@@ -145,7 +145,7 @@ export const UploadWorkflowsModal: React.FC<UploadWorkflowsModalProps> = ({
           />
           <Button
             className="mt-2"
-            color="orange"
+            color="blue"
             size="md"
             variant="primary"
             onClick={() => handleWorkflowDefinitionString(workflowDefinition)}
@@ -157,7 +157,7 @@ export const UploadWorkflowsModal: React.FC<UploadWorkflowsModalProps> = ({
           <h3>Or just try some from Keep examples:</h3>
           <Button
             className="mt-2"
-            color="orange"
+            color="blue"
             size="md"
             variant="secondary"
             icon={ArrowRightIcon}
@@ -168,7 +168,7 @@ export const UploadWorkflowsModal: React.FC<UploadWorkflowsModalProps> = ({
 
           <Button
             className="mt-2"
-            color="orange"
+            color="blue"
             size="md"
             variant="secondary"
             icon={ArrowRightIcon}
@@ -191,7 +191,7 @@ export const UploadWorkflowsModal: React.FC<UploadWorkflowsModalProps> = ({
         <div className="mt-4">
           <Button
             className="mt-2"
-            color="orange"
+            color="blue"
             variant="secondary"
             onClick={() => onClose()}
           >

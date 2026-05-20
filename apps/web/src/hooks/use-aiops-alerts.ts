@@ -36,16 +36,6 @@ export interface AIOpsAlertFilters {
   search?: string;
 }
 
-interface PaginatedResponse<T> {
-  data: {
-    items: T[];
-    total: number;
-    page: number;
-    page_size: number;
-  };
-  meta?: { request_id?: string; took_ms?: number };
-}
-
 // ─── Query key factory ────────────────────────────────────────────────────────
 
 export const aiopsAlertKeys = {
@@ -61,33 +51,62 @@ export function useAIOpsAlerts(filters: AIOpsAlertFilters = {}) {
   return useQuery({
     queryKey: aiopsAlertKeys.list(filters),
     queryFn: async () => {
-      const params: Record<string, string> = {};
-      if (filters.page) params.page = String(filters.page);
-      if (filters.page_size) params.page_size = String(filters.page_size);
-      if (filters.severity?.length) params.severity = filters.severity.join(',');
-      if (filters.status?.length) params.status = filters.status.join(',');
-      if (filters.source) params.source = filters.source;
-      if (filters.time_from) params.time_from = filters.time_from;
-      if (filters.time_to) params.time_to = filters.time_to;
-      if (filters.sort_by) params.sort_by = filters.sort_by;
-      if (filters.sort_order) params.sort_order = filters.sort_order;
-      if (filters.search) params.search = filters.search;
+      // Build CEL filter expression from the filter params
+      const celParts: string[] = [];
+      if (filters.severity?.length) {
+        const severityList = filters.severity.map(s => `"${s}"`).join(', ');
+        celParts.push(`severity in [${severityList}]`);
+      }
+      if (filters.status?.length) {
+        const statusList = filters.status.map(s => `"${s}"`).join(', ');
+        celParts.push(`status in [${statusList}]`);
+      }
+      if (filters.source) {
+        celParts.push(`source == "${filters.source}"`);
+      }
+      if (filters.search) {
+        celParts.push(`name.contains("${filters.search}")`);
+      }
 
-      const { data } = await keepApi.get<PaginatedResponse<AIOpsAlert>>('/aiops/alerts', { params });
-      return data;
+      const pageSize = filters.page_size || 25;
+      const page = filters.page || 1;
+
+      const query: Record<string, unknown> = {
+        cel: celParts.length > 0 ? celParts.join(' && ') : undefined,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+        sort_by: filters.sort_by || 'lastReceived',
+        sort_dir: filters.sort_order || 'desc',
+      };
+
+      const { data } = await keepApi.post<{
+        limit: number;
+        offset: number;
+        count: number;
+        results: AIOpsAlert[];
+      }>('/alerts/query', query);
+
+      return {
+        data: {
+          items: data.results,
+          total: data.count,
+          page,
+          page_size: pageSize,
+        },
+      };
     },
     staleTime: 30_000,
   });
 }
 
-export function useAIOpsAlert(id: string | null) {
+export function useAIOpsAlert(fingerprint: string | null) {
   return useQuery({
-    queryKey: aiopsAlertKeys.detail(id ?? ''),
+    queryKey: aiopsAlertKeys.detail(fingerprint ?? ''),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: AIOpsAlert }>(`/alerts/${id}`);
-      return data.data;
+      const { data } = await keepApi.get<AIOpsAlert>(`/alerts/${fingerprint}`);
+      return data;
     },
-    enabled: !!id,
+    enabled: !!fingerprint,
     staleTime: 30_000,
   });
 }
@@ -95,13 +114,15 @@ export function useAIOpsAlert(id: string | null) {
 export function useUpdateAlertStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { data } = await keepApi.put<{ data: AIOpsAlert }>(`/alerts/${id}/status`, { status });
+    mutationFn: async ({ fingerprint, status }: { fingerprint: string; status: string }) => {
+      const { data } = await keepApi.post<{ data: { status: string } }>('/alerts/enrich', {
+        fingerprint,
+        enrichments: { status },
+      });
       return data.data;
     },
-    onSuccess: (_, { id }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: aiopsAlertKeys.all() });
-      queryClient.invalidateQueries({ queryKey: aiopsAlertKeys.detail(id) });
     },
   });
 }

@@ -13,7 +13,7 @@ export const useWorkflowExecutions = (
   const api = useApi();
 
   return useSWR<AlertToWorkflowExecution[]>(
-    api.isReady() ? "/aiops/workflows/executions" : null,
+    api.isReady() ? "/workflows/executions" : null,
     (url) => api.get(url),
     options
   );

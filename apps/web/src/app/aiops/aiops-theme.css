@@ -1,388 +1,609 @@
 /*
  * AIOps Theme Override — CloudVisor Design System
  *
- * This file overrides Tremor UI default theme variables with CloudVisor's
- * dark-mode design tokens. All overrides are scoped to `.aiops-scope` to
- * prevent collisions with Radix UI components used elsewhere in the app.
+ * Overrides Tremor UI / Keep UI default theme variables with CloudVisor's
+ * design tokens. All overrides are scoped to `.aiops-scope` to prevent
+ * collisions with other components.
  *
- * Uses CSS @layer to control specificity and ensure Tremor styles don't
- * bleed into the rest of the CloudVisor platform.
+ * Supports both light and dark mode via [data-theme="dark"] selectors,
+ * inheriting from CloudVisor's global CSS variables where possible.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-/* ─── Layer: tremor-overrides ──────────────────────────────────────────────
-   Scoped below the base and components layers so that CloudVisor's global
-   styles take precedence outside .aiops-scope, while Tremor components
-   inside .aiops-scope receive the correct dark-theme tokens.
-   ────────────────────────────────────────────────────────────────────────── */
-@layer tremor-overrides {
-
-  /* ─── CloudVisor Design Tokens (AIOps scope) ─────────────────────────────── */
-  .aiops-scope {
-    /* ── Backgrounds ── */
-    --color-bg-base: #0f1117;
-    --color-bg-surface: #1a1d27;
-    --color-bg-raised: #21242f;
-    --color-bg-hover: #2a2d3a;
-
-    /* ── Borders ── */
-    --color-border: #2e3140;
-    --color-border-focus: #4a90d9;
-
-    /* ── Brand & Semantic Colors ── */
-    --color-primary: #4a90d9;
-    --color-primary-hover: #5ba3f5;
-    --color-danger: #e05252;
-    --color-warning: #e8a838;
-    --color-success: #3db87a;
-    --color-info: #4a90d9;
-
-    /* ── Text ── */
-    --color-text-primary: #e8eaf0;
-    --color-text-secondary: #9099b0;
-    --color-text-disabled: #50566a;
-
-    /* ── Typography ── */
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-
-    /* ── Base appearance ── */
-    color: var(--color-text-primary);
-    background-color: var(--color-bg-base);
-  }
-
-  /* ─── Tremor CSS Variable Overrides ──────────────────────────────────────── */
-
-  /* Tremor brand colors */
-  .aiops-scope {
-    --tremor-brand-subtle: rgba(74, 144, 217, 0.15);
-    --tremor-brand-DEFAULT: #4a90d9;
-    --tremor-brand-emphasis: #5ba3f5;
-    --tremor-brand-inverted: #ffffff;
-    --tremor-brand-muted: rgba(74, 144, 217, 0.10);
-    --tremor-brand-faint: rgba(74, 144, 217, 0.05);
-  }
-
-  /* Tremor background colors */
-  .aiops-scope {
-    --tremor-background-subtle: #1a1d27;
-    --tremor-background-DEFAULT: #0f1117;
-    --tremor-background-emphasis: #21242f;
-    --tremor-background-muted: #1a1d27;
-  }
-
-  /* Tremor border colors */
-  .aiops-scope {
-    --tremor-border-DEFAULT: #2e3140;
-  }
-
-  /* Tremor ring (focus) colors */
-  .aiops-scope {
-    --tremor-ring-DEFAULT: #4a90d9;
-  }
-
-  /* Tremor content (text) colors */
-  .aiops-scope {
-    --tremor-content-subtle: #50566a;
-    --tremor-content-DEFAULT: #9099b0;
-    --tremor-content-emphasis: #e8eaf0;
-    --tremor-content-strong: #ffffff;
-    --tremor-content-inverted: #0f1117;
-  }
-
-  /* ─── Tremor Component Overrides ─────────────────────────────────────────── */
-
-  /* Cards and panels */
-  .aiops-scope [class*="tremor-Card"],
-  .aiops-scope [class*="tremor-card"] {
-    background-color: var(--color-bg-surface);
-    border-color: var(--color-border);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.30);
-  }
-
-  /* Inputs and selects */
-  .aiops-scope input,
-  .aiops-scope select,
-  .aiops-scope textarea,
-  .aiops-scope [class*="tremor-TextInput"],
-  .aiops-scope [class*="tremor-Select"] {
-    background-color: var(--color-bg-raised);
-    border-color: var(--color-border);
-    color: var(--color-text-primary);
-  }
-
-  .aiops-scope input:focus,
-  .aiops-scope select:focus,
-  .aiops-scope textarea:focus,
-  .aiops-scope [class*="tremor-TextInput"]:focus-within,
-  .aiops-scope [class*="tremor-Select"]:focus-within {
-    border-color: var(--color-border-focus);
-    box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
-    outline: none;
-  }
-
-  .aiops-scope input::placeholder,
-  .aiops-scope textarea::placeholder {
-    color: var(--color-text-disabled);
-  }
-
-  /* Buttons */
-  .aiops-scope [class*="tremor-Button"][data-variant="primary"],
-  .aiops-scope button[class*="tremor"][class*="primary"] {
-    background-color: var(--color-primary);
-    color: #ffffff;
-  }
-
-  .aiops-scope [class*="tremor-Button"][data-variant="primary"]:hover,
-  .aiops-scope button[class*="tremor"][class*="primary"]:hover {
-    background-color: var(--color-primary-hover);
-  }
-
-  /* Dropdown menus */
-  .aiops-scope [class*="tremor-Dropdown"],
-  .aiops-scope [role="listbox"],
-  .aiops-scope [role="menu"] {
-    background-color: var(--color-bg-raised);
-    border-color: var(--color-border);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.40);
-  }
-
-  .aiops-scope [class*="tremor-Dropdown"] [role="option"]:hover,
-  .aiops-scope [role="listbox"] [role="option"]:hover,
-  .aiops-scope [role="menu"] [role="menuitem"]:hover {
-    background-color: var(--color-bg-hover);
-  }
-
-  /* Tabs */
-  .aiops-scope [class*="tremor-Tab"] {
-    color: var(--color-text-secondary);
-  }
-
-  .aiops-scope [class*="tremor-Tab"][aria-selected="true"],
-  .aiops-scope [class*="tremor-Tab"].active {
-    color: var(--color-primary);
-    border-color: var(--color-primary);
-  }
-
-  /* Dividers */
-  .aiops-scope hr,
-  .aiops-scope [class*="tremor-Divider"] {
-    border-color: var(--color-border);
-  }
-
-  /* Text overrides for Tremor typography */
-  .aiops-scope [class*="tremor-Title"],
-  .aiops-scope [class*="tremor-Metric"] {
-    color: var(--color-text-primary);
-  }
-
-  .aiops-scope [class*="tremor-Text"],
-  .aiops-scope [class*="tremor-Subtitle"] {
-    color: var(--color-text-secondary);
-  }
-
-  /* List items */
-  .aiops-scope [class*="tremor-List"] [class*="tremor-ListItem"] {
-    border-color: var(--color-border);
-  }
-
-  /* Dialog / Modal */
-  .aiops-scope [class*="tremor-Dialog"],
-  .aiops-scope [role="dialog"] {
-    background-color: var(--color-bg-surface);
-    border-color: var(--color-border);
-  }
-
-  /* Callout */
-  .aiops-scope [class*="tremor-Callout"] {
-    border-color: var(--color-border);
-    background-color: var(--color-bg-surface);
-  }
-
-  /* ─── Scrollbar Styling (AIOps scope) ────────────────────────────────────── */
-  .aiops-scope *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  .aiops-scope *::-webkit-scrollbar-track {
-    background: var(--color-bg-base);
-  }
-
-  .aiops-scope *::-webkit-scrollbar-thumb {
-    background-color: var(--color-border);
-    border-radius: 5px;
-    border: 2px solid var(--color-bg-base);
-  }
-
-  .aiops-scope *::-webkit-scrollbar-thumb:hover {
-    background-color: var(--color-text-disabled);
-  }
-
-  .aiops-scope * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-border) var(--color-bg-base);
-  }
-
-  /* ─── Selection ──────────────────────────────────────────────────────────── */
-  .aiops-scope ::selection {
-    background-color: rgba(74, 144, 217, 0.25);
-    color: var(--color-text-primary);
-  }
-
-  /* ─── Focus Visible ──────────────────────────────────────────────────────── */
-  .aiops-scope :focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
-  }
-
-  /* ─── Transitions ────────────────────────────────────────────────────────── */
-  .aiops-scope [class*="tremor-"] {
-    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
-  }
-
-  /* ─── Badge & Severity Pill Styles ───────────────────────────────────────── */
-  /* Base badge styling for all AIOps badges and Tremor Badge overrides.
-     Uses CloudVisor severity color mappings with 15% opacity backgrounds. */
-
-  .aiops-scope .aiops-severity-badge,
-  .aiops-scope .aiops-status-badge,
-  .aiops-scope .aiops-badge {
-    display: inline-flex;
-    align-items: center;
-    border-radius: 9999px;
-    padding: 2px 10px;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1.4;
-    white-space: nowrap;
-    text-transform: capitalize;
-    letter-spacing: 0.01em;
-  }
-
-  /* Tremor Badge overrides within AIOps scope */
-  .aiops-scope [class*="tremor-Badge"],
-  .aiops-scope [data-testid*="badge"] {
-    border-radius: 9999px;
-    padding: 2px 10px;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1.4;
-    border-width: 1px;
-    border-style: solid;
-  }
-
-  /* Severity: Critical / High — #e05252 with 15% opacity background */
-  .aiops-scope [class*="tremor-Badge"][class*="red"],
-  .aiops-scope [class*="tremor-Badge"][class*="rose"],
-  .aiops-scope [data-severity="critical"],
-  .aiops-scope [data-severity="high"] {
-    color: #e05252;
-    background-color: rgba(224, 82, 82, 0.15);
-    border-color: rgba(224, 82, 82, 0.2);
-  }
-
-  /* Severity: Warning — #e8a838 with 15% opacity background */
-  .aiops-scope [class*="tremor-Badge"][class*="amber"],
-  .aiops-scope [class*="tremor-Badge"][class*="yellow"],
-  .aiops-scope [class*="tremor-Badge"][class*="orange"],
-  .aiops-scope [data-severity="warning"],
-  .aiops-scope [data-severity="medium"] {
-    color: #e8a838;
-    background-color: rgba(232, 168, 56, 0.15);
-    border-color: rgba(232, 168, 56, 0.2);
-  }
-
-  /* Severity: Success / Low — #3db87a with 15% opacity background */
-  .aiops-scope [class*="tremor-Badge"][class*="green"],
-  .aiops-scope [class*="tremor-Badge"][class*="emerald"],
-  .aiops-scope [data-severity="success"],
-  .aiops-scope [data-severity="low"] {
-    color: #3db87a;
-    background-color: rgba(61, 184, 122, 0.15);
-    border-color: rgba(61, 184, 122, 0.2);
-  }
-
-  /* Severity: Info — #4a90d9 with 15% opacity background */
-  .aiops-scope [class*="tremor-Badge"][class*="blue"],
-  .aiops-scope [class*="tremor-Badge"][class*="cyan"],
-  .aiops-scope [data-severity="info"] {
-    color: #4a90d9;
-    background-color: rgba(74, 144, 217, 0.15);
-    border-color: rgba(74, 144, 217, 0.2);
-  }
-
-  /* Neutral / default badge color */
-  .aiops-scope [class*="tremor-Badge"][class*="gray"],
-  .aiops-scope [class*="tremor-Badge"][class*="slate"],
-  .aiops-scope [data-severity="neutral"] {
-    color: #9099b0;
-    background-color: rgba(144, 153, 176, 0.15);
-    border-color: rgba(144, 153, 176, 0.2);
-  }
-
-  /* Badge icon sizing */
-  .aiops-scope [class*="tremor-Badge"] svg,
-  .aiops-scope .aiops-severity-badge svg,
-  .aiops-scope .aiops-status-badge svg {
-    width: 12px;
-    height: 12px;
-    margin-right: 4px;
-    flex-shrink: 0;
-  }
-}
-
-
-/* ─── Override Tremor Orange → CloudVisor Blue ─────────────────────────────── */
-/* Tremor uses orange-500 as its default brand color. Override globally. */
-
-.aiops-scope [class*="bg-orange"] {
-  background-color: #4a90d9 !important;
-}
-
-.aiops-scope [class*="text-orange"] {
-  color: #4a90d9 !important;
-}
-
-.aiops-scope [class*="border-orange"] {
-  border-color: #4a90d9 !important;
-}
-
-.aiops-scope [class*="ring-orange"] {
-  --tw-ring-color: #4a90d9 !important;
-}
-
-.aiops-scope [class*="hover:bg-orange"]:hover {
-  background-color: #5ba3f5 !important;
-}
-
-.aiops-scope button[class*="orange"] {
-  background-color: #4a90d9 !important;
-  border-color: #4a90d9 !important;
-}
-
-.aiops-scope button[class*="orange"]:hover {
-  background-color: #5ba3f5 !important;
-  border-color: #5ba3f5 !important;
-}
-
-/* ─── Fix content area to match CloudVisor's page background ───────────────── */
+/* ─── Base: Light Mode (default) ───────────────────────────────────────────── */
 .aiops-scope {
-  background-color: var(--bg-base, #f9fafb);
-  color: var(--text-primary, #333333);
+  /* Inherit from CloudVisor's global tokens */
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Tremor brand → CloudVisor accent blue */
+  --tremor-brand-subtle: rgba(0, 115, 187, 0.10);
+  --tremor-brand-DEFAULT: #0972d3;
+  --tremor-brand-emphasis: #0060b0;
+  --tremor-brand-inverted: #ffffff;
+  --tremor-brand-muted: rgba(0, 115, 187, 0.08);
+  --tremor-brand-faint: rgba(0, 115, 187, 0.04);
+
+  /* Tremor backgrounds → CloudVisor light tokens */
+  --tremor-background-subtle: var(--bg-elevated, #f8f8f8);
+  --tremor-background-DEFAULT: var(--bg-base, #f2f3f3);
+  --tremor-background-emphasis: var(--bg-surface, #ffffff);
+  --tremor-background-muted: var(--bg-elevated, #f8f8f8);
+
+  /* Tremor borders */
+  --tremor-border-DEFAULT: var(--border-default, #e0e0e0);
+
+  /* Tremor ring (focus) */
+  --tremor-ring-DEFAULT: #0972d3;
+
+  /* Tremor content (text) */
+  --tremor-content-subtle: var(--text-tertiary, #687078);
+  --tremor-content-DEFAULT: var(--text-secondary, #414d5c);
+  --tremor-content-emphasis: var(--text-primary, #000716);
+  --tremor-content-strong: #000716;
+  --tremor-content-inverted: #ffffff;
 }
 
-/* When CloudVisor is in dark mode */
+/* ─── Dark Mode ────────────────────────────────────────────────────────────── */
 [data-theme="dark"] .aiops-scope {
-  background-color: #0f1117;
-  color: #e8eaf0;
+  --tremor-brand-subtle: rgba(74, 144, 217, 0.15);
+  --tremor-brand-DEFAULT: #4a90d9;
+  --tremor-brand-emphasis: #5ba3f5;
+  --tremor-brand-inverted: #ffffff;
+  --tremor-brand-muted: rgba(74, 144, 217, 0.10);
+  --tremor-brand-faint: rgba(74, 144, 217, 0.05);
+
+  --tremor-background-subtle: var(--bg-elevated, #1c2433);
+  --tremor-background-DEFAULT: var(--bg-base, #0d1117);
+  --tremor-background-emphasis: var(--bg-surface, #131920);
+  --tremor-background-muted: var(--bg-elevated, #1c2433);
+
+  --tremor-border-DEFAULT: var(--border-default, #2e3140);
+
+  --tremor-ring-DEFAULT: #4a90d9;
+
+  --tremor-content-subtle: var(--text-tertiary, #50566a);
+  --tremor-content-DEFAULT: var(--text-secondary, #9099b0);
+  --tremor-content-emphasis: var(--text-primary, #e8eaf0);
+  --tremor-content-strong: #ffffff;
+  --tremor-content-inverted: #0f1117;
 }
 
-/* ─── Remove Keep's own page title since CloudVisor breadcrumbs handle it ──── */
+/* ─── Tremor Component Overrides ───────────────────────────────────────────── */
+
+/* Cards and panels */
+.aiops-scope [class*="tremor-Card"],
+.aiops-scope [class*="tremor-card"] {
+  background-color: var(--bg-surface);
+  border-color: var(--border-default);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .aiops-scope [class*="tremor-Card"],
+[data-theme="dark"] .aiops-scope [class*="tremor-card"] {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.30);
+}
+
+/* Inputs and selects */
+.aiops-scope input,
+.aiops-scope select,
+.aiops-scope textarea,
+.aiops-scope [class*="tremor-TextInput"],
+.aiops-scope [class*="tremor-Select"] {
+  background-color: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.aiops-scope input:focus,
+.aiops-scope select:focus,
+.aiops-scope textarea:focus,
+.aiops-scope [class*="tremor-TextInput"]:focus-within,
+.aiops-scope [class*="tremor-Select"]:focus-within {
+  border-color: #0972d3;
+  box-shadow: 0 0 0 2px rgba(9, 114, 211, 0.2);
+  outline: none;
+}
+
+[data-theme="dark"] .aiops-scope input:focus,
+[data-theme="dark"] .aiops-scope select:focus,
+[data-theme="dark"] .aiops-scope textarea:focus {
+  border-color: #4a90d9;
+  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+}
+
+.aiops-scope input::placeholder,
+.aiops-scope textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* ─── Orange → Blue brand override (scoped to AIOps) ──────────────────────── */
+/* Keep/Tremor uses color="orange" for brand buttons and active states.
+   We remap all orange utilities to CloudVisor blue within .aiops-scope. */
+
+/* ─── Brand color note ──────────────────────────────────────────────────────── */
+/* All Tremor buttons have been updated from color="orange" to color="blue" in source.
+   No CSS color overrides needed for buttons. */
+
+/* Text and border blue are handled natively by Tremor's color="blue" */
+
+/* Hover states for blue buttons handled natively by Tremor */
+
+/* Ensure SVG icons inside blue brand buttons are visible */
+.aiops-scope .bg-blue-500 svg,
+.aiops-scope .bg-blue-600 svg {
+  color: #ffffff;
+}
+
+/* Dropdown menus */
+.aiops-scope [class*="tremor-Dropdown"],
+.aiops-scope [role="listbox"],
+.aiops-scope [role="menu"] {
+  background-color: var(--bg-surface);
+  border-color: var(--border-default);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.10);
+}
+
+[data-theme="dark"] .aiops-scope [class*="tremor-Dropdown"],
+[data-theme="dark"] .aiops-scope [role="listbox"],
+[data-theme="dark"] .aiops-scope [role="menu"] {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.40);
+}
+
+.aiops-scope [class*="tremor-Dropdown"] [role="option"]:hover,
+.aiops-scope [role="listbox"] [role="option"]:hover,
+.aiops-scope [role="menu"] [role="menuitem"]:hover {
+  background-color: var(--bg-elevated);
+}
+
+/* Tabs */
+.aiops-scope [class*="tremor-Tab"] {
+  color: var(--text-secondary);
+}
+
+.aiops-scope [class*="tremor-Tab"][aria-selected="true"],
+.aiops-scope [class*="tremor-Tab"].active {
+  color: #0972d3;
+  border-color: #0972d3;
+}
+
+[data-theme="dark"] .aiops-scope [class*="tremor-Tab"][aria-selected="true"],
+[data-theme="dark"] .aiops-scope [class*="tremor-Tab"].active {
+  color: #4a90d9;
+  border-color: #4a90d9;
+}
+
+/* Dividers */
+.aiops-scope hr,
+.aiops-scope [class*="tremor-Divider"] {
+  border-color: var(--border-default);
+}
+
+/* Text overrides for Tremor typography */
+.aiops-scope [class*="tremor-Title"],
+.aiops-scope [class*="tremor-Metric"] {
+  color: var(--text-primary);
+}
+
+.aiops-scope [class*="tremor-Text"],
+.aiops-scope [class*="tremor-Subtitle"] {
+  color: var(--text-secondary);
+}
+
+/* Dialog / Modal */
+.aiops-scope [class*="tremor-Dialog"],
+.aiops-scope [role="dialog"] {
+  background-color: var(--bg-surface);
+  border-color: var(--border-default);
+}
+
+/* ─── Modals, Popovers, Panels (Keep UI) ───────────────────────────────────── */
+/* These panels render with white backgrounds by default. Override for dark mode. */
+
+/* Generic modal/dialog overlay content */
+.aiops-scope [class*="Modal"],
+.aiops-scope [class*="modal"],
+.aiops-scope [class*="Dialog"],
+.aiops-scope [class*="dialog"],
+.aiops-scope [data-headlessui-state],
+.aiops-scope [class*="Popover"] > [class*="Panel"],
+.aiops-scope [class*="popover"] {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+/* Headless UI Dialog panels */
+.aiops-scope div[role="dialog"],
+.aiops-scope div[aria-modal="true"] {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+
+/* Popover panels (Settings, Add Facet, etc.) */
+.aiops-scope [class*="Popover"][class*="Panel"],
+.aiops-scope [data-headlessui-state] > div,
+.aiops-scope .absolute[class*="bg-white"],
+.aiops-scope div[class*="bg-white"] {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+/* Any white background within aiops-scope → surface color */
+[data-theme="dark"] .aiops-scope [class*="bg-white"] {
+  background-color: var(--bg-surface) !important;
+}
+
+[data-theme="dark"] .aiops-scope [class*="bg-gray-50"],
+[data-theme="dark"] .aiops-scope [class*="bg-gray-100"] {
+  background-color: var(--bg-elevated) !important;
+}
+
+/* Labels and headings in panels */
+.aiops-scope label,
+.aiops-scope h2,
+.aiops-scope h3,
+.aiops-scope h4 {
+  color: var(--text-primary);
+}
+
+.aiops-scope p,
+.aiops-scope span {
+  color: inherit;
+}
+
+/* Select/dropdown within modals */
+.aiops-scope select,
+.aiops-scope [class*="Select"],
+.aiops-scope [class*="select"] {
+  background-color: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+/* Checkbox and radio styling */
+.aiops-scope input[type="checkbox"],
+.aiops-scope input[type="radio"] {
+  background-color: var(--bg-surface);
+  border-color: var(--border-default);
+}
+
+.aiops-scope input[type="checkbox"]:checked {
+  background-color: #0972d3;
+  border-color: #0972d3;
+}
+
+[data-theme="dark"] .aiops-scope input[type="checkbox"]:checked {
+  background-color: #4a90d9;
+  border-color: #4a90d9;
+}
+
+/* Tab panels in settings popover */
+.aiops-scope [role="tabpanel"] {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.aiops-scope [role="tablist"] {
+  border-color: var(--border-default);
+}
+
+.aiops-scope [role="tab"] {
+  color: var(--text-secondary);
+}
+
+.aiops-scope [role="tab"][aria-selected="true"],
+.aiops-scope [role="tab"][data-selected] {
+  color: #0972d3;
+  border-color: #0972d3;
+}
+
+[data-theme="dark"] .aiops-scope [role="tab"][aria-selected="true"],
+[data-theme="dark"] .aiops-scope [role="tab"][data-selected] {
+  color: #4a90d9;
+  border-color: #4a90d9;
+}
+
+/* Links within panels */
+.aiops-scope a {
+  color: #0972d3;
+}
+[data-theme="dark"] .aiops-scope a {
+  color: #4a90d9;
+}
+
+/* Cancel/secondary text buttons */
+.aiops-scope button[class*="text-gray"],
+.aiops-scope [class*="text-gray-500"] {
+  color: var(--text-secondary) !important;
+}
+
+/* Ensure all text within dark mode panels is readable */
+[data-theme="dark"] .aiops-scope [class*="text-gray-900"],
+[data-theme="dark"] .aiops-scope [class*="text-gray-800"],
+[data-theme="dark"] .aiops-scope [class*="text-gray-700"] {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .aiops-scope [class*="text-gray-600"],
+[data-theme="dark"] .aiops-scope [class*="text-gray-500"] {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .aiops-scope [class*="text-gray-400"],
+[data-theme="dark"] .aiops-scope [class*="text-gray-300"] {
+  color: var(--text-tertiary) !important;
+}
+
+/* Dark mode border overrides for panels */
+[data-theme="dark"] .aiops-scope [class*="border-gray"],
+[data-theme="dark"] .aiops-scope [class*="divide-gray"] > * {
+  border-color: var(--border-default) !important;
+}
+
+/* ─── Badge & Severity Styles ──────────────────────────────────────────────── */
+
+.aiops-scope [class*="tremor-Badge"],
+.aiops-scope [data-testid*="badge"] {
+  border-radius: 9999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  border-width: 1px;
+  border-style: solid;
+}
+
+/* Critical / High */
+.aiops-scope [class*="tremor-Badge"][class*="red"],
+.aiops-scope [class*="tremor-Badge"][class*="rose"] {
+  color: #d91515;
+  background-color: rgba(217, 21, 21, 0.08);
+  border-color: rgba(217, 21, 21, 0.15);
+}
+[data-theme="dark"] .aiops-scope [class*="tremor-Badge"][class*="red"],
+[data-theme="dark"] .aiops-scope [class*="tremor-Badge"][class*="rose"] {
+  color: #e05252;
+  background-color: rgba(224, 82, 82, 0.15);
+  border-color: rgba(224, 82, 82, 0.2);
+}
+
+/* Warning */
+.aiops-scope [class*="tremor-Badge"][class*="amber"],
+.aiops-scope [class*="tremor-Badge"][class*="yellow"],
+.aiops-scope [class*="tremor-Badge"][class*="orange"] {
+  color: #8d6605;
+  background-color: rgba(141, 102, 5, 0.08);
+  border-color: rgba(141, 102, 5, 0.15);
+}
+[data-theme="dark"] .aiops-scope [class*="tremor-Badge"][class*="amber"],
+[data-theme="dark"] .aiops-scope [class*="tremor-Badge"][class*="yellow"],
+[data-theme="dark"] .aiops-scope [class*="tremor-Badge"][class*="orange"] {
+  color: #e8a838;
+  background-color: rgba(232, 168, 56, 0.15);
+  border-color: rgba(232, 168, 56, 0.2);
+}
+
+/* Success / Low */
+.aiops-scope [class*="tremor-Badge"][class*="green"],
+.aiops-scope [class*="tremor-Badge"][class*="emerald"] {
+  color: #037f0c;
+  background-color: rgba(3, 127, 12, 0.08);
+  border-color: rgba(3, 127, 12, 0.15);
+}
+[data-theme="dark"] .aiops-scope [class*="tremor-Badge"][class*="green"],
+[data-theme="dark"] .aiops-scope [class*="tremor-Badge"][class*="emerald"] {
+  color: #3db87a;
+  background-color: rgba(61, 184, 122, 0.15);
+  border-color: rgba(61, 184, 122, 0.2);
+}
+
+/* Info */
+.aiops-scope [class*="tremor-Badge"][class*="blue"],
+.aiops-scope [class*="tremor-Badge"][class*="cyan"] {
+  color: #0972d3;
+  background-color: rgba(9, 114, 211, 0.08);
+  border-color: rgba(9, 114, 211, 0.15);
+}
+[data-theme="dark"] .aiops-scope [class*="tremor-Badge"][class*="blue"],
+[data-theme="dark"] .aiops-scope [class*="tremor-Badge"][class*="cyan"] {
+  color: #4a90d9;
+  background-color: rgba(74, 144, 217, 0.15);
+  border-color: rgba(74, 144, 217, 0.2);
+}
+
+/* Neutral */
+.aiops-scope [class*="tremor-Badge"][class*="gray"],
+.aiops-scope [class*="tremor-Badge"][class*="slate"] {
+  color: var(--text-secondary);
+  background-color: var(--bg-elevated);
+  border-color: var(--border-default);
+}
+
+/* Badge icon sizing */
+.aiops-scope [class*="tremor-Badge"] svg {
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+/* ─── Scrollbar Styling ────────────────────────────────────────────────────── */
+[data-theme="dark"] .aiops-scope *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+[data-theme="dark"] .aiops-scope *::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+
+[data-theme="dark"] .aiops-scope *::-webkit-scrollbar-thumb {
+  background-color: #555;
+  border-radius: 5px;
+  border: 2px solid var(--bg-base);
+}
+
+[data-theme="dark"] .aiops-scope *::-webkit-scrollbar-thumb:hover {
+  background-color: #777;
+}
+
+/* ─── Selection ────────────────────────────────────────────────────────────── */
+.aiops-scope ::selection {
+  background-color: rgba(9, 114, 211, 0.20);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .aiops-scope ::selection {
+  background-color: rgba(74, 144, 217, 0.25);
+}
+
+/* ─── Focus Visible ────────────────────────────────────────────────────────── */
+.aiops-scope :focus-visible {
+  outline: 2px solid #0972d3;
+  outline-offset: 2px;
+}
+
+[data-theme="dark"] .aiops-scope :focus-visible {
+  outline-color: #4a90d9;
+}
+
+/* ─── Transitions ──────────────────────────────────────────────────────────── */
+.aiops-scope [class*="tremor-"] {
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+/* ─── Remove Keep's own page title (CloudVisor breadcrumbs handle it) ──────── */
 .aiops-scope .page-container > h1:first-child {
   display: none;
+}
+
+/* ─── Alert Table Styling ──────────────────────────────────────────────────── */
+/* The Keep alert table uses Tailwind classes for text/bg that need dark mode overrides */
+
+/* Table container */
+[data-theme="dark"] .aiops-scope table,
+[data-theme="dark"] .aiops-scope [class*="table"] {
+  color: var(--text-primary);
+}
+
+/* Table body rows — override ALL background colors in dark mode */
+[data-theme="dark"] .aiops-scope tbody tr {
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+}
+
+[data-theme="dark"] .aiops-scope tbody tr:hover {
+  background-color: var(--bg-elevated) !important;
+}
+
+/* Table header — override ALL background colors in dark mode */
+[data-theme="dark"] .aiops-scope thead tr,
+[data-theme="dark"] .aiops-scope thead th {
+  background-color: var(--bg-elevated) !important;
+  color: var(--text-secondary) !important;
+}
+
+/* Last viewed row highlight */
+[data-theme="dark"] .aiops-scope tbody tr[class*="bg-orange-50"] {
+  background-color: rgba(74, 144, 217, 0.06) !important;
+}
+
+/* Table cells */
+[data-theme="dark"] .aiops-scope td {
+  color: var(--text-primary) !important;
+  border-color: var(--border-default) !important;
+}
+
+/* Ensure all text inside table cells is visible */
+[data-theme="dark"] .aiops-scope td span,
+[data-theme="dark"] .aiops-scope td p,
+[data-theme="dark"] .aiops-scope td div,
+[data-theme="dark"] .aiops-scope td a {
+  color: inherit !important;
+}
+
+/* Table header text specifically */
+[data-theme="dark"] .aiops-scope th span,
+[data-theme="dark"] .aiops-scope th div,
+[data-theme="dark"] .aiops-scope th button {
+  color: var(--text-secondary) !important;
+}
+
+/* Selected/checked row */
+[data-theme="dark"] .aiops-scope tbody tr[class*="bg-orange-100"],
+[data-theme="dark"] .aiops-scope tbody tr[class*="bg-blue-100"] {
+  background-color: rgba(74, 144, 217, 0.10) !important;
+}
+
+/* Pagination area */
+[data-theme="dark"] .aiops-scope [class*="pagination"],
+[data-theme="dark"] .aiops-scope nav[aria-label*="pagination"] {
+  color: var(--text-secondary);
+}
+
+/* Fix the "Showing X of Y" text */
+[data-theme="dark"] .aiops-scope [class*="text-sm"][class*="text-gray"] {
+  color: var(--text-secondary) !important;
+}
+
+/* Light mode table styling */
+.aiops-scope thead,
+.aiops-scope thead tr,
+.aiops-scope th {
+  background-color: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+}
+
+.aiops-scope tbody tr {
+  background-color: var(--bg-surface);
+  border-color: var(--border-default);
+}
+
+.aiops-scope tbody tr:hover {
+  background-color: var(--bg-elevated);
+}
+
+/* ─── Severity left-border indicator (preserve colors) ─────────────────────── */
+/* Keep uses a thin left border on rows to indicate severity — keep those colors */
+[data-theme="dark"] .aiops-scope tbody tr[class*="border-l"] {
+  background-color: var(--bg-surface) !important;
+}
+
+/* ─── Settings Popover Panel ───────────────────────────────────────────────── */
+[data-theme="dark"] .aiops-scope [data-testid="settings-panel"],
+[data-theme="dark"] .aiops-scope .bg-white {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-default) !important;
+}
+
+/* ─── Icon buttons background fix ──────────────────────────────────────────── */
+/* Tremor secondary/light buttons with orange color should match page background */
+.aiops-scope button[class*="bg-orange-100"],
+.aiops-scope button[class*="bg-orange-50"],
+.aiops-scope button[class*="bg-orange-200"] {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border-default) !important;
+}
+
+[data-theme="dark"] .aiops-scope button[class*="bg-orange-100"],
+[data-theme="dark"] .aiops-scope button[class*="bg-orange-50"],
+[data-theme="dark"] .aiops-scope button[class*="bg-orange-200"] {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border-default) !important;
+}
+
+/* ─── Settings gear button — match page background ─────────────────────────── */
+.aiops-scope button[data-testid="settings-button"],
+.aiops-scope button[aria-label="Settings"] {
+  background-color: transparent !important;
 }

@@ -78,7 +78,7 @@ export const AlertTimeline: React.FC<AlertTimelineProps> = ({
         <Title>Timeline</Title>
         <Button
           icon={ArrowPathIcon}
-          color="orange"
+          color="blue"
           size="xs"
           disabled={isLoading}
           loading={isLoading}

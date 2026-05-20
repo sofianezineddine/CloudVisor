@@ -294,7 +294,7 @@ const DraggableHeaderCell = ({
           <DropdownMenu.Menu
             icon={ChevronDownIcon}
             label=""
-            className="opacity-0 group-hover:opacity-100 transition-opacity border-l !border-orange-500 hover:!bg-orange-500 text-orange-500 hover:text-white dark:hover:text-gray-900 !rounded-none"
+            className="opacity-0 group-hover:opacity-100 transition-opacity border-l !border-blue-500 hover:!bg-blue-500 text-blue-500 hover:text-white dark:hover:text-gray-900 !rounded-none"
             iconClassName=" "
             onClick={(event) => {
               // prevent click propagation, so the header cell is not clicked

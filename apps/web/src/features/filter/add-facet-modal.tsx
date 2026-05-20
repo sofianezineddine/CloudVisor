@@ -74,7 +74,7 @@ export const AddFacetModal: React.FC<AddFacetModalProps> = ({
       <div className="flex flex-1 justify-end gap-2">
         <Button
           data-testid="cancel-facet-creation-btn"
-          color="orange"
+          color="blue"
           size="xs"
           variant="secondary"
           onClick={close}
@@ -83,7 +83,7 @@ export const AddFacetModal: React.FC<AddFacetModalProps> = ({
         </Button>
         <Button
           data-testid="create-facet-btn"
-          color="orange"
+          color="blue"
           size="xs"
           variant="primary"
           type="submit"

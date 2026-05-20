@@ -99,7 +99,7 @@ describe('useAIOpsWebSocket', () => {
   });
 
   it('should not connect when pathname is not under /aiops', async () => {
-    currentPathname = '/aiops/dashboard';
+    currentPathname = '/settings/profile';
     const { useAIOpsWebSocket } = await import('./use-aiops-websocket');
 
     renderHook(() => useAIOpsWebSocket());
@@ -157,7 +157,7 @@ describe('useAIOpsWebSocket', () => {
     expect(mockSubscribe).toHaveBeenCalledWith('private-org-123');
 
     // Simulate navigation away — change pathname and rerender
-    currentPathname = '/aiops/dashboard';
+    currentPathname = '/dashboard';
     rerender();
 
     // Should disconnect
@@ -165,7 +165,7 @@ describe('useAIOpsWebSocket', () => {
   });
 
   it('should return disconnected status initially when not on AIOps page', async () => {
-    currentPathname = '/aiops/dashboard';
+    currentPathname = '/settings';
     const { useAIOpsWebSocket } = await import('./use-aiops-websocket');
 
     const { result } = renderHook(() => useAIOpsWebSocket());
@@ -226,8 +226,8 @@ describe('useAIOpsWebSocket', () => {
       handler({ id: 'alert-1' });
     });
 
-    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['keep', 'alerts'] });
-    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['keep', 'dashboard'] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['aiops', 'alerts'] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['aiops', 'dashboard'] });
   });
 
   it('should work with /aiops root path', async () => {

@@ -9,7 +9,3 @@ export default function Page() {
   );
 }
 
-export const metadata = {
-  title: "Keep - Settings",
-  description: "Configure your Keep.",
-};

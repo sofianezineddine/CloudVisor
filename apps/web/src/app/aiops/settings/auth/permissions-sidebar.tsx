@@ -140,7 +140,7 @@ const PermissionSidebar = ({
             <div className="flex justify-between mb-4">
               <Dialog.Title className="text-3xl font-bold" as={Text}>
                 Manage Permissions
-                <Badge className="ml-4" color="orange">
+                <Badge className="ml-4" color="blue">
                   Beta
                 </Badge>
               </Dialog.Title>
@@ -163,7 +163,7 @@ const PermissionSidebar = ({
 
                 <div className="mt-6">
                   <Title className="mb-2">Type</Title>
-                  <Badge color="orange" size="lg">
+                  <Badge color="blue" size="lg">
                     {selectedResource?.type}
                   </Badge>
                 </div>
@@ -204,7 +204,7 @@ const PermissionSidebar = ({
 
               <div className="mt-6 flex justify-end gap-3">
                 <Button
-                  color="orange"
+                  color="blue"
                   variant="secondary"
                   onClick={handleClose}
                   className="border border-orange-500 text-orange-500"
@@ -212,7 +212,7 @@ const PermissionSidebar = ({
                   Cancel
                 </Button>
                 {!isDisabled && (
-                  <Button color="orange" type="submit" disabled={!isDirty}>
+                  <Button color="blue" type="submit" disabled={!isDirty}>
                     Save Changes
                   </Button>
                 )}

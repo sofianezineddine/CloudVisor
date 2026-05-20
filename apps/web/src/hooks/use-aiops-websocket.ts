@@ -123,18 +123,18 @@ export function useAIOpsWebSocket(
   // ─── Invalidate queries on real-time events ─────────────────────────────────
 
   const invalidateAlerts = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['keep', 'alerts'] });
-    queryClient.invalidateQueries({ queryKey: ['keep', 'dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ['aiops', 'alerts'] });
+    queryClient.invalidateQueries({ queryKey: ['aiops', 'dashboard'] });
   }, [queryClient]);
 
   const invalidateIncidents = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['keep', 'incidents'] });
-    queryClient.invalidateQueries({ queryKey: ['keep', 'dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ['aiops', 'incidents'] });
+    queryClient.invalidateQueries({ queryKey: ['aiops', 'dashboard'] });
   }, [queryClient]);
 
   const invalidateWorkflows = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['keep', 'workflows'] });
-    queryClient.invalidateQueries({ queryKey: ['keep', 'dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ['aiops', 'workflows'] });
+    queryClient.invalidateQueries({ queryKey: ['aiops', 'dashboard'] });
   }, [queryClient]);
 
   // ─── Connect / Disconnect lifecycle ─────────────────────────────────────────

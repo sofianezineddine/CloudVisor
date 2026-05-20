@@ -246,7 +246,7 @@ export default function ColumnSelection({
       </div>
       <Button
         className="mt-4"
-        color="orange"
+        color="blue"
         type="submit"
         loading={useBackend && isLoading}
         disabled={useBackend && isLoading}

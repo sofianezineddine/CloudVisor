@@ -299,7 +299,7 @@ export function IncidentList({
             <Title>Incident Predictions</Title>
             <Subtitle>
               Possible problems predicted by Keep AI & Correlation Rules{" "}
-              <Badge color="orange">Beta</Badge>
+              <Badge color="blue">Beta</Badge>
             </Subtitle>
             <PredictedIncidentsTable
               incidents={predictedIncidents}
@@ -318,7 +318,7 @@ export function IncidentList({
             <div className="flex gap-2">
               {renderDateTimePicker()}
               <Button
-                color="orange"
+                color="blue"
                 size="md"
                 icon={PlusIcon}
                 variant="primary"

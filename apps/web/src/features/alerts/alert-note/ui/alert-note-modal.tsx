@@ -106,14 +106,14 @@ export const AlertNoteModal = ({
         <Button // Use Tremor button for Cancel
           onClick={handleNoteClose}
           variant="secondary"
-          color="orange"
+          color="blue"
         >
           {readOnly ? "Close" : "Cancel"}
         </Button>
         {!readOnly && (
           <Button // Use Tremor button for Save
             onClick={saveNote}
-            color="orange"
+            color="blue"
           >
             Save
           </Button>

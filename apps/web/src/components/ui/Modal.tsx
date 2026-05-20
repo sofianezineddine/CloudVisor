@@ -47,7 +47,7 @@ export default function Modal({
             <div className="flex flex-row items-center justify-between gap-2">
               <PageTitle>
                 {title}
-                {beta && <Badge color="orange">Beta</Badge>}
+                {beta && <Badge color="blue">Beta</Badge>}
               </PageTitle>
               <Button
                 variant="light"

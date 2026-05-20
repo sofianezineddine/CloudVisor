@@ -43,7 +43,7 @@ const KeepBanner = ({
               ) : window.location.href = "https://www.github.com/keephq/keep"}
             }}
             variant="primary"
-            color="orange"
+            color="blue"
             size="xs"
           >
             Give us a ⭐️
@@ -60,7 +60,7 @@ const KeepBanner = ({
                 "noopener,noreferrer"
               ) : window.location.href = "https://www.keephq.dev/meet-keep"}
             }}
-            color="orange"
+            color="blue"
             variant="secondary"
             size="xs"
           >

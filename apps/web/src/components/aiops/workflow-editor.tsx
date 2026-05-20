@@ -78,10 +78,7 @@ export function WorkflowEditor({ workflow, onClose }: WorkflowEditorProps) {
 
   const handleToggle = () => {
     if (!workflow) return;
-    toggleStatus.mutate({
-      id: workflow.id,
-      status: workflow.status === 'enabled' ? 'disabled' : 'enabled',
-    });
+    toggleStatus.mutate({ id: workflow.id });
   };
 
   const handleRun = () => {

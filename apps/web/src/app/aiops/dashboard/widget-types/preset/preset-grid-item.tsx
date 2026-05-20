@@ -196,7 +196,7 @@ const PresetGridItem: React.FC<GridItemProps> = ({ item }) => {
         </div>
         <div className="flex items-center">
           <Button
-            color="orange"
+            color="blue"
             variant="secondary"
             size="xs"
             onClick={handleGoToPresetClick}

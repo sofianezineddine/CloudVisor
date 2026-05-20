@@ -116,7 +116,7 @@ export const AddFacetModalWithSuggestions: React.FC<
         <div className="flex flex-1 justify-end gap-2">
           <Button
             data-testid="cancel-facet-creation-btn"
-            color="orange"
+            color="blue"
             size="xs"
             variant="secondary"
             onClick={close}
@@ -125,7 +125,7 @@ export const AddFacetModalWithSuggestions: React.FC<
           </Button>
           <Button
             data-testid="create-facet-btn"
-            color="orange"
+            color="blue"
             size="xs"
             variant="primary"
             type="submit"

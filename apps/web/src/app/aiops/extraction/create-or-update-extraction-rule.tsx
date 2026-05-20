@@ -79,7 +79,7 @@ export default function CreateOrUpdateExtractionRule({
   const addExtraction = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const response = await api.post("/aiops/extraction", {
+      const response = await api.post("/extraction", {
         priority: priority,
         name: extractionName,
         description: mapDescription,
@@ -280,7 +280,7 @@ export default function CreateOrUpdateExtractionRule({
             <Badge color="gray">...</Badge>
           ) : (
             extractedAttributes.map((attribute) => (
-              <Badge key={attribute} color="orange">
+              <Badge key={attribute} color="blue">
                 {attribute}
               </Badge>
             ))
@@ -289,7 +289,7 @@ export default function CreateOrUpdateExtractionRule({
       </div>
       <div className={"space-x-1 flex flex-row justify-end items-center"}>
         <Button
-          color="orange"
+          color="blue"
           size="xs"
           variant="secondary"
           onClick={exitEditOrCreateMode}
@@ -298,7 +298,7 @@ export default function CreateOrUpdateExtractionRule({
         </Button>
         <Button
           disabled={!submitEnabled()}
-          color="orange"
+          color="blue"
           size="xs"
           type="submit"
         >

@@ -1,3 +1,4 @@
+'use client';
 import React from "react";
 import { WorkflowsPage } from "./workflows.page";
 import { FacetDto } from "@/features/filter";
@@ -24,7 +25,3 @@ export default async function Page() {
   );
 }
 
-export const metadata = {
-  title: "Keep - Workflows",
-  description: "Automate your workflows with Keep.",
-};

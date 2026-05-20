@@ -4,6 +4,7 @@ import * as React from 'react';
 import { ConfigProvider } from '@/app/config-provider';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppLayout } from '@/components/layout';
+import { AIOpsWSProvider } from '@/components/aiops/ws-provider';
 import './aiops-theme.css';
 
 // ─── AIOps Layout ────────────────────────────────────────────────────────────
@@ -29,7 +30,9 @@ export default function AIOpsLayout({
             PUSHER_PORT: parseInt(process.env.NEXT_PUBLIC_PUSHER_PORT || '6001'),
             PUSHER_APP_KEY: process.env.NEXT_PUBLIC_PUSHER_KEY || 'cloudvisor-key',
             PUSHER_CLUSTER: undefined,
-            API_URL: process.env.API_URL || 'http://localhost:8007',
+            API_URL: process.env.NEXT_PUBLIC_API_GATEWAY_URL
+              ? `${process.env.NEXT_PUBLIC_API_GATEWAY_URL}/v1/keep`
+              : 'http://localhost:8005/v1/keep',
             API_URL_CLIENT: process.env.NEXT_PUBLIC_API_URL_CLIENT || 'http://localhost:8005/v1/keep',
             POSTHOG_KEY: undefined,
             POSTHOG_HOST: undefined,
@@ -53,7 +56,9 @@ export default function AIOpsLayout({
             KEEP_WF_LIST_EXTENDED_INFO: false,
             ALERT_SIDEBAR_FIELDS: ['service','source','description','message','fingerprint','url','incidents','timeline','relatedServices'],
           }}>
-            {children}
+            <AIOpsWSProvider>
+              {children}
+            </AIOpsWSProvider>
           </ConfigProvider>
         </div>
       </AppLayout>

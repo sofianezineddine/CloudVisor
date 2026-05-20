@@ -96,7 +96,7 @@ export function ApplicationsList({
         >
           <Button
             variant="primary"
-            color="orange"
+            color="blue"
             onClick={() => {
               setModalState({
                 isOpen: true,
@@ -129,7 +129,7 @@ export function ApplicationsList({
             <div>
               <Button
                 variant="primary"
-                color="orange"
+                color="blue"
                 onClick={() => {
                   setModalState({ ...initialModalState, isOpen: true });
                 }}
@@ -148,7 +148,7 @@ export function ApplicationsList({
                   <div className="flex gap-4">
                     <Button
                       variant="light"
-                      color="orange"
+                      color="blue"
                       onClick={() => {
                         setSelectedApplicationIds([application.id]);
                         setSelectedObjectId(application.id);
@@ -158,7 +158,7 @@ export function ApplicationsList({
                     </Button>
                     <Button
                       variant="secondary"
-                      color="orange"
+                      color="blue"
                       onClick={() => handleEditApplication(application)}
                     >
                       Edit

@@ -68,7 +68,7 @@ export function WorkflowInputsForm({
         </Button>
         <Button
           variant="primary"
-          color="orange"
+          color="blue"
           type="submit"
           data-testid="wf-inputs-form-submit"
         >

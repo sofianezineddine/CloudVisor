@@ -110,10 +110,10 @@ export const AddStepUI = ({
         </div>
       </div>
       <div className="flex gap-2">
-        <Button color="orange" variant="primary" onClick={onAdd}>
+        <Button color="blue" variant="primary" onClick={onAdd}>
           Add (⌘+Enter)
         </Button>
-        <Button color="orange" variant="secondary" onClick={onCancel}>
+        <Button color="blue" variant="secondary" onClick={onCancel}>
           No
         </Button>
       </div>

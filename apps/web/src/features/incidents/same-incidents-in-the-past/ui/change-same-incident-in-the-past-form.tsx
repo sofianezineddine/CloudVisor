@@ -76,8 +76,8 @@ export function ChangeSameIncidentInThePastForm({
           <div className="flex items-center justify-between w-full gap-6">
             <Button
               className="flex-1"
-              color="orange"
-              onClick={() => router.push("/aiops/incidents")}
+              color="blue"
+              onClick={() => router.push("/incidents")}
             >
               Incidents page
             </Button>
@@ -129,7 +129,7 @@ export function ChangeSameIncidentInThePastForm({
             </Button>
           )}
           <Button
-            color="orange"
+            color="blue"
             onClick={handleLinkIncident}
             disabled={selectedIncident === null}
           >

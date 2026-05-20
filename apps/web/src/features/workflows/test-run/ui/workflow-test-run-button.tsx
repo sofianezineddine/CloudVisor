@@ -293,7 +293,7 @@ export function WorkflowTestRunButton({
       <Tooltip content={testRunDescription}>
         <Button
           variant="primary"
-          color="orange"
+          color="blue"
           size="md"
           className="min-w-28 disabled:opacity-70"
           icon={PlayIcon}

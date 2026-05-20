@@ -76,7 +76,7 @@ export default function CreateOrUpdateMaintenanceRule({
     setSuppress(false);
     setEnabled(true);
     setIgnoreStatuses([]);
-    router.replace("/aiops/maintenance");
+    router.replace("/maintenance");
   };
 
   const calculateDurationInSeconds = () => {
@@ -103,7 +103,7 @@ export default function CreateOrUpdateMaintenanceRule({
   const addMaintenanceRule = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const response = await api.post("/aiops/maintenance", {
+      const response = await api.post("/maintenance", {
         name: maintenanceName,
         description: description,
         cel_query: celQuery,
@@ -259,7 +259,7 @@ export default function CreateOrUpdateMaintenanceRule({
       <div className={"space-x-1 flex flex-row justify-end items-center"}>
         {editMode ? (
           <Button
-            color="orange"
+            color="blue"
             size="xs"
             variant="secondary"
             onClick={exitEditMode}
@@ -269,7 +269,7 @@ export default function CreateOrUpdateMaintenanceRule({
         ) : null}
         <Button
           disabled={!submitEnabled()}
-          color="orange"
+          color="blue"
           size="xs"
           type="submit"
         >

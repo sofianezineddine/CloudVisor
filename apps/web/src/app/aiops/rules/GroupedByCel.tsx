@@ -19,7 +19,7 @@ export const GroupedByCell = ({ fields }: GroupedByCellProps) => {
   function renderFields(fields: string[]): React.JSX.Element[] | React.JSX.Element {
     return fields.map((group, index) => (
       <>
-        <Badge color="orange" key={group}>
+        <Badge color="blue" key={group}>
           {group}
         </Badge>
         {fields.length !== index + 1 && (

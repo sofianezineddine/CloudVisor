@@ -116,7 +116,7 @@ export const LinkWithIcon = ({
         {count !== undefined && count !== null && (
           <Badge
             size="xs"
-            color="orange"
+            color="blue"
             data-testid={`${testId}-badge`}
             className="px-1 mr-0.5 min-w-5"
           >
@@ -129,7 +129,7 @@ export const LinkWithIcon = ({
           </Badge>
         )}
         {isBeta && (
-          <Badge color="orange" size="xs" className="ml-1">
+          <Badge color="blue" size="xs" className="ml-1">
             Beta
           </Badge>
         )}

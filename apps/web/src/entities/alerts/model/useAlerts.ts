@@ -170,7 +170,7 @@ export const useAlerts = () => {
 
     const requestUrl = `/alerts/query`;
     const swrKey = () =>
-      // adding "/aiops/alerts/query" so global revalidation works
+      // adding "/alerts/query" so global revalidation works
       api.isReady() && query
         ? requestUrl +
           Object.entries(queryToPost)

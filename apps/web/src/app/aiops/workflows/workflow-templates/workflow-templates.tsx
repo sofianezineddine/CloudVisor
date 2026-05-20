@@ -70,7 +70,7 @@ export const WorkflowTemplates: React.FC<WorkflowTemplatesProps> = () => {
             </div>
             <Button
               className="mt-4"
-              color="orange"
+              color="blue"
               variant="secondary"
               onClick={() => setSearchValue("")}
             >

@@ -33,7 +33,7 @@ export const IncidentsNotFoundPlaceholder = () => {
     >
       <div className="flex gap-2">
         <Button
-          color="orange"
+          color="blue"
           variant="secondary"
           size="md"
           onClick={() => {
@@ -43,7 +43,7 @@ export const IncidentsNotFoundPlaceholder = () => {
           Correlate Alerts Manually
         </Button>
         <Button
-          color="orange"
+          color="blue"
           variant="primary"
           size="md"
           onClick={() => {

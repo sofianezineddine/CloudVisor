@@ -64,7 +64,7 @@ const SSOSettings = () => {
                       Connect
                     </Button>
                     <Button
-                      color="orange"
+                      color="blue"
                       onClick={() => {
                         /* Disconnect logic here */
                       }}

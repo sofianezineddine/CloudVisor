@@ -29,7 +29,7 @@ export function NoWorkflowsState({}: {
             <div className="flex items-center gap-2">
               <span>You can also</span>
               <Button
-                color="orange"
+                color="blue"
                 size="xs"
                 variant="secondary"
                 onClick={() => {
@@ -42,10 +42,10 @@ export function NoWorkflowsState({}: {
               </Button>
               <span>or</span>
               <Button
-                color="orange"
+                color="blue"
                 size="xs"
                 variant="primary"
-                onClick={() => router.push("/aiops/workflows/builder")}
+                onClick={() => router.push("/workflows/builder")}
               >
                 Start from scratch
               </Button>

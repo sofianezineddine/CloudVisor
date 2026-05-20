@@ -40,7 +40,7 @@ export function AddEditNodeSidePanel({
 
   const handleSave = async () => {
     try {
-      const result = await api.post("/aiops/topology/service", {
+      const result = await api.post("/topology/service", {
         ...formData,
         tags: formData.tags
           ?.split(",")
@@ -57,7 +57,7 @@ export function AddEditNodeSidePanel({
 
   const handleUpdate = async () => {
     try {
-      const result = await api.put("/aiops/topology/service", {
+      const result = await api.put("/topology/service", {
         ...formData,
         tags: formData.tags
           ?.split(",")
@@ -259,20 +259,20 @@ export function AddEditNodeSidePanel({
       </div>
       <div className="sticky bottom-0 p-4 border-t border-gray-200 bg-white flex justify-end gap-2">
         {editData ? (
-          <Button onClick={handleUpdate} color="orange" variant="primary">
+          <Button onClick={handleUpdate} color="blue" variant="primary">
             Update
           </Button>
         ) : (
           <Button
             onClick={handleSave}
-            color="orange"
+            color="blue"
             variant="primary"
             disabled={!handleSaveValidation()}
           >
             Save
           </Button>
         )}
-        <Button onClick={handleClosePanel} color="orange" variant="secondary">
+        <Button onClick={handleClosePanel} color="blue" variant="secondary">
           Close
         </Button>
       </div>

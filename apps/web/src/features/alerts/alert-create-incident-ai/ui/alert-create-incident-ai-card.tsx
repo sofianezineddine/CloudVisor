@@ -216,7 +216,7 @@ const IncidentCard: React.FC<IncidentCardProps> = ({
             />
           </Text>
           <Subtitle className="mt-2">Severity</Subtitle>
-          <Badge color="orange">{editedIncident.severity || "N/A"}</Badge>
+          <Badge color="blue">{editedIncident.severity || "N/A"}</Badge>
           <Subtitle className="mt-2">Confidence Score</Subtitle>
           <Text>{editedIncident.confidence_score || "N/A"}</Text>
           <Subtitle className="mt-2">Confidence Explanation</Subtitle>

@@ -31,7 +31,7 @@ export interface WorkflowsQuery {
   sortDir?: "asc" | "desc";
 }
 
-const requestUrl = "/aiops/workflows/query?is_v2=true";
+const requestUrl = "/workflows/query?is_v2=true";
 
 export function useWorkflowsV2(
   workflowsQuery: WorkflowsQuery | null,

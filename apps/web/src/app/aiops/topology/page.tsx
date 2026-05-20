@@ -1,15 +1,9 @@
-'use client';
 import React from "react";
 import { getApplications, getTopology } from "./api";
 import { TopologyPageClient } from "./topology-client";
 import { createServerApiClient } from "@/shared/api/server";
 import { TopologyApplication, TopologyService } from "./model";
 import { PageSubtitle, PageTitle } from "@/shared/ui";
-
-export const metadata = {
-  title: "Keep - Service Topology",
-  description: "See service topology and information about your services",
-};
 
 type PageProps = {
   searchParams: Promise<{

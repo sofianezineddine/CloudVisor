@@ -138,7 +138,7 @@ export function ProviderConfigForm({ provider, onClose }: ProviderConfigFormProp
     if (!provider) return;
     setDeleting(true);
     try {
-      await deleteProvider.mutateAsync({ id: provider.id });
+      await deleteProvider.mutateAsync({ type: provider.type, id: provider.id });
       onClose();
     } finally {
       setDeleting(false);

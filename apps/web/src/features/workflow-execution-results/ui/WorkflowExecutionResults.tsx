@@ -384,7 +384,7 @@ export function WorkflowExecutionResultsInternal({
             <EmptyStateCard title="No logs found">
               <Button
                 variant="primary"
-                color="orange"
+                color="blue"
                 size="sm"
                 icon={RefreshIcon}
                 onClick={refreshExecutionData}

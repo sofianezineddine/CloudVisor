@@ -42,7 +42,7 @@ export default function Page(props: PageProps) {
         <>
           <Link
             className="p-2 bg-orange-500 text-white hover:bg-orange-600 rounded"
-            href="/aiops/workflows"
+            href="/workflows"
           >
             Go Back
           </Link>

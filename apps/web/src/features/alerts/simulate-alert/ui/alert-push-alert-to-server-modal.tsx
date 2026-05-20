@@ -162,7 +162,7 @@ export const PushAlertToServerModal = ({
           <>
             <Callout
               title="About alert payload"
-              color="orange"
+              color="blue"
               className="break-words mt-4"
             >
               Feel free to edit the payload as you want. However, some of the
@@ -209,10 +209,10 @@ export const PushAlertToServerModal = ({
         )}
 
         <div className="mt-6 flex gap-2 justify-end">
-          <Button color="orange" onClick={handleClose} variant="secondary">
+          <Button color="blue" onClick={handleClose} variant="secondary">
             Cancel
           </Button>
-          <Button color="orange" variant="primary" type="submit">
+          <Button color="blue" variant="primary" type="submit">
             Submit
           </Button>
         </div>

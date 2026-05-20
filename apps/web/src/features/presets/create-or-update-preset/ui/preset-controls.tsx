@@ -27,7 +27,7 @@ export const PresetControls: React.FC<PresetControlsProps> = ({
             id="private"
             checked={isPrivate}
             onChange={() => setIsPrivate(!isPrivate)}
-            color="orange"
+            color="blue"
           />
           <label htmlFor="private" className="text-sm text-gray-500">
             <Text>Private</Text>
@@ -46,7 +46,7 @@ export const PresetControls: React.FC<PresetControlsProps> = ({
             id="noisy"
             checked={isNoisy}
             onChange={() => setIsNoisy(!isNoisy)}
-            color="orange"
+            color="blue"
           />
           <label htmlFor="noisy" className="text-sm text-gray-500">
             <Text>Noisy</Text>
@@ -66,7 +66,7 @@ export const PresetControls: React.FC<PresetControlsProps> = ({
             id="counterShowsFiringOnly"
             checked={counterShowsFiringOnly}
             onChange={() => setCounterShowsFiringOnly(!counterShowsFiringOnly)}
-            color="orange"
+            color="blue"
           />
           <label
             htmlFor="counterShowsFiringOnly"

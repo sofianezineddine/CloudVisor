@@ -37,7 +37,7 @@ const WFDebugWithAI = ({
   return (
     <Button
       variant="secondary"
-      color="orange"
+      color="blue"
       size="xs"
       icon={SparklesIcon}
       onClick={() => {
@@ -292,7 +292,7 @@ export function TestRunStepForm({
         <Button
           variant="primary"
           className="w-full"
-          color="orange"
+          color="blue"
           disabled={isLoading || isDisabled}
           data-testid="wf-editor-step-test-run-button"
         >

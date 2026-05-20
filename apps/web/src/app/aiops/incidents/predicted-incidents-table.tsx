@@ -86,7 +86,7 @@ export default function PredictedIncidentsTable({
         <div className={"space-x-1 flex flex-row items-center justify-center"}>
           {/*If user wants to edit the mapping. We use the callback to set the data in mapping.tsx which is then passed to the create-new-mapping.tsx form*/}
           <Button
-            color="orange"
+            color="blue"
             size="xs"
             tooltip="Confirm incident"
             variant="secondary"

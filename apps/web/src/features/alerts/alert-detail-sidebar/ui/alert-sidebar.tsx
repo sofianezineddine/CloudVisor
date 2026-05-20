@@ -121,7 +121,7 @@ export const AlertSidebar = ({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black/30 z-20" aria-hidden="true" />
+          <div className="fixed inset-x-0 bg-black/30 z-20" style={{ top: '116px', bottom: '28px' }} aria-hidden="true" />
         </Transition.Child>
         <Transition.Child
           as={Fragment}
@@ -132,7 +132,7 @@ export const AlertSidebar = ({
           leaveFrom="translate-x-0"
           leaveTo="translate-x-full"
         >
-          <Dialog.Panel className="fixed right-0 inset-y-0 w-2/4 bg-white z-30 p-6 overflow-auto flex flex-col">
+          <Dialog.Panel className="fixed right-0 w-2/4 bg-white z-30 p-6 overflow-auto flex flex-col" style={{ top: '116px', bottom: '28px' }}>
             <div className="flex justify-between mb-4">
               <div className="w-full">
                 <Dialog.Title

@@ -228,7 +228,7 @@ const GroupsSidebar = ({
               )}
               <div className="mt-6 flex justify-end gap-2">
                 <Button
-                  color="orange"
+                  color="blue"
                   variant="secondary"
                   onClick={(e) => {
                     e.preventDefault();
@@ -239,7 +239,7 @@ const GroupsSidebar = ({
                   Cancel
                 </Button>
                 <Button
-                  color="orange"
+                  color="blue"
                   type="submit"
                   disabled={isSubmitting || (isNewGroup ? false : !isDirty)}
                 >

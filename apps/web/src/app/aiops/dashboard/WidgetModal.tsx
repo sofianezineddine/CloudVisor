@@ -169,7 +169,7 @@ const WidgetModal: React.FC<WidgetModalProps> = ({
           ></MetricWidgetForm>
         )}
         <Button
-          color="orange"
+          color="blue"
           type="submit"
           disabled={!isValid || !innerFormState.isValid}
         >

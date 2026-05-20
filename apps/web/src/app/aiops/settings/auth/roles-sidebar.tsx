@@ -209,11 +209,11 @@ const RoleSidebar = ({
             <div className="flex justify-between mb-4">
               <Dialog.Title className="text-3xl font-bold" as={Text}>
                 {selectedRole ? "Edit Role" : "Add Role"}
-                <Badge className="ml-4" color="orange">
+                <Badge className="ml-4" color="blue">
                   Beta
                 </Badge>
                 {selectedRole && selectedRole.predefined && (
-                  <Badge className="ml-2" color="orange">
+                  <Badge className="ml-2" color="blue">
                     Predefined Role
                   </Badge>
                 )}
@@ -297,7 +297,7 @@ const RoleSidebar = ({
               </div>
               <div className="mt-6 flex justify-end gap-2">
                 <Button
-                  color="orange"
+                  color="blue"
                   variant="secondary"
                   onClick={(e) => {
                     e.preventDefault(); // Prevent form submission
@@ -310,7 +310,7 @@ const RoleSidebar = ({
                 </Button>
                 {!selectedRole?.predefined && (
                   <Button
-                    color="orange"
+                    color="blue"
                     type="submit"
                     disabled={
                       isSubmitting ||

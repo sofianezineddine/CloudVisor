@@ -50,7 +50,7 @@ export const RuleGroup = ({ actions, ruleGroup }: QueryRuleGroupProps) => {
         onClick={onAddGroupClick}
         type="button"
         variant="light"
-        color="orange"
+        color="blue"
       >
         Add filter
       </Button>

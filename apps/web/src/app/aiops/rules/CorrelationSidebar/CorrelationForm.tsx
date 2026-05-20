@@ -340,7 +340,7 @@ export const CorrelationForm = ({
           name="requireApprove"
           render={({ field: { value, onChange } }) => (
             <Switch
-              color="orange"
+              color="blue"
               id="requireManualApprove"
               onChange={onChange}
               checked={value}
@@ -359,7 +359,7 @@ export const CorrelationForm = ({
             name="multiLevel"
             render={({ field: { value, onChange } }) => (
               <Switch
-                color="orange"
+                color="blue"
                 id="multiLevelCorrelation"
                 onChange={onChange}
                 checked={value}

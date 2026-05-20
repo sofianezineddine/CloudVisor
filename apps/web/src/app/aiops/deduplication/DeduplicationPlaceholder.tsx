@@ -13,7 +13,7 @@ export const DeduplicationPlaceholder = () => {
             Alert deduplication is the first layer of denoising. It groups
             similar alerts from one source.
             <br /> To connect alerts across sources into incidents, check{" "}
-            <Link href="/aiops/rules" className="underline text-orange-500">
+            <Link href="/rules" className="underline text-orange-500">
               Correlations
             </Link>
           </Subtitle>

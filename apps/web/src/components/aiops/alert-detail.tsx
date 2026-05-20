@@ -59,10 +59,10 @@ export function AlertDetail({ alertId, onClose }: AlertDetailProps) {
   const [statusChanging, setStatusChanging] = React.useState(false);
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!alertId) return;
+    if (!alert?.fingerprint) return;
     setStatusChanging(true);
     try {
-      await updateStatus.mutateAsync({ id: alertId, status: newStatus });
+      await updateStatus.mutateAsync({ fingerprint: alert.fingerprint, status: newStatus });
     } finally {
       setStatusChanging(false);
     }

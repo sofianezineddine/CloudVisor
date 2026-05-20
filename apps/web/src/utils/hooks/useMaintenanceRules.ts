@@ -10,7 +10,7 @@ export const useMaintenanceRules = (
   const api = useApi();
 
   return useSWR<MaintenanceRule[]>(
-    api.isReady() ? "/aiops/maintenance" : null,
+    api.isReady() ? "/maintenance" : null,
     (url) => api.get(url),
     options
   );

@@ -422,7 +422,7 @@ export const AlertsRulesBuilder = ({
             <Button
               data-testid="save-preset-button"
               icon={FiSave}
-              color="orange"
+              color="blue"
               variant="secondary"
               size="sm"
               disabled={!celRules.length || !isValidCEL}
@@ -432,7 +432,7 @@ export const AlertsRulesBuilder = ({
           )}
           {showSqlImport && (
             <Button
-              color="orange"
+              color="blue"
               variant="secondary"
               type="button"
               onClick={onImportSQL}
@@ -450,7 +450,7 @@ export const AlertsRulesBuilder = ({
               onClick={() =>
                 deletePreset(selectedPreset!.id!, selectedPreset!.name).then(
                   () => {
-                    router.push("/aiops/alerts/feed");
+                    router.push("/alerts/feed");
                   }
                 )
               }
@@ -478,7 +478,7 @@ export const AlertsRulesBuilder = ({
           )}
           <div className="flex justify-end">
             <Button
-              color="orange"
+              color="blue"
               onClick={onImportSQLSubmit}
               disabled={!(sqlQuery.length > 0)}
             >
@@ -506,7 +506,7 @@ export const AlertsRulesBuilder = ({
           </div>
           <div className="inline-flex justify-end">
             <Button
-              color="orange"
+              color="blue"
               onClick={onGenerateQuery}
               disabled={!query.rules.length}
             >

@@ -89,10 +89,7 @@ export function WorkflowList({
   const runWorkflow = useRunWorkflow();
 
   const handleToggle = (workflow: AIOpsWorkflow) => {
-    toggleStatus.mutate({
-      id: workflow.id,
-      status: workflow.status === 'enabled' ? 'disabled' : 'enabled',
-    });
+    toggleStatus.mutate({ id: workflow.id });
   };
 
   const handleRun = (workflow: AIOpsWorkflow) => {

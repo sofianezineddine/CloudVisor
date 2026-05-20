@@ -1,7 +1,11 @@
-"use client";
-import dynamic from "next/dynamic";
+'use client';
 
-export const MonacoYAMLEditor = dynamic(
-  () => import("./editor.client").then((mod) => mod.MonacoYAMLEditor),
+import dynamic from 'next/dynamic';
+
+export const WorkflowYAMLEditor = dynamic(
+  () => import('./editor.client').then((mod) => mod.default || mod),
   { ssr: false }
 );
+
+export default WorkflowYAMLEditor;
+export type { MonacoYAMLEditorProps } from './MonacoYAMLEditor.types';

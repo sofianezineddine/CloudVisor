@@ -21,7 +21,7 @@ export const IncidentListPlaceholder = ({ setIsFormOpen }: Props) => {
         </div>
         <Button
           className="mb-10"
-          color="orange"
+          color="blue"
           onClick={() => onCreateButtonClick()}
         >
           Create Incident

@@ -88,7 +88,7 @@ export default function RolesTab({ customRolesAllowed }: RolesTabProps) {
         </div>
         <div className="flex space-x-2 items-center">
           <Button
-            color="orange"
+            color="blue"
             size="md"
             onClick={() => {
               setSelectedRole(null);
@@ -139,14 +139,14 @@ export default function RolesTab({ customRolesAllowed }: RolesTabProps) {
                       <div className="flex items-center">
                         {role.predefined ? (
                           <Badge
-                            color="orange"
+                            color="blue"
                             className="ml-2 w-24 text-center"
                           >
                             Predefined
                           </Badge>
                         ) : (
                           <Badge
-                            color="orange"
+                            color="blue"
                             className="ml-2 w-24 text-center"
                           >
                             Custom
@@ -161,12 +161,12 @@ export default function RolesTab({ customRolesAllowed }: RolesTabProps) {
                   <TableCell className="w-15/24">
                     <div className="flex flex-wrap gap-1">
                       {role.scopes.slice(0, 4).map((scope, index) => (
-                        <Badge key={index} color="orange" className="text-xs">
+                        <Badge key={index} color="blue" className="text-xs">
                           {scope}
                         </Badge>
                       ))}
                       {role.scopes.length > 4 && (
-                        <Badge color="orange" className="text-xs">
+                        <Badge color="blue" className="text-xs">
                           +{role.scopes.length - 4} more
                         </Badge>
                       )}
@@ -177,7 +177,7 @@ export default function RolesTab({ customRolesAllowed }: RolesTabProps) {
                       <Button
                         icon={TrashIcon}
                         variant="light"
-                        color="orange"
+                        color="blue"
                         className="opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => handleDeleteRole(role.id, e)}
                       />

@@ -91,7 +91,7 @@ export const DashboardLinks = () => {
                 Dashboards
               </Subtitle>
               <div className="flex items-center">
-                <Badge color="orange" size="xs" className="ml-2 mr-2">
+                <Badge color="blue" size="xs" className="ml-2 mr-2">
                   Beta
                 </Badge>
                 <IoChevronUp
@@ -136,7 +136,7 @@ export const DashboardLinks = () => {
         {/* TODO: use link instead of button */}
         <Button
           size="xs"
-          color="orange"
+          color="blue"
           variant="secondary"
           className="h-5 mx-2"
           onClick={handleCreateDashboard}

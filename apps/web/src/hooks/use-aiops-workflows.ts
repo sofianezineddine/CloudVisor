@@ -44,8 +44,8 @@ export function useAIOpsWorkflows() {
   return useQuery({
     queryKey: aiopsWorkflowKeys.list(),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: AIOpsWorkflow[] }>('/aiops/workflows');
-      return data.data;
+      const { data } = await keepApi.get<AIOpsWorkflow[]>('/workflows');
+      return data;
     },
     staleTime: 30_000,
   });
@@ -54,9 +54,14 @@ export function useAIOpsWorkflows() {
 export function useCreateWorkflow() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { name: string; yaml_definition: string; trigger_config?: Record<string, unknown> }) => {
-      const { data } = await keepApi.post<{ data: AIOpsWorkflow }>('/aiops/workflows', payload);
-      return data.data;
+    mutationFn: async (payload: { yaml_definition: string }) => {
+      // Keep expects the workflow YAML as the raw request body at POST /workflows/json
+      const { data } = await keepApi.post<{ workflow_id: string; status: string; revision: number }>(
+        '/workflows/json',
+        payload.yaml_definition,
+        { headers: { 'Content-Type': 'application/yaml' } }
+      );
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: aiopsWorkflowKeys.all() });
@@ -67,9 +72,9 @@ export function useCreateWorkflow() {
 export function useToggleWorkflowStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: 'enabled' | 'disabled' }) => {
-      const { data } = await keepApi.put<{ data: AIOpsWorkflow }>(`/workflows/${id}/status`, { status });
-      return data.data;
+    mutationFn: async ({ id }: { id: string }) => {
+      const { data } = await keepApi.put<{ workflow_id: string; status: string; is_disabled: boolean }>(`/workflows/${id}/toggle`);
+      return data;
     },
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: aiopsWorkflowKeys.all() });
@@ -82,8 +87,8 @@ export function useRunWorkflow() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id }: { id: string }) => {
-      const { data } = await keepApi.post<{ data: AIOpsWorkflowExecution }>(`/workflows/${id}/run`);
-      return data.data;
+      const { data } = await keepApi.post<{ workflow_execution_id: string }>(`/workflows/${id}/run`);
+      return data;
     },
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: aiopsWorkflowKeys.executions(id) });

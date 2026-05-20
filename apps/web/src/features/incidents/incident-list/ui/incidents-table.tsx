@@ -51,7 +51,7 @@ function SelectedRowActions({
     <div className="w-full flex justify-between">
       <div>
         <Button
-          color="orange"
+          color="blue"
           variant="primary"
           icon={DocumentChartBarIcon}
           tooltip="Generate report for currently visible incidents"
@@ -69,7 +69,7 @@ function SelectedRowActions({
           </span>
         ) : null}
         <Button
-          color="orange"
+          color="blue"
           variant="primary"
           size="md"
           disabled={selectedRowIds.length < 2}

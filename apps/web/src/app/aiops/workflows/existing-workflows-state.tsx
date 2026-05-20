@@ -199,7 +199,7 @@ export function ExistingWorkflowsState({
               icon={FunnelIcon}
             >
               <Button
-                color="orange"
+                color="blue"
                 variant="secondary"
                 onClick={() => setClearFiltersToken(uuidV4())}
               >
@@ -222,7 +222,7 @@ export function ExistingWorkflowsState({
               icon={MagnifyingGlassIcon}
             >
               <Button
-                color="orange"
+                color="blue"
                 variant="secondary"
                 onClick={() => setSearchedValue(null)}
               >
@@ -268,7 +268,7 @@ export function ExistingWorkflowsState({
             </div>
             <div className="flex gap-2">
               <Button
-                color="orange"
+                color="blue"
                 size="md"
                 variant="secondary"
                 onClick={() => {
@@ -280,7 +280,7 @@ export function ExistingWorkflowsState({
                 Upload Workflows
               </Button>
               <Button
-                color="orange"
+                color="blue"
                 size="md"
                 variant="primary"
                 onClick={() => setIsCreateWorkflowModalOpen(true)}

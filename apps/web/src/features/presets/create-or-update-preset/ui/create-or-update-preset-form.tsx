@@ -251,7 +251,7 @@ export function CreateOrUpdatePresetForm({
           type="button"
           size="lg"
           variant="secondary"
-          color="orange"
+          color="blue"
           onClick={handleCancel}
           tooltip="Close"
         >
@@ -262,7 +262,7 @@ export function CreateOrUpdatePresetForm({
           disabled={!presetName}
           type="submit"
           size="lg"
-          color="orange"
+          color="blue"
           variant="primary"
           tooltip="Save Preset"
         >

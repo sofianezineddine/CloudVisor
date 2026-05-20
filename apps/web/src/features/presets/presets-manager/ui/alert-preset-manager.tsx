@@ -166,7 +166,7 @@ export function AlertPresetManager({
           icon={GrTest}
           onClick={handleAddAlertModalOpen}
           className="ml-2"
-          color="orange"
+          color="blue"
         ></Button>
 
         {/* Group expansion toggle button */}
@@ -182,7 +182,7 @@ export function AlertPresetManager({
                 : "Expand all groups"
             }
             className="ml-2"
-            color="orange"
+            color="blue"
           >
             {areAllGroupsExpanded() ? "Collapse All" : "Expand All"}
           </Button>

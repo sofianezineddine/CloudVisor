@@ -60,7 +60,7 @@ export function TabNavigationLink({
       {Icon && <Icon className="!size-5 flex-shrink-0" />}
       <span className="truncate">{children}</span>
       {count && (
-        <Badge size="xs" color="orange">
+        <Badge size="xs" color="blue">
           {count}
         </Badge>
       )}

@@ -146,7 +146,7 @@ const WidgetAlertCountPanel: React.FC<WidgetAlertCountPanelProps> = ({
           </div>
           <div className="flex items-center space-x-1">
             <Button
-              color="orange"
+              color="blue"
               variant="secondary"
               size="xs"
               onClick={handleGoToPresetClick}

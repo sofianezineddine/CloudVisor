@@ -163,7 +163,7 @@ export default function AlertActions({
       <Button
         icon={PlusIcon}
         size="xs"
-        color="orange"
+        color="blue"
         onClick={async () => await addOrUpdatePreset()}
         tooltip="Save current filter as a view"
       >
@@ -172,7 +172,7 @@ export default function AlertActions({
       <Button
         icon={PlusIcon}
         size="xs"
-        color="orange"
+        color="blue"
         onClick={showIncidentSelector}
         tooltip="Associate events with incident"
       >
@@ -181,7 +181,7 @@ export default function AlertActions({
       <Button
         icon={RocketIcon}
         size="xs"
-        color="orange"
+        color="blue"
         onClick={showCreateIncidentWithAI}
         tooltip={
           config?.OPEN_AI_API_KEY_SET

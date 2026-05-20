@@ -318,7 +318,7 @@ export function WorkflowAlertIncidentDependenciesForm({
               <Button
                 variant="light"
                 icon={PlusIcon}
-                color="orange"
+                color="blue"
                 onClick={handleAddField}
               >
                 Add another field
@@ -337,13 +337,13 @@ export function WorkflowAlertIncidentDependenciesForm({
         </div>
       </div>
       <div className="flex justify-end gap-2">
-        <Button variant="secondary" color="orange" onClick={onCancel}>
+        <Button variant="secondary" color="blue" onClick={onCancel}>
           Cancel
         </Button>
         <Button
           type="submit"
           variant="primary"
-          color="orange"
+          color="blue"
           disabled={!isValid}
           data-testid={`wf-${type}-dependencies-form-submit`}
         >

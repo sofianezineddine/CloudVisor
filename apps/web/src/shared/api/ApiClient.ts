@@ -3,18 +3,17 @@ import { Session } from "next-auth";
 import { KeepApiError, KeepApiReadOnlyError } from "./KeepApiError";
 import { getApiUrlFromConfig } from "@/shared/lib/getApiUrlFromConfig";
 import { getApiURL } from "@/utils/apiUrl";
-import { signOut as signOutClient } from "next-auth/react";
 import { GuestSession } from "@/types/auth";
 import { AuthType } from "@/utils/authenticationType";
 
 const READ_ONLY_ALLOWED_METHODS = ["GET", "OPTIONS"];
 const READ_ONLY_ALWAYS_ALLOWED_URLS = [
-  "/aiops/alerts/audit",
-  "/aiops/alerts/facets/options",
-  "/aiops/alerts/query",
-  "/aiops/incidents/facets/options",
-  "/aiops/workflows/query",
-  "/aiops/workflows/facets/options",
+  "/alerts/audit",
+  "/alerts/facets/options",
+  "/alerts/query",
+  "/incidents/facets/options",
+  "/workflows/query",
+  "/workflows/facets/options",
 ];
 
 interface ApiClientOptions {
@@ -44,21 +43,51 @@ export class ApiClient {
     if (!token && typeof window !== 'undefined') {
       token = localStorage.getItem('access_token') || '';
     }
-    if (!token) {
-      // Allow unauthenticated requests (the API gateway will reject if needed)
-      return this.additionalHeaders;
-    }
-    if (token === "unauthenticated") {
-      return this.additionalHeaders;
-    }
-    return {
-      Authorization: `Bearer ${token}`,
+
+    const headers: Record<string, any> = {
+      'X-Tenant-ID': 'keep',
       ...this.additionalHeaders,
     };
+
+    if (token && token !== "unauthenticated") {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    return headers;
   }
 
   getToken() {
     return this.session?.accessToken;
+  }
+
+  /**
+   * Attempt to refresh the access token using the stored refresh token.
+   * Returns true if refresh succeeded, false otherwise.
+   */
+  private async attemptTokenRefresh(): Promise<boolean> {
+    try {
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) return false;
+
+      const authBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
+      const res = await fetch(`${authBaseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!res.ok) return false;
+
+      const data = await res.json();
+      if (data.access_token && data.refresh_token) {
+        localStorage.setItem('access_token', data.access_token);
+        localStorage.setItem('refresh_token', data.refresh_token);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
   }
 
   getApiBaseUrl() {
@@ -81,11 +110,14 @@ export class ApiClient {
         if (response.status === 401) {
           // on server, middleware will handle the sign out
           if (!this.isServer) {
-            // For OAUTH2PROXY auth, redirect to oauth2-proxy's sign_out endpoint
-            if (this.config?.AUTH_TYPE === AuthType.OAUTH2PROXY) {
-              window.location.href = "/oauth2/sign_out";
-            } else {
-              await signOutClient();
+            // CloudVisor auth: attempt silent token refresh
+            const refreshed = await this.attemptTokenRefresh();
+            if (!refreshed) {
+              // Refresh failed — clear session and redirect to login
+              localStorage.removeItem('access_token');
+              localStorage.removeItem('refresh_token');
+              localStorage.removeItem('cloudvisor-user');
+              window.location.href = '/login?error=session_expired';
             }
           }
           throw new KeepApiError(

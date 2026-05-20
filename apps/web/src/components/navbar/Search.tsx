@@ -38,31 +38,31 @@ const NAVIGATION_OPTIONS = [
     icon: VscDebugDisconnect,
     label: "Go to the providers page",
     shortcut: ["p"],
-    navigate: "/aiops/providers",
+    navigate: "/providers",
   },
   {
     icon: AiOutlineAlert,
     label: "Go to alert console",
     shortcut: ["g"],
-    navigate: "/aiops/alerts/feed",
+    navigate: "/alerts/feed",
   },
   {
     icon: AiOutlineGroup,
     label: "Go to alert quality",
     shortcut: ["q"],
-    navigate: "/aiops/alerts/quality",
+    navigate: "/alerts/quality",
   },
   {
     icon: MdOutlineEngineering,
     label: "Go to alert groups",
     shortcut: ["g"],
-    navigate: "/aiops/rules",
+    navigate: "/rules",
   },
   {
     icon: LuWorkflow,
     label: "Go to the workflows page",
     shortcut: ["wf"],
-    navigate: "/aiops/workflows",
+    navigate: "/workflows",
   },
   {
     icon: UserGroupIcon,
@@ -199,7 +199,7 @@ export const Search = ({ session }: SearchProps) => {
     if (query.length && queriedOptions.length === 0) {
       return (
         <ListItem className="flex flex-col items-center justify-center cursor-default select-none px-4 py-2 text-gray-700 h-72">
-          <Icon color="orange" size="xl" icon={MdOutlineSearchOff} />
+          <Icon color="blue" size="xl" icon={MdOutlineSearchOff} />
           Nothing found.
         </ListItem>
       );
@@ -225,7 +225,7 @@ export const Search = ({ session }: SearchProps) => {
                       active ? "bg-orange-400 text-white" : "text-gray-900"
                     }`}
                     icon={option.icon}
-                    color="orange"
+                    color="blue"
                   />
                   <span className="text-left">{option.label}</span>
                 </ListItem>
@@ -263,7 +263,7 @@ export const Search = ({ session }: SearchProps) => {
                       active ? "bg-orange-400 text-white" : "text-gray-900"
                     }`}
                     icon={option.icon}
-                    color="orange"
+                    color="blue"
                   />
                   <span className="text-left">{option.label}</span>
                 </ListItem>
@@ -288,7 +288,7 @@ export const Search = ({ session }: SearchProps) => {
                       active ? "bg-orange-400 text-white" : "text-gray-900"
                     }`}
                     icon={option.icon}
-                    color="orange"
+                    color="blue"
                   />
                   <span className="text-left">{option.label}</span>
                 </ListItem>
@@ -418,7 +418,7 @@ export const Search = ({ session }: SearchProps) => {
               <ComboboxInput
                 className="z-20 tremor-TextInput-root relative flex items-center w-full outline-none rounded-tremor-default transition duration-100 border shadow-tremor-input dark:shadow-dark-tremor-input bg-tremor-background dark:bg-dark-tremor-background hover:bg-tremor-background-muted dark:hover:bg-dark-tremor-background-muted text-tremor-content dark:text-dark-tremor-content border-tremor-border dark:border-dark-tremor-border tremor-TextInput-input bg-transparent focus:outline-none focus:ring-0 text-tremor-default py-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pr-3 pl-3 placeholder:text-tremor-content dark:placeholder:text-dark-tremor-content"
                 placeholder={placeholderText}
-                color="orange"
+                color="blue"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 ref={comboboxInputRef}

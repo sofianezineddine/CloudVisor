@@ -42,7 +42,7 @@ export const CorrelationTable = ({ rules }: CorrelationTableProps) => {
 
   const onCloseCorrelation = () => {
     setIsRuleCreation(false);
-    router.replace("/aiops/rules");
+    router.replace("/rules");
   };
 
   const CORRELATION_TABLE_COLS = useMemo(
@@ -65,7 +65,7 @@ export const CorrelationTable = ({ rules }: CorrelationTableProps) => {
         cell: (context) => {
           const template = context.getValue();
           return template ? (
-            <Badge title={context.getValue() as string} color="orange">
+            <Badge title={context.getValue() as string} color="blue">
               {
                 <div className="max-w-28 md:max-w-40 2xl:max-w-96 overflow-hidden overflow-ellipsis">
                   {template}
@@ -81,7 +81,7 @@ export const CorrelationTable = ({ rules }: CorrelationTableProps) => {
         header: "Incident Prefix",
         cell: (context) =>
           context.getValue() && (
-            <Badge color="orange">{context.getValue()}</Badge>
+            <Badge color="blue">{context.getValue()}</Badge>
           ),
       }),
       columnHelper.accessor("definition_cel", {
@@ -138,7 +138,7 @@ export const CorrelationTable = ({ rules }: CorrelationTableProps) => {
           </PageSubtitle>
         </div>
         <Button
-          color="orange"
+          color="blue"
           size="md"
           variant="primary"
           onClick={() => setIsRuleCreation(true)}

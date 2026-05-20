@@ -116,7 +116,7 @@ export const ColumnRenameSubMenu = ({
               handleRename();
             }}
             size="xs"
-            color="orange"
+            color="blue"
           >
             Save
           </Button>

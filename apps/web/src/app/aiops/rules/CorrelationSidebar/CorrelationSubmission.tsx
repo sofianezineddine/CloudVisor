@@ -24,10 +24,10 @@ export const CorrelationSubmission = ({
   return (
     <div className="xl:col-span-2 flex justify-between items-end">
       <div className="flex items-center gap-x-4">
-        <Button type="button" variant="light" color="orange" onClick={toggle}>
+        <Button type="button" variant="light" color="blue" onClick={toggle}>
           Cancel
         </Button>
-        <Button color="orange" disabled={!isValid || exceeds90Days}>
+        <Button color="blue" disabled={!isValid || exceeds90Days}>
           {isRuleBeingEdited ? "Save correlation" : "Create correlation"}
         </Button>
       </div>

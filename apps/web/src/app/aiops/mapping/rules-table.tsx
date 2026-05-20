@@ -119,7 +119,7 @@ export default function RulesTable({ mappings, editCallback }: Props) {
       cell: (context) => (
         <div className="flex flex-wrap gap-1">
           {context.row.original.attributes?.map((attr) => (
-            <Badge key={attr} color="orange" size="xs">
+            <Badge key={attr} color="blue" size="xs">
               {attr}
             </Badge>
           ))}
@@ -132,7 +132,7 @@ export default function RulesTable({ mappings, editCallback }: Props) {
       cell: (context) => (
         <div className="space-x-1 flex flex-row items-center justify-end opacity-0 group-hover:opacity-100 bg-slate-100 border-l">
           <Button
-            color="orange"
+            color="blue"
             size="xs"
             icon={MdPlayArrow}
             tooltip="Run"
@@ -142,7 +142,7 @@ export default function RulesTable({ mappings, editCallback }: Props) {
             }}
           />
           <Button
-            color="orange"
+            color="blue"
             size="xs"
             variant="secondary"
             icon={MdModeEdit}

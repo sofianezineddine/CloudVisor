@@ -190,12 +190,12 @@ function WorkflowTile({ workflow }: { workflow: Workflow }) {
         >
           <div className="absolute top-0 right-0 mt-2 mr-2 mb-2 flex items-center flex-wrap">
             {workflow.provisioned && (
-              <Badge color="orange" size="xs" className="mr-2 mb-2">
+              <Badge color="blue" size="xs" className="mr-2 mb-2">
                 Provisioned
               </Badge>
             )}
             {workflow.alertRule && (
-              <Badge color="orange" size="xs" className="mr-2 mb-2">
+              <Badge color="blue" size="xs" className="mr-2 mb-2">
                 Alert Rule
               </Badge>
             )}
@@ -287,7 +287,7 @@ function WorkflowTile({ workflow }: { workflow: Workflow }) {
         </div>
         <div className="mt-2.5">
           <Button
-            color="orange"
+            color="blue"
             size="xs"
             variant="secondary"
             onClick={() => setOpenTriggerModal(false)}

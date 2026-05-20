@@ -129,7 +129,7 @@ export function SeverityMappingSelection({
 
               <Button
                 variant="light"
-                color="orange"
+                color="blue"
                 size="xs"
                 className="mt-2"
                 onClick={addEntry}
@@ -141,7 +141,7 @@ export function SeverityMappingSelection({
         )}
       </div>
 
-      <Button className="mt-4" color="orange" onClick={handleApply}>
+      <Button className="mt-4" color="blue" onClick={handleApply}>
         Apply
       </Button>
     </div>

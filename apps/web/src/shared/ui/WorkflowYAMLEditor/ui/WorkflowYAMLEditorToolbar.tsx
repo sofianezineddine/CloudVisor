@@ -47,7 +47,7 @@ export function WorkflowYAMLEditorToolbar({
   return (
     <div className={clsx("absolute top-2 right-6 z-10 flex gap-2", className)}>
       <Button
-        color="orange"
+        color="blue"
         size="sm"
         className="h-8 px-2 bg-white"
         onClick={handleCopy}
@@ -62,7 +62,7 @@ export function WorkflowYAMLEditorToolbar({
         )}
       </Button>
       <Button
-        color="orange"
+        color="blue"
         size="sm"
         className="h-8 px-2 bg-white"
         onClick={onDownload}
@@ -74,7 +74,7 @@ export function WorkflowYAMLEditorToolbar({
       </Button>
       {!readOnly && onSave ? (
         <Button
-          color="orange"
+          color="blue"
           size="sm"
           className="h-8 px-2"
           onClick={onSave}

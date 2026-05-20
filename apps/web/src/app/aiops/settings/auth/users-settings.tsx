@@ -124,7 +124,7 @@ export default function UsersSettings({
         </div>
         <div className="flex space-x-2 items-center">
           <Button
-            color="orange"
+            color="blue"
             size="md"
             icon={TiUserAdd}
             onClick={handleAddUserClick}

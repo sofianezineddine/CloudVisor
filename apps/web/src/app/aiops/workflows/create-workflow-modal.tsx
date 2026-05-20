@@ -32,10 +32,10 @@ export const CreateWorkflowModal: React.FC<CreateWorkflowModalProps> = ({
               Or skip this, and{" "}
               <Button
                 className="ml-2"
-                color="orange"
+                color="blue"
                 size="xs"
                 variant="primary"
-                onClick={() => router.push("/aiops/workflows/builder")}
+                onClick={() => router.push("/workflows/builder")}
               >
                 Start from scratch
               </Button>

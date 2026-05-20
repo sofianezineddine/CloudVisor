@@ -44,7 +44,7 @@ export function PermissionsTable({
               <Text className="truncate">{resource.name}</Text>
             </TableCell>
             <TableCell className="w-4/24">
-              <Badge color="orange" className="text-xs">
+              <Badge color="blue" className="text-xs">
                 {resource.type}
               </Badge>
             </TableCell>
@@ -58,13 +58,13 @@ export function PermissionsTable({
                         const [type, ...rest] = assignment.split("_");
                         const displayId = rest.join("_");
                         return (
-                          <Badge key={index} color="orange" className="text-xs">
+                          <Badge key={index} color="blue" className="text-xs">
                             {`${displayId} (${type})`}
                           </Badge>
                         );
                       })}
                     {resource.assignments.length > 5 && (
-                      <Badge color="orange" className="text-xs">
+                      <Badge color="blue" className="text-xs">
                         +{resource.assignments.length - 5} more
                       </Badge>
                     )}

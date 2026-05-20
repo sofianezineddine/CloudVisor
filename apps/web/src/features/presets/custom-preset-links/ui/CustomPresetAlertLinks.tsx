@@ -181,7 +181,7 @@ export const CustomPresetAlertLinks = ({
 
   const deletePresetAndRedirect = (presetId: string, presetName: string) => {
     deletePreset(presetId, presetName).then(() => {
-      router.push("/aiops/alerts/feed");
+      router.push("/alerts/feed");
     });
   };
 

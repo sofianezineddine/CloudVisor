@@ -222,7 +222,7 @@ export default function ProviderTile({ provider, onClick }: Props) {
           <Icon
             icon={FaCode}
             className="absolute top-[-15px] right-[-15px]"
-            color="orange"
+            color="blue"
             size="sm"
             tooltip="Provisioned"
           />

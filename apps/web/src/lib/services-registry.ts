@@ -110,9 +110,8 @@ export const SERVICES: ServiceDefinition[] = [
     id: 'aiops',
     label: 'AIOps',
     path: '/aiops',
-    defaultTab: 'overview',
+    defaultTab: 'alerts',
     sections: [
-      { label: null, tabs: [{ id: 'overview', label: 'Overview' }] },
       { label: 'Alert Management', tabs: [{ id: 'alerts', label: 'Alerts' }, { id: 'incidents', label: 'Incidents' }] },
       { label: 'Automation', tabs: [{ id: 'workflows', label: 'Workflows' }] },
       { label: 'Infrastructure', tabs: [{ id: 'providers', label: 'Providers' }, { id: 'topology', label: 'Topology' }] },

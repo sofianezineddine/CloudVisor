@@ -55,11 +55,11 @@ export function RolesTable({
                   <Text className="truncate">{role.name}</Text>
                   <div className="flex items-center">
                     {role.predefined ? (
-                      <Badge color="orange" className="ml-2 w-24 text-center">
+                      <Badge color="blue" className="ml-2 w-24 text-center">
                         Predefined
                       </Badge>
                     ) : (
-                      <Badge color="orange" className="ml-2 w-24 text-center">
+                      <Badge color="blue" className="ml-2 w-24 text-center">
                         Custom
                       </Badge>
                     )}
@@ -72,12 +72,12 @@ export function RolesTable({
               <TableCell className="w-15/24">
                 <div className="flex flex-wrap gap-1">
                   {role.scopes.slice(0, 4).map((scope, index) => (
-                    <Badge key={index} color="orange" className="text-xs">
+                    <Badge key={index} color="blue" className="text-xs">
                       {scope}
                     </Badge>
                   ))}
                   {role.scopes.length > 4 && (
-                    <Badge color="orange" className="text-xs">
+                    <Badge color="blue" className="text-xs">
                       +{role.scopes.length - 4} more
                     </Badge>
                   )}
@@ -88,7 +88,7 @@ export function RolesTable({
                   <Button
                     icon={TrashIcon}
                     variant="light"
-                    color="orange"
+                    color="blue"
                     className="opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => onDeleteRole(role.id, e)}
                   />

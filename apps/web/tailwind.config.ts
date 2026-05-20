@@ -20,15 +20,64 @@ const config: Config = {
         border: 'var(--border-default)',
         background: 'var(--bg-base)',
         foreground: 'var(--text-primary)',
-        // Override Tremor's orange brand with CloudVisor blue
+        // Tremor light mode colors
         tremor: {
           brand: {
             faint: 'rgb(239 246 255)',
             muted: 'rgb(219 234 254)',
             subtle: 'rgb(96 165 250)',
-            DEFAULT: '#4a90d9',
-            emphasis: '#374151',
+            DEFAULT: '#0972d3',
+            emphasis: '#0060b0',
             inverted: '#ffffff',
+          },
+          background: {
+            muted: 'rgb(249 250 251)',
+            subtle: 'rgb(243 244 246)',
+            DEFAULT: '#ffffff',
+            emphasis: 'rgb(55 65 81)',
+          },
+          border: {
+            DEFAULT: 'rgb(229 231 235)',
+          },
+          ring: {
+            DEFAULT: 'rgb(209 213 219)',
+          },
+          content: {
+            subtle: 'rgb(156 163 175)',
+            DEFAULT: 'rgb(107 114 128)',
+            emphasis: 'rgb(55 65 81)',
+            strong: 'rgb(17 24 39)',
+            inverted: '#ffffff',
+          },
+        },
+        // Tremor dark mode colors (referenced by dark: prefix in Tremor components)
+        'dark-tremor': {
+          brand: {
+            faint: 'rgba(74, 144, 217, 0.05)',
+            muted: 'rgba(74, 144, 217, 0.10)',
+            subtle: 'rgba(74, 144, 217, 0.15)',
+            DEFAULT: '#4a90d9',
+            emphasis: '#5ba3f5',
+            inverted: '#0d1117',
+          },
+          background: {
+            muted: '#1c2433',
+            subtle: '#131920',
+            DEFAULT: '#0d1117',
+            emphasis: '#d1d5db',
+          },
+          border: {
+            DEFAULT: '#2e3140',
+          },
+          ring: {
+            DEFAULT: '#2e3140',
+          },
+          content: {
+            subtle: '#6b7280',
+            DEFAULT: '#9ca3af',
+            emphasis: '#e5e7eb',
+            strong: '#f9fafb',
+            inverted: '#0d1117',
           },
         },
         primary: {

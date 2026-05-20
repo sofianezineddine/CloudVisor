@@ -78,7 +78,7 @@ export function UsersTable({
                   <Text className="truncate">{user.email}</Text>
                 </div>
                 <div className="ml-2">
-                  {user.ldap && <Badge color="orange">LDAP</Badge>}
+                  {user.ldap && <Badge color="blue">LDAP</Badge>}
                 </div>
               </div>
             </TableCell>
@@ -88,7 +88,7 @@ export function UsersTable({
             <TableCell className="w-2/12">
               <div className="flex flex-wrap gap-1">
                 {user.role && (
-                  <Badge color="orange" className="text-xs">
+                  <Badge color="blue" className="text-xs">
                     {user.role}
                   </Badge>
                 )}
@@ -98,12 +98,12 @@ export function UsersTable({
               <TableCell className="w-2/12">
                 <div className="flex flex-wrap gap-1">
                   {user.groups?.slice(0, 4).map((group, index) => (
-                    <Badge key={index} color="orange" className="text-xs">
+                    <Badge key={index} color="blue" className="text-xs">
                       {group.name}
                     </Badge>
                   ))}
                   {user.groups && user.groups.length > 4 && (
-                    <Badge color="orange" className="text-xs">
+                    <Badge color="blue" className="text-xs">
                       +{user.groups.length - 4} more
                     </Badge>
                   )}
@@ -126,7 +126,7 @@ export function UsersTable({
                     <Button
                       icon={TrashIcon}
                       variant="light"
-                      color="orange"
+                      color="blue"
                       className="opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={(e) =>
                         onDeleteUser && onDeleteUser(user.email, e)

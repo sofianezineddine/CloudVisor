@@ -38,12 +38,12 @@ export function SameIncidentField({ incident }: { incident: IncidentDto }) {
                 status={same_incident_in_the_past.status}
               />
             )}
-            href={"/aiops/incidents/" + same_incident_in_the_past.id}
+            href={"/incidents/" + same_incident_in_the_past.id}
           >
             {getIncidentName(same_incident_in_the_past)}
           </Link>
           <Button
-            color="orange"
+            color="blue"
             variant="secondary"
             size="xs"
             className="!px-1 !py-0.5"
@@ -57,7 +57,7 @@ export function SameIncidentField({ incident }: { incident: IncidentDto }) {
           <p className="flex items-baseline gap-2">
             No linked incidents
             <Button
-              color="orange"
+              color="blue"
               variant="secondary"
               size="xs"
               className="!px-1 !py-0.5"

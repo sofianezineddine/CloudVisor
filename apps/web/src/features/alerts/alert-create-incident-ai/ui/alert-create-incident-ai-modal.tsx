@@ -114,7 +114,7 @@ export const CreateIncidentWithAIModal = ({
           controller: AbortController
         ) => {
           return await api.post(
-            "/aiops/incidents/ai/suggest",
+            "/incidents/ai/suggest",
             alertsToProcess.map((alert) => alert.fingerprint),
             { signal: controller.signal }
           );
@@ -287,7 +287,7 @@ export const CreateIncidentWithAIModal = ({
       toast.success("Incidents created successfully");
       await mutateIncidents();
       handleCloseAIModal();
-      router.push("/aiops/incidents");
+      router.push("/incidents");
     } catch (error) {
       console.error("Error creating incidents:", error);
       if (error instanceof KeepApiError) {
@@ -335,7 +335,7 @@ export const CreateIncidentWithAIModal = ({
             <div className="space-y-6">
               <Callout
                 title="Help the AI out by adjusting the incident groupings"
-                color="orange"
+                color="blue"
               >
                 - Drag and drop alerts between incidents to adjust the incidents
                 and improve the AI&apos;s algorithm.
@@ -361,7 +361,7 @@ export const CreateIncidentWithAIModal = ({
               ))}
               <Button
                 className="w-full"
-                color="orange"
+                color="blue"
                 onClick={handleCreateIncidents}
               >
                 Create Incidents
@@ -402,7 +402,7 @@ export const CreateIncidentWithAIModal = ({
               {alerts.length > 50 ? (
                 <Callout
                   title="Alert Limit"
-                  color="orange"
+                  color="blue"
                   className="w-full mb-4"
                 >
                   You have selected {alerts.length} alerts. Keep currently
@@ -428,7 +428,7 @@ export const CreateIncidentWithAIModal = ({
             <div className="flex-1" />
             <Button
               className="w-full"
-              color="orange"
+              color="blue"
               onClick={createIncidentWithAI}
             >
               Generate incident suggestions with AI

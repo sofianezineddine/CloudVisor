@@ -282,7 +282,7 @@ export const PresetWidgetForm: React.FC<PresetWidgetFormProps> = ({
         <div className="flex items-center justify-between">
           <Subtitle>Thresholds</Subtitle>
           <Button
-            color="orange"
+            color="blue"
             variant="secondary"
             type="button"
             onClick={handleAddThreshold}
@@ -312,7 +312,7 @@ export const PresetWidgetForm: React.FC<PresetWidgetFormProps> = ({
                   onClick={() => remove(index)}
                   className="p-2"
                 >
-                  <Icon color="orange" icon={Trashcan} className="h-5 w-5" />
+                  <Icon color="blue" icon={Trashcan} className="h-5 w-5" />
                 </button>
               )}
             </div>

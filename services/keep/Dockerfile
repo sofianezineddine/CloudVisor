@@ -65,6 +65,8 @@ COPY --from=builder /venv /venv
 COPY services/keep/start.sh /app/start.sh
 COPY services/keep/cloudvisor_consumer.py /app/cloudvisor_consumer.py
 COPY services/keep/gunicorn_config.py /app/gunicorn_config.py
+# Copy workflow template examples (needed by /workflows/templates/query endpoint)
+COPY keep/examples/workflows /examples/workflows
 RUN chmod +x /app/start.sh
 
 # Set ownership

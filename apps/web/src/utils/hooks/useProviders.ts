@@ -9,7 +9,7 @@ export const useProviders = (
   const api = useApi();
 
   return useSWRImmutable<ProvidersResponse>(
-    api.isReady() ? "/aiops/providers" : null,
+    api.isReady() ? "/providers" : null,
     (url) => api.get(url),
     options
   );

@@ -103,11 +103,11 @@ export const CorrelationSidebarBody = ({
     try {
       selectedId
         ? await api.put(`/rules/${selectedId}`, body)
-        : await api.post("/aiops/rules", body);
+        : await api.post("/rules", body);
 
       toggle();
       mutate();
-      router.replace("/aiops/rules");
+      router.replace("/rules");
     } catch (error) {
       showErrorToast(error, "Failed to create correlation rule");
     }
@@ -148,7 +148,7 @@ export const CorrelationSidebarBody = ({
           className="relative"
           title="NOTE: Rules will be applied only to new alerts. Historical data will
           be ignored."
-          color="orange"
+          color="blue"
         >
           <Button
             className="absolute top-0 right-0"

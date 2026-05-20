@@ -53,6 +53,8 @@ export default function SettingsSelection({
             ref={refs.setReference}
             data-testid="settings-button"
             aria-label="Settings"
+            className="[&]:!bg-transparent"
+            style={{ backgroundColor: 'transparent', boxShadow: 'none' }}
           />
           <Popover.Overlay className="fixed inset-0 bg-black opacity-30 z-20" />
           <Popover.Panel

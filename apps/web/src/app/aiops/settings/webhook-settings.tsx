@@ -155,7 +155,7 @@ req.end();
 
     const resp = await fetch(data.webhookApi, requestOptions);
     if (resp.ok) {
-      router.push("/aiops/alerts/feed");
+      router.push("/alerts/feed");
     } else {
       showErrorToast(resp, "Something went wrong! Please try again.");
     }
@@ -200,7 +200,7 @@ req.end();
             <div>
               <Button
                 icon={PlayIcon}
-                color="orange"
+                color="blue"
                 onClick={tryNow}
                 id="tooltip-select-0"
               >
@@ -223,7 +223,7 @@ req.end();
               <Button
                 icon={ClipboardDocumentIcon}
                 size="xs"
-                color="orange"
+                color="blue"
                 onClick={onCopyCode}
               >
                 Copy code

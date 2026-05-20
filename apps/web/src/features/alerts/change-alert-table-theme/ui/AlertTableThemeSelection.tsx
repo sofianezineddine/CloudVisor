@@ -103,7 +103,7 @@ export const AlertTableThemeSelection = ({
       <Button
         data-testid="apply-theme-button"
         className="mt-4"
-        color="orange"
+        color="blue"
         onClick={onApplyTheme}
       >
         Apply theme

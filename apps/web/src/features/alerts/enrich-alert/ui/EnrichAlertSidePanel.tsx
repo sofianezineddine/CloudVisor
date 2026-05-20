@@ -123,14 +123,14 @@ export const EnrichAlertSidePanel: React.FC<EnrichAlertModalProps> = ({
 
     try {
       if (unEnrichedFields.length != 0) {
-        const unEnrichmentResponse = await api.post("/aiops/alerts/unenrich", {
+        const unEnrichmentResponse = await api.post("/alerts/unenrich", {
           fingerprint: alert?.fingerprint,
           enrichments: unEnrichedFields,
         });
         fieldsUnEnrichedSuccessfully = true;
       }
 
-      const response = await api.post("/aiops/alerts/enrich", requestData);
+      const response = await api.post("/alerts/enrich", requestData);
 
       toast.success("Alert enriched successfully");
       await mutate();
@@ -182,13 +182,13 @@ export const EnrichAlertSidePanel: React.FC<EnrichAlertModalProps> = ({
         </Button>
         <Button
           onClick={handleSave}
-          color="orange"
+          color="blue"
           variant="primary"
           disabled={!isDataValid}
         >
           Save
         </Button>
-        <Button onClick={handleClose} color="orange" variant="secondary">
+        <Button onClick={handleClose} color="blue" variant="secondary">
           Close
         </Button>
       </div>

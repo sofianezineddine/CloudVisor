@@ -21,7 +21,7 @@ function FollowingIncident({ incidentId }: { incidentId: string }) {
     <div>
       <Link
         icon={() => <StatusIcon className="!p-0" status={incident.status} />}
-        href={"/aiops/incidents/" + incidentId}
+        href={"/incidents/" + incidentId}
       >
         {getIncidentName(incident)}
       </Link>

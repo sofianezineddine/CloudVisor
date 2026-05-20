@@ -114,7 +114,8 @@ export default function AlertPagination({
         {isRefreshAllowed && (
           <Button
             icon={ArrowPathIcon}
-            color="orange"
+            color="gray"
+            variant="light"
             size="xs"
             disabled={isValidating}
             loading={isValidating}

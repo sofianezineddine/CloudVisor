@@ -40,7 +40,7 @@ export function WorkflowUnsavedChangesForm({
           >
             Discard all changes and run
           </Button>
-          <Button variant="primary" size="sm" color="orange" type="submit">
+          <Button variant="primary" size="sm" color="blue" type="submit">
             Return to editor
           </Button>
         </div>
@@ -64,7 +64,7 @@ export function WorkflowUnsavedChangesForm({
           <Button
             variant="secondary"
             size="sm"
-            color="orange"
+            color="blue"
             onClick={onClose}
           >
             Cancel
@@ -82,7 +82,7 @@ export function WorkflowUnsavedChangesForm({
             <Button
               variant="primary"
               size="sm"
-              color="orange"
+              color="blue"
               type="submit"
               data-testid="wf-unsaved-changes-save-and-run"
             >
@@ -111,7 +111,7 @@ export function WorkflowUnsavedChangesForm({
           <Button
             variant="secondary"
             size="sm"
-            color="orange"
+            color="blue"
             onClick={onClose}
           >
             Cancel
@@ -120,7 +120,7 @@ export function WorkflowUnsavedChangesForm({
             <Button
               variant="secondary"
               size="sm"
-              color="orange"
+              color="blue"
               onClick={onRunWithoutSaving}
               data-testid="wf-unsaved-changes-discard-and-run"
             >
@@ -129,7 +129,7 @@ export function WorkflowUnsavedChangesForm({
             <Button
               variant="primary"
               size="sm"
-              color="orange"
+              color="blue"
               type="submit"
               data-testid="wf-unsaved-changes-save-and-run"
             >

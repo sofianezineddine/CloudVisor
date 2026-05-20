@@ -184,7 +184,7 @@ export default function CreateOrEditMapping({
   const addRule = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await api.post("/aiops/mapping", {
+      await api.post("/mapping", {
         priority: priority,
         name: mapName,
         description: mapDescription,
@@ -373,7 +373,7 @@ export default function CreateOrEditMapping({
                           }}
                         />
                         <Button
-                          color="orange"
+                          color="blue"
                           size="xs"
                           variant="secondary"
                           onClick={processCsvText}
@@ -481,7 +481,7 @@ export default function CreateOrEditMapping({
                     mappingType !== "topology" && (
                       <Button
                         onClick={addAttributeGroup}
-                        color="orange"
+                        color="blue"
                         size="xs"
                         variant="secondary"
                         className="flex items-center"
@@ -521,7 +521,7 @@ export default function CreateOrEditMapping({
                 (attribute) => !attributeGroups.flat().includes(attribute)
               )
               .map((attribute) => (
-                <Badge key={attribute} color="orange">
+                <Badge key={attribute} color="blue">
                   {attribute}
                 </Badge>
               ))
@@ -531,7 +531,7 @@ export default function CreateOrEditMapping({
 
       <div className={"space-x-1 flex flex-row justify-end items-center"}>
         <Button
-          color="orange"
+          color="blue"
           size="xs"
           variant="secondary"
           onClick={exitEditOrCreateMode}
@@ -540,7 +540,7 @@ export default function CreateOrEditMapping({
         </Button>
 
         <Button
-          color="orange"
+          color="blue"
           size="xs"
           type="submit"
           disabled={

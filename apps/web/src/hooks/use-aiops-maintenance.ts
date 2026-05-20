@@ -5,28 +5,38 @@ import { keepApi } from '@/lib/api/keep';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface AIOpsMaintenanceWindow {
-  id: string;
+export interface AIOpsMaintenanceRule {
+  id: number;
   name: string;
-  status: 'scheduled' | 'active' | 'expired';
+  description?: string;
+  created_by: string;
+  cel_query: string;
   start_time: string;
   end_time: string;
-  filters: Record<string, unknown>;
-  created_at: string;
+  duration_seconds?: number;
+  updated_at?: string;
+  suppress: boolean;
+  enabled: boolean;
 }
 
-export interface CreateMaintenanceWindowPayload {
+/** @deprecated Use AIOpsMaintenanceRule */
+export type AIOpsMaintenanceWindow = AIOpsMaintenanceRule;
+
+export interface CreateMaintenanceRulePayload {
   name: string;
+  description?: string;
+  cel_query: string;
   start_time: string;
-  end_time: string;
-  filters: Record<string, unknown>;
+  duration_seconds?: number;
+  suppress?: boolean;
+  enabled?: boolean;
 }
 
-export interface UpdateMaintenanceWindowPayload {
-  name?: string;
-  start_time?: string;
-  end_time?: string;
-  filters?: Record<string, unknown>;
+/** @deprecated Use CreateMaintenanceRulePayload */
+export type CreateMaintenanceWindowPayload = CreateMaintenanceRulePayload;
+
+export interface UpdateMaintenanceRulePayload extends CreateMaintenanceRulePayload {
+  id: number;
 }
 
 // ─── Query key factory ────────────────────────────────────────────────────────
@@ -43,8 +53,8 @@ export function useAIOpsMaintenanceWindows() {
   return useQuery({
     queryKey: aiopsMaintenanceKeys.list(),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: AIOpsMaintenanceWindow[] }>('/aiops/maintenance');
-      return data.data;
+      const { data } = await keepApi.get<AIOpsMaintenanceRule[]>('/maintenance');
+      return data;
     },
     staleTime: 30_000,
   });
@@ -53,9 +63,9 @@ export function useAIOpsMaintenanceWindows() {
 export function useCreateMaintenanceWindow() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: CreateMaintenanceWindowPayload) => {
-      const { data } = await keepApi.post<{ data: AIOpsMaintenanceWindow }>('/aiops/maintenance', payload);
-      return data.data;
+    mutationFn: async (payload: CreateMaintenanceRulePayload) => {
+      const { data } = await keepApi.post<AIOpsMaintenanceRule>('/maintenance', payload);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: aiopsMaintenanceKeys.all() });
@@ -66,9 +76,9 @@ export function useCreateMaintenanceWindow() {
 export function useUpdateMaintenanceWindow() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...payload }: UpdateMaintenanceWindowPayload & { id: string }) => {
-      const { data } = await keepApi.put<{ data: AIOpsMaintenanceWindow }>(`/maintenance/${id}`, payload);
-      return data.data;
+    mutationFn: async ({ id, ...payload }: UpdateMaintenanceRulePayload) => {
+      const { data } = await keepApi.put<AIOpsMaintenanceRule>(`/maintenance/${id}`, payload);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: aiopsMaintenanceKeys.all() });
@@ -79,7 +89,7 @@ export function useUpdateMaintenanceWindow() {
 export function useDeleteMaintenanceWindow() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
+    mutationFn: async ({ id }: { id: number }) => {
       await keepApi.delete(`/maintenance/${id}`);
     },
     onSuccess: () => {

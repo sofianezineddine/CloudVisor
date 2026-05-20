@@ -49,7 +49,7 @@ export default function Extraction() {
         </div>
         <div>
           <Button
-            color="orange"
+            color="blue"
             size="md"
             type="submit"
             onClick={() => setIsSidePanelOpen(true)}
@@ -82,7 +82,7 @@ export default function Extraction() {
             ) : (
               <EmptyStateCard icon={ExportIcon} title="No extraction rules yet">
                 <Button
-                  color="orange"
+                  color="blue"
                   size="md"
                   type="submit"
                   onClick={() => setIsSidePanelOpen(true)}

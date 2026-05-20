@@ -25,7 +25,7 @@ export function ActionTraySelection({ onClose }: ActionTraySelectionProps) {
         <Switch
           checked={showActionsOnHover}
           onChange={setShowActionsOnHover}
-          color="orange"
+          color="blue"
         />
       </div>
     </div>

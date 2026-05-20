@@ -10,7 +10,7 @@ export const useWorkflows = (options?: SWRConfiguration) => {
   const api = useApi();
 
   const swr = useSWRImmutable<Workflow[]>(
-    api.isReady() ? "/aiops/workflows" : null,
+    api.isReady() ? "/workflows" : null,
     (url) => api.get(url),
     options
   );

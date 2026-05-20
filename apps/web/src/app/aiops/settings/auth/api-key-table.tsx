@@ -68,7 +68,7 @@ export function APIKeysTable({
               <CopyBlock {...getCopyBlockProps(key.secret)} />
             </TableCell>
             <TableCell className="text-left">
-              <Badge color="orange">{key.role || "N/A"}</Badge>
+              <Badge color="blue">{key.role || "N/A"}</Badge>
             </TableCell>
             <TableCell className="text-left">
               <Text>{key.created_by}</Text>
@@ -85,7 +85,7 @@ export function APIKeysTable({
                   tooltip="Regenerate key"
                   icon={UpdateIcon}
                   variant="light"
-                  color="orange"
+                  color="blue"
                   onClick={(e) =>
                     !isDisabled && onRegenerate(key.reference_id, e)
                   }
@@ -95,7 +95,7 @@ export function APIKeysTable({
                   tooltip="Delete key"
                   icon={TrashIcon}
                   variant="light"
-                  color="orange"
+                  color="blue"
                   onClick={(e) => !isDisabled && onDelete(key.reference_id, e)}
                   disabled={isDisabled}
                 />

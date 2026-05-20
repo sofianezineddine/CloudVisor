@@ -35,13 +35,10 @@ export interface AIOpsIncidentFilters {
 }
 
 interface PaginatedResponse<T> {
-  data: {
-    items: T[];
-    total: number;
-    page: number;
-    page_size: number;
-  };
-  meta?: { request_id?: string; took_ms?: number };
+  limit: number;
+  offset: number;
+  count: number;
+  items: T[];
 }
 
 // ─── Query key factory ────────────────────────────────────────────────────────
@@ -60,12 +57,14 @@ export function useAIOpsIncidents(filters: AIOpsIncidentFilters = {}) {
     queryKey: aiopsIncidentKeys.list(filters),
     queryFn: async () => {
       const params: Record<string, string> = {};
-      if (filters.page) params.page = String(filters.page);
-      if (filters.page_size) params.page_size = String(filters.page_size);
+      const pageSize = filters.page_size || 25;
+      const page = filters.page || 1;
+      params.limit = String(pageSize);
+      params.offset = String((page - 1) * pageSize);
       if (filters.status) params.status = filters.status;
       if (filters.severity) params.severity = filters.severity;
 
-      const { data } = await keepApi.get<PaginatedResponse<AIOpsIncident>>('/aiops/incidents', { params });
+      const { data } = await keepApi.get<PaginatedResponse<AIOpsIncident>>('/incidents', { params });
       return data;
     },
     staleTime: 30_000,
@@ -76,8 +75,8 @@ export function useAIOpsIncident(id: string | null) {
   return useQuery({
     queryKey: aiopsIncidentKeys.detail(id ?? ''),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: AIOpsIncidentDetail }>(`/incidents/${id}`);
-      return data.data;
+      const { data } = await keepApi.get<AIOpsIncidentDetail>(`/incidents/${id}`);
+      return data;
     },
     enabled: !!id,
     staleTime: 30_000,
@@ -88,7 +87,7 @@ export function useUpdateIncidentStatus() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { data } = await keepApi.put<{ data: AIOpsIncident }>(`/incidents/${id}/status`, { status });
+      const { data } = await keepApi.post<{ data: AIOpsIncident }>(`/incidents/${id}/status`, { status });
       return data.data;
     },
     onSuccess: (_, { id }) => {
@@ -102,7 +101,7 @@ export function useCreateIncident() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { title: string; alert_ids: string[]; severity?: string }) => {
-      const { data } = await keepApi.post<{ data: AIOpsIncident }>('/aiops/incidents', payload);
+      const { data } = await keepApi.post<{ data: AIOpsIncident }>('/incidents', payload);
       return data.data;
     },
     onSuccess: () => {

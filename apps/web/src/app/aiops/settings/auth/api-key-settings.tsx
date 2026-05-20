@@ -108,7 +108,7 @@ export default function ApiKeySettings({ selectedTab }: Props) {
 
         <div>
           <Button
-            color="orange"
+            color="blue"
             size="md"
             icon={KeyIcon}
             onClick={() => setApiKeyModalOpen(true)}
@@ -156,7 +156,7 @@ export default function ApiKeySettings({ selectedTab }: Props) {
                     <CopyBlock {...getCopyBlockProps(key.secret)} />
                   </TableCell>
                   <TableCell className="text-left">
-                    <Badge color="orange">{key.role || "N/A"}</Badge>
+                    <Badge color="blue">{key.role || "N/A"}</Badge>
                   </TableCell>
                   <TableCell className="text-left">
                     <Text>{key.created_by}</Text>
@@ -173,14 +173,14 @@ export default function ApiKeySettings({ selectedTab }: Props) {
                         tooltip="Regenerate key"
                         icon={UpdateIcon}
                         variant="light"
-                        color="orange"
+                        color="blue"
                         onClick={(e) => handleRegenerate(key.reference_id, e)}
                       />
                       <Button
                         tooltip="Delete key"
                         icon={TrashIcon}
                         variant="light"
-                        color="orange"
+                        color="blue"
                         onClick={(e) => handleDelete(key.reference_id, e)}
                       />
                     </div>

@@ -116,7 +116,7 @@ export function SeverityMappingFacet({
                   <Button
                     size="xs"
                     variant="light"
-                    color="orange"
+                    color="blue"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (isExclusive) {

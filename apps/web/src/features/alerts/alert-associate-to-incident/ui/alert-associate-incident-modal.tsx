@@ -110,7 +110,7 @@ export const AlertAssociateIncidentModal = ({
 
           <Button
             className="flex-1"
-            color="orange"
+            color="blue"
             onClick={showCreateIncidentForm}
           >
             Create a new incident
@@ -148,7 +148,7 @@ export const AlertAssociateIncidentModal = ({
         <div className="flex items-center justify-between gap-6">
           <Button
             className="flex-1"
-            color="orange"
+            color="blue"
             onClick={handleAssociateAlerts}
             disabled={!selectedIncidentInstance}
           >
@@ -157,7 +157,7 @@ export const AlertAssociateIncidentModal = ({
 
           <Button
             className="flex-1"
-            color="orange"
+            color="blue"
             variant="secondary"
             onClick={showCreateIncidentForm}
           >

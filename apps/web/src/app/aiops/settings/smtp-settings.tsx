@@ -243,7 +243,7 @@ export default function SMTPSettingsForm({ selectedTab }: Props) {
             value={settings.host}
             onChange={handleChange}
             placeholder="smtp.example.com"
-            color="orange"
+            color="blue"
             error={!!errors.host}
           />
           <label className="block text-sm font-medium mb-1 text-gray-500">
@@ -264,7 +264,7 @@ export default function SMTPSettingsForm({ selectedTab }: Props) {
             name="port"
             value={settings.port.toString()}
             onChange={handleChange}
-            color="orange"
+            color="blue"
             error={!!errors.port}
           />
           <label className="block text-sm font-medium mb-1 text-gray-500">
@@ -288,7 +288,7 @@ export default function SMTPSettingsForm({ selectedTab }: Props) {
             name="from_email"
             value={settings.from_email}
             onChange={handleChange}
-            color="orange"
+            color="blue"
             error={!!errors.from_email}
             placeholder="keepserver@example.com"
           />
@@ -310,7 +310,7 @@ export default function SMTPSettingsForm({ selectedTab }: Props) {
             name="username"
             value={settings.username}
             onChange={handleChange}
-            color="orange"
+            color="blue"
             error={!!errors.username}
           />
           <label className="block text-sm font-medium mb-1 text-gray-500">
@@ -328,7 +328,7 @@ export default function SMTPSettingsForm({ selectedTab }: Props) {
             name="password"
             value={settings.password}
             onChange={handleChange}
-            color="orange"
+            color="blue"
             error={!!errors.password}
           />
           <label className="block text-sm font-medium mb-1 text-gray-500">
@@ -352,12 +352,12 @@ export default function SMTPSettingsForm({ selectedTab }: Props) {
 
         <div className="flex flex-col justify-end space-y-2 mt-6">
           <div className="flex justify-end space-x-2">
-            <Button onClick={onSave} color="orange" className="px-4 py-2">
+            <Button onClick={onSave} color="blue" className="px-4 py-2">
               Save
             </Button>
             <Button
               onClick={onDelete}
-              color="orange"
+              color="blue"
               className="px-4 py-2"
               disabled={!smtpInstalled}
             >
@@ -392,7 +392,7 @@ export default function SMTPSettingsForm({ selectedTab }: Props) {
             value={settings.to_email}
             onChange={handleChange}
             placeholder="recipient@example.com"
-            color="orange"
+            color="blue"
             error={!!errors.to_email}
           />
           <label className="block text-sm font-medium mb-1 text-gray-500">
@@ -403,7 +403,7 @@ export default function SMTPSettingsForm({ selectedTab }: Props) {
           )}
         </div>
         <div className="flex justify-end space-x-2 mt-6">
-          <Button onClick={onTest} color="orange" className="px-4 py-2">
+          <Button onClick={onTest} color="blue" className="px-4 py-2">
             Test
           </Button>
         </div>

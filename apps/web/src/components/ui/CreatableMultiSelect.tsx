@@ -59,14 +59,14 @@ type CustomSelectProps = SelectProps<OptionType, true, GroupBase<OptionType>> & 
 const customComponents: CustomSelectProps['components'] = {
   Option: ({ children, ...props }) => (
     <components.Option {...props}>
-      <Badge color="orange" size="sm">
+      <Badge color="blue" size="sm">
         {children}
       </Badge>
     </components.Option>
   ),
   MultiValue: ({ children, ...props }) => (
     <components.MultiValue {...props}>
-      <Badge color="orange" size="sm">
+      <Badge color="blue" size="sm">
         {children}
       </Badge>
     </components.MultiValue>

@@ -110,10 +110,10 @@ export function SplitIncidentAlertsModal({
         </div>
       </div>
       <div className="flex justify-end mt-4 gap-2">
-        <Button onClick={handleClose} color="orange" variant="secondary">
+        <Button onClick={handleClose} color="blue" variant="secondary">
           Cancel
         </Button>
-        <Button onClick={handleSplit} color="orange">
+        <Button onClick={handleSplit} color="blue">
           Confirm split
         </Button>
       </div>

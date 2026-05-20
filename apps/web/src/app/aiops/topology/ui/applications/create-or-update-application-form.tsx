@@ -237,7 +237,7 @@ export function CreateOrUpdateApplicationForm({
         )}
         <div className="flex flex-1 justify-end gap-2">
           <Button
-            color="orange"
+            color="blue"
             size="xs"
             variant="secondary"
             onClick={onCancel}
@@ -245,7 +245,7 @@ export function CreateOrUpdateApplicationForm({
             Cancel
           </Button>
           <Button
-            color="orange"
+            color="blue"
             size="xs"
             variant="primary"
             type="submit"

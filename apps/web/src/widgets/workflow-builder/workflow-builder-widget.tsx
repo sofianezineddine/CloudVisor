@@ -104,7 +104,7 @@ export function WorkflowBuilderWidget({
             {!workflowRaw && (
               <>
                 <Button
-                  color="orange"
+                  color="blue"
                   size="md"
                   onClick={loadWorkflow}
                   className="min-w-28"
@@ -126,7 +126,7 @@ export function WorkflowBuilderWidget({
             {isInitialized && <WorkflowEnabledSwitch />}
             {workflowRaw && (
               <Button
-                color="orange"
+                color="blue"
                 size="md"
                 onClick={() => setIsEditModalOpen(true)}
                 icon={PencilIcon}
@@ -144,7 +144,7 @@ export function WorkflowBuilderWidget({
               data-testid="wf-builder-main-test-run-button"
             />
             <Button
-              color="orange"
+              color="blue"
               size="md"
               className="min-w-28 relative disabled:opacity-70"
               disabled={!canDeploy || isSaving || !isEditorSyncedWithNodes}

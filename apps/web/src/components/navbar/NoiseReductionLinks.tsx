@@ -117,7 +117,7 @@ export const NoiseReductionLinks = ({ session }: NoiseReductionLinksProps) => {
           disabledConfigKey={noiseReductionKeys.HIDE_NAVBAR_CORRELATION}
         >
           <li>
-            <LinkWithIcon href="/aiops/rules" icon={Rules} testId="rules">
+            <LinkWithIcon href="/rules" icon={Rules} testId="rules">
               <Subtitle className="text-xs">Correlations</Subtitle>
             </LinkWithIcon>
           </li>
@@ -126,7 +126,7 @@ export const NoiseReductionLinks = ({ session }: NoiseReductionLinksProps) => {
           disabledConfigKey={noiseReductionKeys.HIDE_NAVBAR_WORKFLOWS}
         >
           <li>
-            <LinkWithIcon href="/aiops/workflows" icon={Workflows} testId="workflows">
+            <LinkWithIcon href="/workflows" icon={Workflows} testId="workflows">
               <Subtitle className="text-xs">Workflows</Subtitle>
             </LinkWithIcon>
           </li>
@@ -137,7 +137,7 @@ export const NoiseReductionLinks = ({ session }: NoiseReductionLinksProps) => {
         >
           <li>
             <LinkWithIcon
-              href="/aiops/topology"
+              href="/topology"
               icon={TbTopologyRing}
               isBeta={!topologyData || topologyData.length === 0}
               count={
@@ -153,7 +153,7 @@ export const NoiseReductionLinks = ({ session }: NoiseReductionLinksProps) => {
           disabledConfigKey={noiseReductionKeys.HIDE_NAVBAR_MAPPING}
         >
           <li>
-            <LinkWithIcon href="/aiops/mapping" icon={Mapping} testId="mapping">
+            <LinkWithIcon href="/mapping" icon={Mapping} testId="mapping">
               <Subtitle className="text-xs">Mapping</Subtitle>
             </LinkWithIcon>
           </li>
@@ -163,7 +163,7 @@ export const NoiseReductionLinks = ({ session }: NoiseReductionLinksProps) => {
         >
           <li>
             <LinkWithIcon
-              href="/aiops/extraction"
+              href="/extraction"
               icon={ExportIcon}
               testId="extraction"
             >
@@ -176,7 +176,7 @@ export const NoiseReductionLinks = ({ session }: NoiseReductionLinksProps) => {
         >
           <li>
             <LinkWithIcon
-              href="/aiops/maintenance"
+              href="/maintenance"
               icon={FaVolumeMute}
               testId="maintenance"
             >

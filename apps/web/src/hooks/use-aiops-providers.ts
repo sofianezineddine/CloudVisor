@@ -35,8 +35,13 @@ export function useAIOpsProviders() {
   return useQuery({
     queryKey: aiopsProviderKeys.list(),
     queryFn: async () => {
-      const { data } = await keepApi.get<{ data: AIOpsProvider[] }>('/aiops/providers');
-      return data.data;
+      const { data } = await keepApi.get<{
+        providers: unknown[];
+        installed_providers: AIOpsProvider[];
+        linked_providers: AIOpsProvider[];
+        is_localhost: boolean;
+      }>('/providers');
+      return [...data.installed_providers, ...data.linked_providers];
     },
     staleTime: 30_000,
   });
@@ -46,7 +51,12 @@ export function useInstallProvider() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ type, config }: { type: string; config: Record<string, unknown> }) => {
-      const { data } = await keepApi.post<{ data: AIOpsProvider }>(`/providers/${type}/install`, config);
+      const { data } = await keepApi.post<{ data: AIOpsProvider }>('/providers/install', {
+        provider_type: type,
+        provider_id: type,
+        provider_name: (config.name as string) || type,
+        ...config,
+      });
       return data.data;
     },
     onSuccess: () => {
@@ -58,7 +68,7 @@ export function useInstallProvider() {
 export function useTestProvider() {
   return useMutation({
     mutationFn: async ({ id }: { id: string }) => {
-      const { data } = await keepApi.post<{ data: ProviderTestResult }>(`/providers/${id}/test`);
+      const { data } = await keepApi.post<{ data: ProviderTestResult }>(`/providers/${id}/scopes`);
       return data.data;
     },
   });
@@ -67,8 +77,8 @@ export function useTestProvider() {
 export function useDeleteProvider() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
-      await keepApi.delete(`/providers/${id}`);
+    mutationFn: async ({ type, id }: { type: string; id: string }) => {
+      await keepApi.delete(`/providers/${type}/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: aiopsProviderKeys.all() });

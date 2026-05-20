@@ -39,7 +39,7 @@ export function useTopologyApplications(
   const addApplication = useCallback(
     async (application: Omit<TopologyApplication, "id">) => {
       try {
-        const result = await api.post("/aiops/topology/applications", application);
+        const result = await api.post("/topology/applications", application);
         revalidateMultiple([TOPOLOGY_URL, TOPOLOGY_APPLICATIONS_URL]);
         return result as TopologyApplication;
       } catch (error) {

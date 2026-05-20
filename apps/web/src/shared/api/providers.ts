@@ -174,5 +174,5 @@ export type ProviderFormData = Record<string, ProviderFormValue>;
 export type ProviderInputErrors = Record<string, string>;
 
 export const getProviders = async (api: ApiClient) => {
-  return await api.get<ProvidersResponse>("/aiops/providers");
+  return await api.get<ProvidersResponse>("/providers");
 };

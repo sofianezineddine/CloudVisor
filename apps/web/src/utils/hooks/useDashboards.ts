@@ -11,7 +11,7 @@ export const useDashboards = () => {
   const api = useApi();
 
   const { data, error, mutate } = useSWR<Dashboard[]>(
-    api.isReady() ? "/aiops/dashboard" : null,
+    api.isReady() ? "/dashboard" : null,
     (url: string) => api.get(url),
     {
       revalidateOnFocus: false,

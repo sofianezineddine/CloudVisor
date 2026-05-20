@@ -145,7 +145,7 @@ export default function CreateApiKeyModal({
 
         {/* Submit and Cancel Buttons */}
         <div className="mt-6 flex gap-2">
-          <Button color="orange" type="submit">
+          <Button color="blue" type="submit">
             Create API Key{" "}
           </Button>
           <Button

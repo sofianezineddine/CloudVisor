@@ -35,7 +35,7 @@ export const useRules = (options?: SWRConfiguration) => {
   const api = useApi();
 
   return useSWR<Rule[]>(
-    api.isReady() ? "/aiops/rules" : null,
+    api.isReady() ? "/rules" : null,
     (url) => api.get(url),
     options
   );

@@ -29,10 +29,10 @@ const AIOpsWSContext = createContext<AIOpsWSContextValue>({
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SOKETI_HOST = process.env.NEXT_PUBLIC_SOKETI_HOST || 'localhost';
-const SOKETI_PORT = Number(process.env.NEXT_PUBLIC_SOKETI_PORT || '6001');
-const SOKETI_KEY = process.env.NEXT_PUBLIC_SOKETI_KEY || 'cv-soketi-key';
-const SOKETI_CLUSTER = process.env.NEXT_PUBLIC_SOKETI_CLUSTER || 'mt1';
+const PUSHER_HOST = process.env.NEXT_PUBLIC_PUSHER_HOST || process.env.NEXT_PUBLIC_SOKETI_HOST || 'localhost';
+const PUSHER_PORT = Number(process.env.NEXT_PUBLIC_PUSHER_PORT || process.env.NEXT_PUBLIC_SOKETI_PORT || '6001');
+const PUSHER_KEY = process.env.NEXT_PUBLIC_PUSHER_KEY || process.env.NEXT_PUBLIC_SOKETI_KEY || 'cloudvisor-key';
+const PUSHER_CLUSTER = process.env.NEXT_PUBLIC_SOKETI_CLUSTER || 'mt1';
 
 const API_GATEWAY_BASE_URL =
   process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
@@ -57,14 +57,14 @@ export function AIOpsWSProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const channelName = `private-org.${user.organization_id}.aiops`;
+    const channelName = `private-${user.organization_id}`;
 
     // Initialize Pusher with Soketi configuration
-    const pusher = new Pusher(SOKETI_KEY, {
-      wsHost: SOKETI_HOST,
-      wsPort: SOKETI_PORT,
-      wssPort: SOKETI_PORT,
-      cluster: SOKETI_CLUSTER,
+    const pusher = new Pusher(PUSHER_KEY, {
+      wsHost: PUSHER_HOST,
+      wsPort: PUSHER_PORT,
+      wssPort: PUSHER_PORT,
+      cluster: PUSHER_CLUSTER,
       forceTLS: false,
       enabledTransports: ['ws', 'wss'],
       authEndpoint: `${API_GATEWAY_BASE_URL}/v1/keep/pusher/auth`,

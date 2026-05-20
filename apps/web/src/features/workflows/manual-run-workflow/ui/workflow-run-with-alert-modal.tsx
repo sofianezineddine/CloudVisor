@@ -215,7 +215,7 @@ export function AlertTriggerModal({
           <Button
             variant="light"
             icon={PlusIcon}
-            color="orange"
+            color="blue"
             onClick={handleAddField}
           >
             Add another field
@@ -230,7 +230,7 @@ export function AlertTriggerModal({
           >
             Cancel
           </Button>
-          <Button color="orange" type="submit">
+          <Button color="blue" type="submit">
             Run workflow
           </Button>
         </div>

@@ -31,7 +31,7 @@ export function EmptyStateTable({
             </p>
             <Button
               className="mt-4"
-              color="orange"
+              color="blue"
               onClick={() => window.open(documentationURL, "_blank")}
             >
               View Documentation

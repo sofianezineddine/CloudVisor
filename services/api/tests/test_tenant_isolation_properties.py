@@ -187,7 +187,7 @@ class TestTenantDataIsolationProperty:
         """
         tenant_a, tenant_b = tenant_pair
 
-        # Simulate middleware tenant extraction (mirrors tenant_middleware.py logic)
+        # Simulate middleware tenant extraction (mirrors Keep's NoAuthVerifier logic)
         request_a = MockRequest(
             headers={"X-Tenant-ID": tenant_a},
             path=path,
