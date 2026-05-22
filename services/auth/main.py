@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+import os
 
 from cloudvisor_utils.config import get_settings
 from cloudvisor_utils.logging_utils import configure_logging, get_logger
@@ -60,6 +61,24 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["*"],
     )
+
+    # ── Security response headers ─────────────────────────────────────────────
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    class AuthSecurityHeaders(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            response = await call_next(request)
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            if os.environ.get("APP_ENVIRONMENT") == "production":
+                response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            return response
+
+    app.add_middleware(AuthSecurityHeaders)
 
     if settings.otel.enabled:
         setup_tracing(

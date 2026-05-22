@@ -95,7 +95,7 @@ jest.mock("@/features/alerts/enrich-alert", () => ({
     isOpen ? <div data-testid="enrich-sidebar" /> : null,
 }));
 
-jest.mock("@/app/(keep)/not-found", () => ({
+jest.mock("@/app/aiops/not-found", () => ({
   __esModule: true,
   default: () => <div>Not Found</div>,
 }));

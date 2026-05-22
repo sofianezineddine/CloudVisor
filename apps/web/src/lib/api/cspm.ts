@@ -159,8 +159,9 @@ export interface ComplianceFramework {
 // ─── Core fetch ───────────────────────────────────────────────────────────────
 
 async function gw<T>(path: string, options?: RequestInit, _retry = true): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const token = typeof window !== 'undefined' ? null /* HttpOnly cookie */ : null;
   const res = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -170,20 +171,21 @@ async function gw<T>(path: string, options?: RequestInit, _retry = true): Promis
 
   // Auto-refresh on 401
   if (res.status === 401 && _retry) {
-    const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+    const refreshToken = typeof window !== 'undefined' ? null /* HttpOnly cookie */ : null;
     if (refreshToken) {
       try {
         const authBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
         const refreshRes = await fetch(`${authBase}/auth/refresh`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh_token: refreshToken }),
         });
         if (refreshRes.ok) {
           const data = await refreshRes.json();
           if (data.access_token && data.refresh_token) {
-            localStorage.setItem('access_token', data.access_token);
-            localStorage.setItem('refresh_token', data.refresh_token);
+            /* tokens in HttpOnly cookies */;
+            /* tokens in HttpOnly cookies */;
             return gw<T>(path, options, false);
           }
         }
@@ -192,8 +194,8 @@ async function gw<T>(path: string, options?: RequestInit, _retry = true): Promis
       }
     }
     // Session unrecoverable
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    /* cleared by server */;
+    /* cleared by server */;
     localStorage.removeItem('cloudvisor-user');
     if (typeof window !== 'undefined') {
       window.location.href = '/login?error=session_expired';

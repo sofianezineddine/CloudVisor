@@ -10,12 +10,12 @@ const API_GATEWAY_BASE_URL =
 
 function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('access_token');
+  return null /* HttpOnly cookie */;
 }
 
 function getRefreshToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('refresh_token');
+  return null /* HttpOnly cookie */;
 }
 
 /** Silent token refresh on 401. */
@@ -26,14 +26,15 @@ async function silentRefresh(): Promise<string | null> {
     const authBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
     const res = await fetch(`${authBase}/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
     if (!res.ok) return null;
     const data = await res.json();
     if (data.access_token && data.refresh_token) {
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('refresh_token', data.refresh_token);
+      /* tokens in HttpOnly cookies */;
+      /* tokens in HttpOnly cookies */;
       return data.access_token;
     }
     return null;
@@ -47,6 +48,7 @@ async function policyFetch(endpoint: string, options: RequestInit = {}, _retry =
   const token = getAccessToken();
 
   const response = await fetch(url, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -59,8 +61,8 @@ async function policyFetch(endpoint: string, options: RequestInit = {}, _retry =
   if (response.status === 401 && _retry) {
     const newToken = await silentRefresh();
     if (newToken) return policyFetch(endpoint, options, false);
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    /* cleared by server */;
+    /* cleared by server */;
     if (typeof window !== 'undefined') window.location.href = '/login?error=session_expired';
     throw new Error('Session expired');
   }

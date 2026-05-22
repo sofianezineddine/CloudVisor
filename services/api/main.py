@@ -109,8 +109,9 @@ def create_app() -> FastAPI:
     )
 
     # ── Security headers ──────────────────────────────────────────────────────
-    from app.middleware.security import SecurityHeadersMiddleware
+    from app.middleware.security import SecurityHeadersMiddleware, CSRFMiddleware
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(CSRFMiddleware)
 
     # ── Request ID + timing + rate-limit headers middleware ───────────────────
     @app.middleware("http")

@@ -10,7 +10,7 @@ const CONNECTOR_BASE_URL = process.env.NEXT_PUBLIC_CONNECTOR_BASE_URL || 'http:/
 /** Read the access token from localStorage (set by use-auth.tsx on login). */
 function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('access_token');
+  return null /* HttpOnly cookie */;
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -214,6 +214,7 @@ async function connectorFetch(
   const token = getAccessToken();
 
   const response = await fetch(url, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       // Always send the JWT so the connector can extract org_id for tenant isolation

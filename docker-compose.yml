@@ -647,6 +647,42 @@ services:
           cpus: "2.0"
           memory: 1G
 
+  # ─── CloudVisor Web Frontend (port 3000) ──────────────────────────────────
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: cv-web
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE_URL: http://cv-auth:8002
+      NEXT_PUBLIC_API_GATEWAY_URL: http://cv-api:8005
+      NEXT_PUBLIC_CONNECTOR_BASE_URL: http://cv-connector:8000
+      NEXT_PUBLIC_GRAPH_SERVICE_URL: http://cv-graph:8001
+      NEXT_PUBLIC_POLICY_SERVICE_URL: http://cv-policy:8003
+      NEXT_PUBLIC_ALERT_SERVICE_URL: http://cv-alert:8004
+      NEXT_PUBLIC_CSPM_SERVICE_URL: http://cv-cspm:8006
+      NEXT_PUBLIC_COPILOT_URL: http://cv-copilot:8010
+      NEXT_PUBLIC_API_URL_CLIENT: http://localhost:8005/v1/keep
+      NEXT_PUBLIC_PUSHER_KEY: cloudvisor-key
+      NEXT_PUBLIC_PUSHER_HOST: localhost
+      NEXT_PUBLIC_PUSHER_PORT: "6001"
+      API_URL: http://cv-keep:8007
+    depends_on:
+      - api-service
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
 volumes:
   esdata1:
   postgres_data:

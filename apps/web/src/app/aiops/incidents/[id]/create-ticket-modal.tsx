@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Button, Text, Select, SelectItem, TextInput, Textarea } from "@tremor/react";
 import Modal from "@/components/ui/Modal";
 import { DynamicImageProviderIcon } from "@/components/ui";
-import { useFetchProviders } from "@/app/(keep)/providers/page.client";
+import { useFetchProviders } from "@/app/aiops/providers/page.client";
 import { type IncidentDto } from "@/entities/incidents/model";
 import { type Provider } from "@/shared/api/providers";
 import { getProviderBaseUrl, getTicketCreateUrl, canCreateTickets } from "@/entities/incidents/lib/ticketing-utils";

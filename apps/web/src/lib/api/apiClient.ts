@@ -19,33 +19,26 @@ const AUTH_BASE_URL =
 
 /** Read the access token from localStorage (set by use-auth.tsx on login). */
 function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('access_token');
+  // No longer needed — auth is via HttpOnly cookies
+  return null;
 }
 
 function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('refresh_token');
+  // No longer needed — refresh is via HttpOnly cookie
+  return null;
 }
 
-/** Attempt a silent token refresh. Returns the new access token or null. */
+/** Attempt a silent token refresh via cookie. */
 async function silentRefresh(): Promise<string | null> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
   try {
     const res = await fetch(`${AUTH_BASE_URL}/auth/refresh`, {
       method: 'POST',
+      credentials: 'include', // Send cv_refresh cookie
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: JSON.stringify({}),
     });
     if (!res.ok) return null;
-    const data = await res.json();
-    if (data.access_token && data.refresh_token) {
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('refresh_token', data.refresh_token);
-      return data.access_token;
-    }
-    return null;
+    return 'refreshed'; // Server set new cookies
   } catch {
     return null;
   }
@@ -53,8 +46,6 @@ async function silentRefresh(): Promise<string | null> {
 
 /** Clear tokens and redirect to login. */
 function forceLogout(): void {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
   localStorage.removeItem('cloudvisor-user');
   if (typeof window !== 'undefined') {
     window.location.href = '/login?error=session_expired';
@@ -160,26 +151,32 @@ async function apiFetch<T = unknown>(
   _retry = true,
 ): Promise<T> {
   const url = `${API_GATEWAY_BASE_URL}${endpoint}`;
-  const token = getAccessToken();
+
+  // Add CSRF token for state-changing requests
+  const method = (options.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...options.headers as Record<string, string>,
+  };
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && typeof document !== 'undefined') {
+    const csrfMatch = document.cookie.match(/(?:^|; )cv_csrf=([^;]*)/);
+    if (csrfMatch) headers['X-CSRF-Token'] = decodeURIComponent(csrfMatch[1]);
+  }
 
   const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
+    credentials: 'include', // Send HttpOnly cookies
+    headers,
     ...options,
   });
 
   // ── Auto-refresh on 401 ───────────────────────────────────────────────────
   if (response.status === 401 && _retry) {
-    const newToken = await silentRefresh();
-    if (newToken) {
-      // Retry once with the new token
+    const refreshed = await silentRefresh();
+    if (refreshed) {
+      // Retry once — server set new cookies
       return apiFetch<T>(endpoint, options, false);
     }
-    // Refresh failed — session is dead, force logout
-    forceLogout();
+    // Don't clear tokens — let AuthProvider handle session state
     throw new Error('Session expired. Please sign in again.');
   }
 

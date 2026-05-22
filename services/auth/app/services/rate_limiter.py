@@ -64,6 +64,63 @@ class RateLimiter:
             window_seconds=3600,
         )
 
+    # ─── Account Lockout ──────────────────────────────────────────────────────
+
+    async def record_failed_login(self, email: str) -> int:
+        """
+        Record a failed login attempt for an account.
+        Returns the current failure count.
+        
+        After 5 failed attempts, the account is locked for 15 minutes.
+        After 10 failed attempts, locked for 1 hour.
+        After 20 failed attempts, locked for 24 hours.
+        """
+        key = f"lockout:failures:{email}"
+        try:
+            pipe = self._redis.pipeline()
+            pipe.incr(key)
+            pipe.expire(key, 86400)  # Track failures for 24 hours
+            results = await pipe.execute()
+            count = results[0]
+
+            # Set lockout based on failure count
+            if count >= 20:
+                await self._redis.setex(f"lockout:locked:{email}", 86400, "1")  # 24 hours
+            elif count >= 10:
+                await self._redis.setex(f"lockout:locked:{email}", 3600, "1")  # 1 hour
+            elif count >= 5:
+                await self._redis.setex(f"lockout:locked:{email}", 900, "1")  # 15 minutes
+
+            return count
+        except Exception as e:
+            logger.warning(f"Account lockout Redis error: {e}")
+            return 0
+
+    async def is_account_locked(self, email: str) -> bool:
+        """Check if an account is currently locked due to failed login attempts."""
+        try:
+            locked = await self._redis.get(f"lockout:locked:{email}")
+            return locked is not None
+        except Exception as e:
+            logger.warning(f"Account lockout check Redis error: {e}")
+            return False
+
+    async def clear_failed_logins(self, email: str) -> None:
+        """Clear failed login counter on successful login."""
+        try:
+            await self._redis.delete(f"lockout:failures:{email}")
+            await self._redis.delete(f"lockout:locked:{email}")
+        except Exception as e:
+            logger.warning(f"Clear lockout Redis error: {e}")
+
+    async def get_lockout_remaining(self, email: str) -> int | None:
+        """Get remaining lockout time in seconds, or None if not locked."""
+        try:
+            ttl = await self._redis.ttl(f"lockout:locked:{email}")
+            return ttl if ttl > 0 else None
+        except Exception:
+            return None
+
     async def _check(self, key: str, limit: int, window_seconds: int) -> bool:
         """
         Sliding window counter using Redis INCR + EXPIRE.

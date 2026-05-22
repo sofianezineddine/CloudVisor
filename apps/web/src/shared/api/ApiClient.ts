@@ -38,56 +38,19 @@ export class ApiClient {
   }
 
   getHeaders() {
-    // CloudVisor integration: get token from session or localStorage
-    let token = this.session?.accessToken;
-    if (!token && typeof window !== 'undefined') {
-      token = localStorage.getItem('access_token') || '';
-    }
-
     const headers: Record<string, any> = {
       'X-Tenant-ID': 'keep',
       ...this.additionalHeaders,
     };
 
-    if (token && token !== "unauthenticated") {
-      headers.Authorization = `Bearer ${token}`;
-    }
+    // CSRF token for state-changing requests (read from non-HttpOnly cv_csrf cookie)
+    // Note: actual auth token is sent via HttpOnly cookie automatically
 
     return headers;
   }
 
   getToken() {
     return this.session?.accessToken;
-  }
-
-  /**
-   * Attempt to refresh the access token using the stored refresh token.
-   * Returns true if refresh succeeded, false otherwise.
-   */
-  private async attemptTokenRefresh(): Promise<boolean> {
-    try {
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken) return false;
-
-      const authBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
-      const res = await fetch(`${authBaseUrl}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      });
-
-      if (!res.ok) return false;
-
-      const data = await res.json();
-      if (data.access_token && data.refresh_token) {
-        localStorage.setItem('access_token', data.access_token);
-        localStorage.setItem('refresh_token', data.refresh_token);
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
   }
 
   getApiBaseUrl() {
@@ -108,18 +71,10 @@ export class ApiClient {
       if (response.headers.get("content-type")?.includes("application/json")) {
         const data = await response.json();
         if (response.status === 401) {
-          // on server, middleware will handle the sign out
-          if (!this.isServer) {
-            // CloudVisor auth: attempt silent token refresh
-            const refreshed = await this.attemptTokenRefresh();
-            if (!refreshed) {
-              // Refresh failed — clear session and redirect to login
-              localStorage.removeItem('access_token');
-              localStorage.removeItem('refresh_token');
-              localStorage.removeItem('cloudvisor-user');
-              window.location.href = '/login?error=session_expired';
-            }
-          }
+          // Don't clear tokens or redirect — just throw the error.
+          // The AuthProvider manages session state independently.
+          // A 401 from the Keep API gateway doesn't necessarily mean
+          // the session is invalid (could be a transient auth service issue).
           throw new KeepApiError(
             `${data.message || data.detail}`,
             url,
@@ -195,12 +150,18 @@ export class ApiClient {
       : getApiUrlFromConfig(this.config);
     const fullUrl = apiUrl + url;
 
+    // Add CSRF token for state-changing requests
+    const method = (requestInit.method || 'GET').toUpperCase();
+    const headers = { ...(this.getHeaders() as HeadersInit), ...requestInit.headers } as Record<string, string>;
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && typeof document !== 'undefined') {
+      const csrfMatch = document.cookie.match(/(?:^|; )cv_csrf=([^;]*)/);
+      if (csrfMatch) headers['X-CSRF-Token'] = decodeURIComponent(csrfMatch[1]);
+    }
+
     const response = await fetch(fullUrl, {
       ...requestInit,
-      headers: {
-        ...(this.getHeaders() as HeadersInit),
-        ...requestInit.headers,
-      },
+      credentials: 'include', // Send HttpOnly cookies automatically
+      headers,
     });
     return this.handleResponse(response, url);
   }

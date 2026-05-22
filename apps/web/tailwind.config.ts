@@ -127,6 +127,9 @@ const config: Config = {
         'tremor-input': '0 1px 2px 0 rgb(0 0 0 / 0.05)',
         'tremor-card': '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
         'tremor-dropdown': '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+        'dark-tremor-input': '0 1px 2px 0 rgb(0 0 0 / 0.2)',
+        'dark-tremor-card': '0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3)',
+        'dark-tremor-dropdown': '0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3)',
       },
       fontFamily: {
         sans: ['Open Sans', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],

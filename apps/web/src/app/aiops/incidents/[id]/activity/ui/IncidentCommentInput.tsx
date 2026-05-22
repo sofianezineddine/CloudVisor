@@ -8,7 +8,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { User } from "@/app/(keep)/settings/models";
+import { User } from "@/app/aiops/settings/models";
 import ReactQuill, { Quill } from "react-quill-new";
 import { Mention, MentionBlot } from "quill-mention";
 import "react-quill-new/dist/quill.snow.css";

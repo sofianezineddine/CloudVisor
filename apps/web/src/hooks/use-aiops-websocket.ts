@@ -171,7 +171,7 @@ export function useAIOpsWebSocket(
       authEndpoint: `${process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005'}/v1/keep/pusher/auth`,
       auth: {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
+          // Auth via HttpOnly cookies — no Authorization header needed
         },
       },
     });
@@ -202,16 +202,13 @@ export function useAIOpsWebSocket(
     pusher.connection.bind('error', (err: { data?: { code?: number } }) => {
       const code = err?.data?.code;
       if (code === 4001 || code === 4003 || code === 401 || code === 403) {
-        // Auth failure — stop reconnecting, redirect to login
+        // Auth failure — stop reconnecting
         setStatus('error');
         reconnectAttemptRef.current = MAX_RECONNECT_ATTEMPTS;
         if (reconnectTimerRef.current) {
           clearTimeout(reconnectTimerRef.current);
         }
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('cloudvisor-user');
-        window.location.href = '/login?error=session_expired';
+        // Don't clear cookies or redirect — let AuthProvider handle it
       } else {
         setStatus('error');
       }

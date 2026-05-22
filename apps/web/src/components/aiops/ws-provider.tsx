@@ -51,15 +51,10 @@ export function AIOpsWSProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      setStatus('disconnected');
-      return;
-    }
-
     const channelName = `private-${user.organization_id}`;
 
     // Initialize Pusher with Soketi configuration
+    // Auth uses cookies (withCredentials) — no Authorization header needed
     const pusher = new Pusher(PUSHER_KEY, {
       wsHost: PUSHER_HOST,
       wsPort: PUSHER_PORT,
@@ -69,10 +64,10 @@ export function AIOpsWSProvider({ children }: { children: React.ReactNode }) {
       enabledTransports: ['ws', 'wss'],
       authEndpoint: `${API_GATEWAY_BASE_URL}/v1/keep/pusher/auth`,
       auth: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        // Cookies are sent automatically for same-origin requests
+        headers: {},
       },
+      authTransport: 'ajax',
     });
 
     pusherRef.current = pusher;

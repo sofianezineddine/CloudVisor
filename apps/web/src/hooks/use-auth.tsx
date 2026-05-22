@@ -37,30 +37,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 
-// SECURITY NOTE: Tokens are stored in localStorage for compatibility with the
-// current architecture. This is acceptable for a development/demo environment.
-// For production hardening, migrate to httpOnly cookies set by the auth service
-// to eliminate XSS token theft risk. The auth service already supports this via
-// the Set-Cookie header on /auth/login and /auth/refresh.
+// ─── Cookie-based auth ───────────────────────────────────────────────────────
+// Tokens are stored in HttpOnly cookies (set by auth service).
+// JavaScript cannot read them — we use the cv_session cookie to check auth status.
+// localStorage is only used for non-sensitive display data (user name, org).
 
-function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
+function hasSession(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.cookie.includes('cv_session=1');
 }
 
-function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
-}
-
-function setTokens(accessToken: string, refreshToken: string) {
-  // Validate tokens are non-empty strings before storing
-  if (!accessToken || !refreshToken) return;
-  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-}
-
-function clearTokens() {
+function clearLocalUserData() {
+  localStorage.removeItem('cloudvisor-user');
+  // Legacy cleanup — remove any old localStorage tokens
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
@@ -70,51 +59,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
-    const token = getAccessToken();
-    if (!token) {
+    if (!hasSession()) {
       setUser(null);
       return;
     }
 
     try {
-      const userData = await authAPI.getCurrentUser(token);
+      // getCurrentUser uses credentials: 'include' — cookie sent automatically
+      const userData = await authAPI.getCurrentUser();
       setUser(userData);
-      // Persist only non-sensitive user fields needed for org ID resolution.
-      // Do NOT store sensitive fields like mfa_secret or full profile in localStorage.
+      // Store only non-sensitive display data
       if (typeof window !== 'undefined') {
-        const safeUserData = {
+        localStorage.setItem('cloudvisor-user', JSON.stringify({
           id: userData.id,
           organization_id: userData.organization_id,
           organization_name: userData.organization_name,
           role: userData.role,
-        };
-        localStorage.setItem('cloudvisor-user', JSON.stringify(safeUserData));
+        }));
       }
     } catch {
-      const refreshToken = getRefreshToken();
-      if (refreshToken) {
-        try {
-          const tokens = await authAPI.refreshToken(refreshToken);
-          setTokens(tokens.access_token, tokens.refresh_token);
-          const newUserData = await authAPI.getCurrentUser(tokens.access_token);
-          setUser(newUserData);
-          if (typeof window !== 'undefined') {
-            const safeUserData = {
-              id: newUserData.id,
-              organization_id: newUserData.organization_id,
-              organization_name: newUserData.organization_name,
-              role: newUserData.role,
-            };
-            localStorage.setItem('cloudvisor-user', JSON.stringify(safeUserData));
-          }
-        } catch {
-          clearTokens();
-          localStorage.removeItem('cloudvisor-user');
-          setUser(null);
+      // Token might be expired — try refresh (server reads cv_refresh cookie)
+      try {
+        await authAPI.refreshToken();
+        // Refresh succeeded — server set new cookies, retry getCurrentUser
+        const newUserData = await authAPI.getCurrentUser();
+        setUser(newUserData);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cloudvisor-user', JSON.stringify({
+            id: newUserData.id,
+            organization_id: newUserData.organization_id,
+            organization_name: newUserData.organization_name,
+            role: newUserData.role,
+          }));
         }
-      } else {
-        clearTokens();
-        localStorage.removeItem('cloudvisor-user');
+      } catch {
+        clearLocalUserData();
         setUser(null);
       }
     }
@@ -125,8 +104,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser]);
 
   const login = async (email: string, password: string, mfaCode?: string) => {
-    const response = await authAPI.login({ email, password, mfa_code: mfaCode });
-    setTokens(response.access_token, response.refresh_token);
+    // Server sets HttpOnly cookies on successful login
+    await authAPI.login({ email, password, mfa_code: mfaCode });
     await refreshUser();
   };
 
@@ -137,20 +116,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     first_name: string;
     last_name: string;
   }) => {
-    const response = await authAPI.register(data);
-    setTokens(response.access_token, response.refresh_token);
+    // Server sets HttpOnly cookies on successful registration
+    await authAPI.register(data);
     await refreshUser();
   };
 
   const logout = async () => {
     try {
+      // Server clears HttpOnly cookies
       await authAPI.logout();
     } catch {
     } finally {
-      clearTokens();
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('cloudvisor-user');
-      }
+      clearLocalUserData();
       // Reset account loader so next login fetches fresh accounts
       try {
         const { resetAccountLoader } = await import('@/components/layout/header');

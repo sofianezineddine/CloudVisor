@@ -119,15 +119,17 @@ class AuthenticatedUser:
 
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> AuthenticatedUser:
     """
     FastAPI dependency: extract and validate the authenticated user.
 
-    Accepts:
-      - Authorization: Bearer <JWT>
-      - X-API-Key: cv_live_<key>
+    Accepts (in priority order):
+      1. Authorization: Bearer <JWT>
+      2. X-API-Key: cv_live_<key>
+      3. cv_access cookie (HttpOnly cookie set by auth service)
 
     Validates against the auth service for authoritative token verification.
     Falls back to local JWT decode if auth service is temporarily unavailable.
@@ -165,17 +167,23 @@ async def get_current_user(
         return AuthenticatedUser(payload, x_api_key, via_api_key=True)
 
     # ── Bearer JWT path ───────────────────────────────────────────────────────
+    # Check Authorization header first, then fall back to cv_access cookie
     if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=(
-                "Authentication required. "
-                "Provide 'Authorization: Bearer <token>' or 'X-API-Key: cv_live_<key>'"
-            ),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token = credentials.credentials
+        # Try reading from HttpOnly cookie
+        cookie_token = request.cookies.get("cv_access")
+        if cookie_token:
+            token = cookie_token
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=(
+                    "Authentication required. "
+                    "Provide 'Authorization: Bearer <token>' or 'X-API-Key: cv_live_<key>'"
+                ),
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    else:
+        token = credentials.credentials
 
     # Fast-path: decode payload locally to get org_id for auth service call
     try:

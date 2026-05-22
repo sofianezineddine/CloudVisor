@@ -61,66 +61,27 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
 
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('access_token');
-}
-
 function getAdminToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('admin_access_token');
 }
-
-/** Attempt a silent token refresh. Returns the new access token or null. */
-async function silentRefresh(): Promise<string | null> {
-  const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
-  if (!refreshToken) return null;
-  try {
-    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.access_token && data.refresh_token) {
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('refresh_token', data.refresh_token);
-      return data.access_token;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  return localStorage.getItem('admin_access_token');
 }
 
-/** Clear tokens and redirect to login when session is unrecoverable. */
-function forceLogout(): void {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('cloudvisor-user');
-  if (typeof window !== 'undefined') {
-    window.location.href = '/login?error=session_expired';
-  }
-}
-
-/** Authenticated fetch to the auth service using the tenant access token.
- *  Automatically retries once after a silent token refresh on 401. */
+/** Authenticated fetch to the auth service using HttpOnly cookies.
+ *  Cookies are sent automatically via credentials: 'include'. */
 async function authFetch(path: string, options: RequestInit = {}, _retry = true): Promise<any> {
-  const token = getToken();
   const res = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: 'include', // Send HttpOnly cookies
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
     },
     ...options,
   });
 
-  // Auto-refresh on 401
-  if (res.status === 401 && _retry) {
-    const newToken = await silentRefresh();
-    if (newToken) return authFetch(path, options, false);
-    forceLogout();
+  // On 401, session has expired — just throw, let AuthProvider handle
+  if (res.status === 401) {
     throw new Error('Session expired. Please sign in again.');
   }
 
@@ -170,10 +131,11 @@ export const authAPI = {
     return res.json();
   },
 
-  /** POST /auth/login — email + password (+ optional MFA code) */
+  /** POST /auth/login — email + password (+ optional MFA code). Server sets HttpOnly cookies. */
   login: async (data: { email: string; password: string; mfa_code?: string }) => {
     const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
+      credentials: 'include', // Receive Set-Cookie from server
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
@@ -181,35 +143,34 @@ export const authAPI = {
     return res.json();
   },
 
-  /** POST /auth/refresh — exchange refresh token for new access + refresh tokens */
-  refreshToken: async (refreshToken: string) => {
+  /** POST /auth/refresh — server reads refresh cookie, sets new cookies */
+  refreshToken: async (_refreshToken?: string) => {
     const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
+      credentials: 'include', // Send cv_refresh cookie, receive new cookies
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: JSON.stringify({}), // Body not needed, server reads cookie
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Token refresh failed'); }
     return res.json();
   },
 
-  /** POST /auth/logout — invalidate current session */
+  /** POST /auth/logout — server clears HttpOnly cookies */
   logout: async () => {
-    const token = getToken();
     const res = await fetch(`${API_BASE_URL}/auth/logout`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      credentials: 'include', // Send cookies so server can identify session
+      headers: { 'Content-Type': 'application/json' },
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Logout failed'); }
     return res.json();
   },
 
-  /** GET /auth/me — current user profile */
-  getCurrentUser: async (token: string) => {
+  /** GET /auth/me — current user profile (uses HttpOnly cookie) */
+  getCurrentUser: async (_token?: string) => {
     const res = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      credentials: 'include', // HttpOnly cookie sent automatically
+      headers: { 'Content-Type': 'application/json' },
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to fetch user'); }
     return res.json();
@@ -249,10 +210,11 @@ export const authAPI = {
   // GET /auth/oauth/{provider}/authorize — browser redirect, no fetch needed
   // GET /auth/callback/{provider}         — browser redirect, no fetch needed
 
-  /** POST /auth/oauth/exchange — exchange one-time code for JWT tokens */
+  /** POST /auth/oauth/exchange — exchange one-time code, server sets HttpOnly cookies */
   exchangeOAuthCode: async (code: string) => {
     const res = await fetch(`${API_BASE_URL}/auth/oauth/exchange`, {
       method: 'POST',
+      credentials: 'include', // Receive Set-Cookie from server
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
     });

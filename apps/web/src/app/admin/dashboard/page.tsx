@@ -144,8 +144,8 @@ export default function AdminDashboardPage() {
             ].map((metric, i) => (
               <div key={i} className="rounded-[var(--radius-container)] border border-[var(--border-default)] bg-[var(--bg-surface)] p-6">
                 <div className="mb-4 flex items-center justify-between">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-[var(--radius-container)] bg-[var(--${metric.color}-dim)]`}>
-                    <metric.icon className={`h-5 w-5 text-[var(--${metric.color})]`} />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-container)]" style={{ backgroundColor: `var(--${metric.color}-dim)` }}>
+                    <metric.icon className="h-5 w-5" style={{ color: `var(--${metric.color})` }} />
                   </div>
                   {metric.trend && (
                     <div className="flex items-center gap-1 text-sm text-[var(--success)]">

@@ -1,12 +1,13 @@
 import React from "react";
-import { Responsive, WidthProvider, Layout } from "react-grid-layout";
+import { Responsive, Layout } from "react-grid-layout";
 import GridItemContainer from "./GridItemContainer";
 import { LayoutItem, WidgetData } from "./types";
 import "react-grid-layout/css/styles.css";
 import { MetricsWidget } from "@/utils/hooks/useDashboardMetricWidgets";
 import { Preset } from "@/entities/presets/model/types";
 
-const ResponsiveGridLayout = WidthProvider(Responsive);
+// react-grid-layout v2.x removed WidthProvider — use Responsive directly with width prop
+const ResponsiveGridLayout = Responsive;
 
 interface GridLayoutProps {
   layout: LayoutItem[];

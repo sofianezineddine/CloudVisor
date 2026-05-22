@@ -1,8 +1,8 @@
-import { TopologySearchProvider } from "@/app/(keep)/topology/TopologySearchContext";
-import { TopologyMap } from "@/app/(keep)/topology/ui/map";
+import { TopologySearchProvider } from "@/app/aiops/topology/TopologySearchContext";
+import { TopologyMap } from "@/app/aiops/topology/ui/map";
 import { getIncidentWithErrorHandling } from "../getIncidentWithErrorHandling";
 import { getIncidentName } from "@/entities/incidents/lib/utils";
-import { getApplications } from "@/app/(keep)/topology/api";
+import { getApplications } from "@/app/aiops/topology/api";
 import { createServerApiClient } from "@/shared/api/server";
 
 type PageProps = {

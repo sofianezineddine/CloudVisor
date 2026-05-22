@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 import httpx
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, status, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
@@ -81,6 +81,7 @@ async def register(
 async def login(
     data: LoginRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
 ) -> TokenResponse:
@@ -95,6 +96,15 @@ async def login(
             detail="Too many login attempts. Please try again in a minute.",
         )
 
+    # Account lockout: check if account is locked due to failed attempts
+    if await limiter.is_account_locked(data.email):
+        remaining = await limiter.get_lockout_remaining(data.email)
+        minutes = (remaining or 900) // 60
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=f"Account temporarily locked due to too many failed attempts. Try again in {minutes} minutes.",
+        )
+
     auth_settings = get_auth_settings_cached()
     auth_service = AuthService(db, auth_settings, redis)
 
@@ -106,14 +116,27 @@ async def login(
             ip_address=ip,
             user_agent=request.headers.get("User-Agent"),
         )
-        return TokenResponse(**result["tokens"])
+        tokens = result["tokens"]
+
+        # Successful login — clear any lockout state
+        await limiter.clear_failed_logins(data.email)
+
+        # Set HttpOnly cookies (Phase 1: alongside JSON response for backward compat)
+        from ...core.cookies import set_auth_cookies
+        set_auth_cookies(response, tokens["access_token"], tokens["refresh_token"])
+
+        return TokenResponse(**tokens)
     except ValueError as e:
+        # Failed login — record for lockout
+        await limiter.record_failed_login(data.email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     data: RefreshTokenRequest,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
 ) -> TokenResponse:
@@ -121,9 +144,18 @@ async def refresh_token(
     auth_settings = get_auth_settings_cached()
     auth_service = AuthService(db, auth_settings, redis)
 
+    # Read refresh token from cookie (fallback to request body for backward compat)
+    from ...core.cookies import get_refresh_token_from_cookie, set_auth_cookies
+    token = get_refresh_token_from_cookie(request) or data.refresh_token
+
     try:
-        result = await auth_service.refresh_tokens(data.refresh_token)
-        return TokenResponse(**result["tokens"])
+        result = await auth_service.refresh_tokens(token)
+        tokens = result["tokens"]
+
+        # Set new HttpOnly cookies
+        set_auth_cookies(response, tokens["access_token"], tokens["refresh_token"])
+
+        return TokenResponse(**tokens)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
@@ -131,15 +163,24 @@ async def refresh_token(
 @router.post("/logout")
 async def logout(
     request: Request,
+    response: Response,
     authorization: str | None = Header(default=None, alias="Authorization"),
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
 ) -> dict:
     """Logout and invalidate session."""
-    if not authorization or not authorization.startswith("Bearer "):
+    from ...core.cookies import get_access_token_from_cookie, clear_auth_cookies
+
+    # Read token from header OR cookie
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+    else:
+        token = get_access_token_from_cookie(request)
+
+    if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    token = authorization.removeprefix("Bearer ").strip()
     auth_settings = get_auth_settings_cached()
     auth_service = AuthService(db, auth_settings, redis)
     try:
@@ -149,15 +190,22 @@ async def logout(
             public_key=auth_settings.effective_public_key,
         )
     except Exception:
+        # Even if token is invalid, clear cookies
+        clear_auth_cookies(response)
         raise HTTPException(status_code=401, detail="Invalid token")
 
     user_id = payload.get("sub")
     session_id = payload.get("session_id")
     if not user_id:
+        clear_auth_cookies(response)
         raise HTTPException(status_code=401, detail="Invalid token")
 
     ip = request.client.host if request.client else None
     await auth_service.logout(user_id=user_id, session_id=session_id, ip_address=ip)
+
+    # Clear all auth cookies
+    clear_auth_cookies(response)
+
     return {"message": "Logged out successfully"}
 
 
@@ -676,6 +724,7 @@ async def oauth_callback(
 @router.post("/oauth/exchange", response_model=TokenResponse)
 async def oauth_exchange(
     data: dict,
+    response: Response,
     redis=Depends(get_redis),
 ) -> TokenResponse:
     """Exchange a one-time OAuth code for JWT tokens (S-03 fix).
@@ -699,5 +748,9 @@ async def oauth_exchange(
         tokens = json.loads(tokens_raw)
     except (ValueError, TypeError):
         raise HTTPException(status_code=500, detail="Token exchange failed")
+
+    # Set HttpOnly cookies
+    from ...core.cookies import set_auth_cookies
+    set_auth_cookies(response, tokens["access_token"], tokens["refresh_token"])
 
     return TokenResponse(**tokens)

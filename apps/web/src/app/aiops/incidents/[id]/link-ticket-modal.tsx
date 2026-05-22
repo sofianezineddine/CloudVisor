@@ -6,7 +6,7 @@ import Modal from "@/components/ui/Modal";
 import { TextInput } from "@/components/ui";
 import { DynamicImageProviderIcon } from "@/components/ui";
 import { useApi } from "@/shared/lib/hooks/useApi";
-import { useFetchProviders } from "@/app/(keep)/providers/page.client";
+import { useFetchProviders } from "@/app/aiops/providers/page.client";
 import { showSuccessToast, showErrorToast } from "@/shared/ui";
 import { type IncidentDto } from "@/entities/incidents/model";
 import { type Provider } from "@/shared/api/providers";

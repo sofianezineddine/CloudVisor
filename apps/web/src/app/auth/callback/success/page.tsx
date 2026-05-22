@@ -11,8 +11,12 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8
  * The backend redirects here with a short-lived one-time exchange code:
  *   /auth/callback/success?code=<exchange_code>
  *
- * We POST that code to /auth/oauth/exchange to get the actual JWT tokens.
- * This keeps tokens out of the URL, browser history, and server logs.
+ * We POST that code to /auth/oauth/exchange which:
+ * 1. Validates the code
+ * 2. Sets HttpOnly cookies (cv_access, cv_refresh, cv_csrf, cv_session)
+ * 3. Returns user info (no tokens in response body)
+ *
+ * Tokens are NEVER accessible to JavaScript — they're in HttpOnly cookies.
  */
 export default function OAuthCallbackSuccessPage() {
   const [status, setStatus] = useState('Completing sign-in…');
@@ -35,9 +39,10 @@ export default function OAuthCallbackSuccessPage() {
       return;
     }
 
-    // Exchange the one-time code for JWT tokens (S-03 fix: tokens never in URL)
+    // Exchange the one-time code — server sets HttpOnly cookies in response
     fetch(`${API_BASE_URL}/auth/oauth/exchange`, {
       method: 'POST',
+      credentials: 'include', // IMPORTANT: receive Set-Cookie from server
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: exchangeCode }),
     })
@@ -48,16 +53,21 @@ export default function OAuthCallbackSuccessPage() {
         }
         return res.json();
       })
-      .then((tokens) => {
-        if (!tokens?.access_token || !tokens?.refresh_token) {
-          throw new Error('Invalid token response');
+      .then((data) => {
+        // Store only non-sensitive user display data in localStorage
+        if (data?.user) {
+          localStorage.setItem('cloudvisor-user', JSON.stringify({
+            id: data.user.id,
+            organization_id: data.user.organization_id,
+            organization_name: data.user.organization_name,
+            role: data.user.role,
+            name: `${data.user.first_name || ''} ${data.user.last_name || ''}`.trim(),
+            email: data.user.email,
+          }));
         }
 
-        localStorage.setItem('access_token', tokens.access_token);
-        localStorage.setItem('refresh_token', tokens.refresh_token);
-
         setStatus('Sign-in successful! Redirecting…');
-        // Full reload so AuthProvider picks up the new tokens
+        // Full reload so AuthProvider detects the cv_session cookie
         window.location.href = '/console';
       })
       .catch((err) => {

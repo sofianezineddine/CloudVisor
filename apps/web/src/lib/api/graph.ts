@@ -9,7 +9,7 @@ const GRAPH_BASE_URL =
 
 function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('access_token');
+  return null /* HttpOnly cookie */;
 }
 
 async function graphFetch(endpoint: string, options: RequestInit = {}): Promise<any> {
@@ -17,6 +17,7 @@ async function graphFetch(endpoint: string, options: RequestInit = {}): Promise<
   const token = getAccessToken();
 
   const response = await fetch(url, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

@@ -16,7 +16,7 @@ import { EnrichAlertSidePanel } from "@/features/alerts/enrich-alert";
 import { FacetDto } from "@/features/filter";
 import { useApi } from "@/shared/lib/hooks/useApi";
 import { KeepLoader, showErrorToast } from "@/shared/ui";
-import NotFound from "@/app/(keep)/not-found";
+import NotFound from "@/app/aiops/not-found";
 import AlertTableTabPanelServerSide from "./alert-table-tab-panel-server-side";
 import { useProviders } from "@/utils/hooks/useProviders";
 import {

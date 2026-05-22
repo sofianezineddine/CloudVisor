@@ -6,7 +6,7 @@ import { MdLink, MdOutlineBookmarkAdd, MdOutlineOpenInNew } from "react-icons/md
 import { type IncidentDto } from "@/entities/incidents/model";
 import { LinkTicketModal } from "./link-ticket-modal";
 import { CreateTicketModal } from "./create-ticket-modal";
-import { useFetchProviders } from "@/app/(keep)/providers/page.client";
+import { useFetchProviders } from "@/app/aiops/providers/page.client";
 import { type Provider } from "@/shared/api/providers";
 import { 
   findLinkedTicket, 

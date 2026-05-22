@@ -34,8 +34,8 @@ import { IncidentChangeSeveritySelect } from "features/incidents/change-incident
 import { useApi } from "@/shared/lib/hooks/useApi";
 import { startCase, map } from "lodash";
 import { useConfig } from "@/utils/hooks/useConfig";
-import { EnrichmentEditableField } from "@/app/(keep)/incidents/[id]/enrichments/EnrichmentEditableField";
-import { EnrichmentEditableForm } from "@/app/(keep)/incidents/[id]/enrichments/EnrichmentEditableForm";
+import { EnrichmentEditableField } from "@/app/aiops/incidents/[id]/enrichments/EnrichmentEditableField";
+import { EnrichmentEditableForm } from "@/app/aiops/incidents/[id]/enrichments/EnrichmentEditableForm";
 import { FormattedContent } from "@/shared/ui/FormattedContent/FormattedContent";
 
 const PROVISIONED_ENRICHMENTS = [

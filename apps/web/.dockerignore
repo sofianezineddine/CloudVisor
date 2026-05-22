@@ -1,0 +1,13 @@
+node_modules
+.next/cache
+.git
+.gitignore
+*.md
+.env.local
+.env.development
+.storybook
+storybook-static
+coverage
+.vscode
+.idea
+src
