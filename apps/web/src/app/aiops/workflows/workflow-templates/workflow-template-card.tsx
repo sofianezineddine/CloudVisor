@@ -11,7 +11,7 @@ export const WorkflowTemplateCard: React.FC<{ template: WorkflowTemplate }> = ({
   const router = useRouter();
   const handlePreview = (template: WorkflowTemplate) => {
     localStorage.setItem("preview_workflow", JSON.stringify(template));
-    router.push(`/workflows/preview/${template.workflow_raw_id}`);
+    router.push(`/aiops/workflows/preview/${template.workflow_raw_id}`);
   };
   const getNameFromId = (id: string) => {
     if (!id) {

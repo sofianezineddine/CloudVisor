@@ -1,30 +1,55 @@
 /**
- * Graph Service API Client — Foundation Service 2
- * Connects to the graph service at port 8001.
- * Used by the asset graph view to fetch real relationship data.
+ * Graph Service API Client
+ *
+ * All requests go through the API gateway (/v1/assets/*, /v1/risk/*)
+ * which proxies to the graph service internally.
+ *
+ * Authentication: HttpOnly cookies via credentials: 'include'
+ * Tokens are NEVER stored or accessed from JavaScript.
  */
 
-const GRAPH_BASE_URL =
-  process.env.NEXT_PUBLIC_GRAPH_SERVICE_URL || 'http://localhost:8001';
+import { getCsrfToken } from '@/lib/csrf';
+import { refreshSession } from '@/lib/api/auth';
 
-function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return null /* HttpOnly cookie */;
-}
+const GATEWAY_BASE_URL =
+  process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
-async function graphFetch(endpoint: string, options: RequestInit = {}): Promise<any> {
-  const url = `${GRAPH_BASE_URL}${endpoint}`;
-  const token = getAccessToken();
+/**
+ * Unified fetch for graph endpoints through the API gateway.
+ * Handles auth via HttpOnly cookies, CSRF tokens, and auto-refresh on 401.
+ */
+async function graphFetch(
+  endpoint: string,
+  options: RequestInit = {},
+  _retry = true,
+): Promise<any> {
+  const url = `${GATEWAY_BASE_URL}${endpoint}`;
+  const method = (options.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  // CSRF protection for state-changing requests
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
 
   const response = await fetch(url, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
+    credentials: 'include', // Send HttpOnly cookies automatically
+    headers,
     ...options,
   });
+
+  // Auto-refresh on 401 — server reads cv_refresh cookie, sets new cv_access
+  if (response.status === 401 && _retry) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      return graphFetch(endpoint, options, false);
+    }
+    throw new Error('Session expired. Please sign in again.');
+  }
 
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
@@ -36,7 +61,19 @@ async function graphFetch(endpoint: string, options: RequestInit = {}): Promise<
   }
 
   if (response.status === 204) return null;
-  return response.json();
+
+  const json = await response.json();
+  // Gateway wraps all responses in { data: ..., total: ..., took_ms: ... } envelope.
+  // Unwrap `data` at this level for convenience, but keep `total` in the result.
+  if (json && typeof json === 'object' && 'data' in json) {
+    return {
+      data: json.data,
+      total: json.meta?.total ?? json.total,
+      took_ms: json.took_ms ?? json.meta?.took_ms,
+      next_cursor: json.meta?.next_cursor ?? json.next_cursor,
+    };
+  }
+  return json;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -92,30 +129,37 @@ export interface AttackPath {
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
+// All endpoints use public gateway paths (/v1/assets/*, /v1/risk/*)
+// The gateway adds org_id from JWT and proxies to internal graph service.
+// Gateway wraps responses in { data: ..., total: ... } — we unwrap via graphFetch.
 
 export const graphAPI = {
   /** List assets with optional filters */
   async listAssets(params: {
-    org_id: string;
+    org_id?: string; // Optional — gateway derives from JWT
     provider?: string;
     resource_type?: string;
     region?: string;
     environment?: string;
     is_public?: boolean;
     risk_score_min?: number;
-    page?: number;
-    page_size?: number;
-  }): Promise<{ assets: GraphAsset[]; total: number; page: number; page_size: number }> {
+    limit?: number; // Gateway uses cursor/limit pagination
+    cursor?: string;
+  }): Promise<{ assets: GraphAsset[]; total: number; limit: number }> {
     const q = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) q.set(k, String(v));
+      if (v !== undefined && v !== null && k !== 'org_id') q.set(k, String(v));
     });
-    return graphFetch(`/internal/assets?${q}`);
+    const result = await graphFetch(`/v1/assets?${q}`);
+    const assets = result?.data ?? [];
+    const total = result?.total ?? (Array.isArray(assets) ? assets.length : 0);
+    return { assets, total, limit: params.limit || 50 };
   },
 
   /** Get a single asset */
   async getAsset(assetId: string): Promise<GraphAsset> {
-    return graphFetch(`/internal/assets/${assetId}`);
+    const result = await graphFetch(`/v1/assets/${assetId}`);
+    return result?.data ?? result;
   },
 
   /** Get related assets (graph neighbors) */
@@ -123,7 +167,11 @@ export const graphAPI = {
     assetId: string,
     depth = 1
   ): Promise<{ asset_id: string; relationships: RelatedAsset[] }> {
-    return graphFetch(`/internal/assets/${assetId}/related?depth=${depth}`);
+    const result = await graphFetch(`/v1/assets/${assetId}/related?depth=${depth}`);
+    return {
+      asset_id: assetId,
+      relationships: result?.data ?? result?.relationships ?? [],
+    };
   },
 
   /** Get attack paths from/to an asset */
@@ -131,20 +179,47 @@ export const graphAPI = {
     assetId: string,
     maxHops = 6
   ): Promise<{ paths: any[]; total: number }> {
-    return graphFetch(`/internal/assets/${assetId}/attack-paths?max_hops=${maxHops}`);
+    const result = await graphFetch(`/v1/assets/${assetId}/attack-paths?max_hops=${maxHops}`);
+    return {
+      paths: result?.data ?? result?.paths ?? [],
+      total: result?.total ?? 0,
+    };
   },
 
   /** Get PII attack paths (internet → sensitive DB) */
   async getPiiAttackPaths(
-    orgId: string,
+    orgId?: string, // Optional — gateway derives from JWT
     maxHops = 6
   ): Promise<{ paths: AttackPath[]; total: number }> {
-    return graphFetch(`/internal/assets/attack-paths/pii?org_id=${orgId}&max_hops=${maxHops}`);
+    // Route through gateway's /v1/risk/attack-paths with PII filter
+    const q = new URLSearchParams({ max_hops: String(maxHops), type: 'pii' });
+    const result = await graphFetch(`/v1/risk/attack-paths?${q}`);
+    const paths = result?.data ?? result?.paths ?? [];
+    return {
+      paths,
+      total: result?.total ?? (Array.isArray(paths) ? paths.length : 0),
+    };
   },
 
-  /** Get graph stats */
-  async getStats(orgId: string): Promise<GraphStats> {
-    return graphFetch(`/internal/assets/stats?org_id=${orgId}`);
+  /** Get asset summary stats */
+  async getStats(orgId?: string): Promise<GraphStats> {
+    const result = await graphFetch(`/v1/assets/summary`);
+    const data = result?.data ?? result;
+    // Map gateway response to GraphStats shape
+    let nodeCount = data?.total ?? data?.node_count ?? 0;
+    // Fallback: if no explicit count, sum by_provider values
+    if (!nodeCount && data?.by_provider) {
+      nodeCount = Object.values(data.by_provider).reduce(
+        (sum: number, count: unknown) => sum + (Number(count) || 0),
+        0,
+      );
+    }
+    return {
+      node_count: nodeCount,
+      edge_count: data?.edge_count ?? 0,
+      by_provider: data?.by_provider ?? {},
+      by_type: data?.by_type ?? {},
+    };
   },
 
   /** Get findings for an asset */
@@ -154,7 +229,14 @@ export const graphAPI = {
     total: number;
     open_findings_count: number;
   }> {
-    return graphFetch(`/internal/assets/${assetId}/findings`);
+    const result = await graphFetch(`/v1/assets/${assetId}/findings`);
+    const findings = result?.data ?? [];
+    return {
+      asset_id: assetId,
+      findings,
+      total: result?.total ?? (Array.isArray(findings) ? findings.length : 0),
+      open_findings_count: (Array.isArray(findings) ? findings.filter((f: any) => f?.status === 'open').length : 0),
+    };
   },
 
   /** Get historical snapshots for an asset (time-travel) */
@@ -167,23 +249,34 @@ export const graphAPI = {
     if (params?.end_time) q.set('end_time', params.end_time);
     if (params?.limit) q.set('limit', String(params.limit));
     const qs = q.toString();
-    return graphFetch(`/internal/assets/${assetId}/history${qs ? `?${qs}` : ''}`);
+    const result = await graphFetch(`/v1/assets/${assetId}/history${qs ? `?${qs}` : ''}`);
+    return {
+      asset_id: assetId,
+      snapshots: result?.data ?? result?.snapshots ?? [],
+      total: result?.total ?? 0,
+    };
   },
 
   /** Full-text search across assets */
   async searchAssets(params: {
     q: string;
-    org_id: string;
+    org_id?: string; // Optional — gateway derives from JWT
     provider?: string;
     region?: string;
-    page?: number;
-    page_size?: number;
-  }): Promise<{ total: number; hits: GraphAsset[]; page: number; page_size: number; source: string }> {
+    limit?: number;
+  }): Promise<{ total: number; hits: GraphAsset[]; limit: number; source: string }> {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) query.set(k, String(v));
+      if (v !== undefined && v !== null && k !== 'org_id') query.set(k, String(v));
     });
-    return graphFetch(`/internal/assets/search?${query}`);
+    const result = await graphFetch(`/v1/assets/search?${query}`);
+    const hits = result?.data ?? [];
+    return {
+      hits,
+      total: result?.total ?? (Array.isArray(hits) ? hits.length : 0),
+      limit: params.limit || 50,
+      source: 'gateway',
+    };
   },
 };
 

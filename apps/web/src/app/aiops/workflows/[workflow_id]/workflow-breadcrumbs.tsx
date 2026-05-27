@@ -11,7 +11,7 @@ export function WorkflowBreadcrumbs({ workflowId }: { workflowId: string }) {
 
   return (
     <Subtitle className="text-sm">
-      <Link href="/workflows">All Workflows</Link>{" "}
+      <Link href="/aiops/workflows">All Workflows</Link>{" "}
       {clientParams.workflow_execution_id ? (
         <>
           <Icon icon={ArrowRightIcon} color="gray" size="xs" />{" "}

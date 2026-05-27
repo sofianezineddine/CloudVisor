@@ -27,12 +27,12 @@ COOKIE_CSRF_NAME = "cv_csrf"
 COOKIE_SESSION_NAME = "cv_session"
 
 # Durations
-ACCESS_TOKEN_MAX_AGE = 900          # 15 minutes
+ACCESS_TOKEN_MAX_AGE = 3600         # 60 minutes
 REFRESH_TOKEN_MAX_AGE = 2_592_000   # 30 days
-CSRF_TOKEN_MAX_AGE = 900            # 15 minutes (matches access token)
+CSRF_TOKEN_MAX_AGE = 3600           # 60 minutes (matches access token)
 
 # Paths
-REFRESH_COOKIE_PATH = "/auth/refresh"
+REFRESH_COOKIE_PATH = "/"
 
 
 def _is_production() -> bool:

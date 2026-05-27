@@ -88,7 +88,7 @@ async def search_assets(
     provider: str | None = None,
     region: str | None = None,
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=100),
+    page_size: int = Query(50, ge=1),
     neo4j=Depends(get_neo4j),
     es=Depends(get_elasticsearch),
 ) -> dict:
@@ -174,7 +174,7 @@ async def list_assets(
     is_public: bool | None = None,
     risk_score_min: int | None = None,
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=100),
+    page_size: int = Query(50, ge=1),
     neo4j=Depends(get_neo4j),
 ) -> dict:
     """List assets with filtering and pagination."""
@@ -294,7 +294,7 @@ async def get_asset_history(
     asset_id: str,
     start_time: str | None = None,
     end_time: str | None = None,
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1),
     db=Depends(get_db),
 ) -> AssetHistoryResponse:
     """Get historical snapshots for an asset."""

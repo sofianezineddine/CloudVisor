@@ -32,14 +32,14 @@ export default function AIOpsLayout({
             PUSHER_CLUSTER: undefined,
             API_URL: process.env.NEXT_PUBLIC_API_GATEWAY_URL
               ? `${process.env.NEXT_PUBLIC_API_GATEWAY_URL}/v1/keep`
-              : 'http://localhost:8005/v1/keep',
-            API_URL_CLIENT: process.env.NEXT_PUBLIC_API_URL_CLIENT || 'http://localhost:8005/v1/keep',
+              : 'http://localhost/v1/keep',
+            API_URL_CLIENT: process.env.NEXT_PUBLIC_API_URL_CLIENT || 'http://localhost/v1/keep',
             POSTHOG_KEY: undefined,
             POSTHOG_HOST: undefined,
             POSTHOG_DISABLED: 'true',
             SENTRY_DISABLED: 'true',
             READ_ONLY: false,
-            OPEN_AI_API_KEY_SET: false,
+            OPEN_AI_API_KEY_SET: true,
             NOISY_ALERTS_ENABLED: false,
             KEEP_DOCS_URL: 'https://docs.keephq.dev',
             KEEP_CONTACT_US_URL: 'https://slack.keephq.dev/',

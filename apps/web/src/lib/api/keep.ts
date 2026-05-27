@@ -15,17 +15,16 @@ import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { getCsrfToken } from '@/lib/csrf';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
-
-const API_GATEWAY_URL =
-  process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
+// All API calls go through nginx same-origin proxy (/v1/keep -> api-gateway)
+// This ensures HttpOnly cookies are sent automatically (same port 80 origin)
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
 
 export const keepApi = axios.create({
-  baseURL: `${API_GATEWAY_URL}/v1/keep`,
+  baseURL: '/v1/keep',
   headers: { 'Content-Type': 'application/json' },
   timeout: 30_000,
-  withCredentials: true, // Send HttpOnly cookies automatically
+  withCredentials: true, // Send HttpOnly cookies through nginx proxy
 });
 
 // ─── Request interceptor: attach CSRF token + X-Correlation-ID ────────────────
@@ -34,6 +33,9 @@ keepApi.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (typeof window !== 'undefined') {
     // Generate a unique correlation ID per request for distributed tracing
     config.headers['X-Correlation-ID'] = crypto.randomUUID();
+
+    // Auth via HttpOnly cookies (sent automatically by withCredentials: true)
+    // No localStorage token storage — tokens are never accessible to JS (C-01 fix)
 
     // Attach CSRF token for state-changing requests
     const method = (config.method || '').toLowerCase();

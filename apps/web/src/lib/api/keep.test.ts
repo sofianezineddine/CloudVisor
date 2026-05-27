@@ -75,8 +75,8 @@ describe('Keep API Client', () => {
     });
 
     it('should target the API gateway URL', () => {
-      // Default is http://localhost:8005/v1/keep
-      expect(keepApi.defaults.baseURL).toBe('http://localhost:8005/v1/keep');
+      // Default is http://localhost/v1/keep
+      expect(keepApi.defaults.baseURL).toBe('http://localhost/v1/keep');
     });
 
     it('should set Content-Type to application/json', () => {

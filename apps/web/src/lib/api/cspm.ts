@@ -3,7 +3,7 @@
  * account_ids is always passed when a scope is active.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
+const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -156,56 +156,50 @@ export interface ComplianceFramework {
   controls: ComplianceControl[];
 }
 
+import { getCsrfToken } from '@/lib/csrf';
+import { refreshSession } from '@/lib/api/auth';
+
 // ─── Core fetch ───────────────────────────────────────────────────────────────
+// Authentication: HttpOnly cookies via credentials: 'include'
+// Tokens are NEVER stored in or read from localStorage.
+// Refresh is handled server-side via cv_refresh HttpOnly cookie.
 
 async function gw<T>(path: string, options?: RequestInit, _retry = true): Promise<T> {
-  const token = typeof window !== 'undefined' ? null /* HttpOnly cookie */ : null;
+  const method = (options?.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string> || {}),
+  };
+
+  // CSRF protection for state-changing requests
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    credentials: 'include', // Send HttpOnly cookies automatically
+    headers,
     ...options,
   });
 
-  // Auto-refresh on 401
+  // Auto-refresh on 401 — server reads cv_refresh cookie, sets new cv_access
   if (res.status === 401 && _retry) {
-    const refreshToken = typeof window !== 'undefined' ? null /* HttpOnly cookie */ : null;
-    if (refreshToken) {
-      try {
-        const authBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
-        const refreshRes = await fetch(`${authBase}/auth/refresh`, {
-          method: 'POST',
-          credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-        if (refreshRes.ok) {
-          const data = await refreshRes.json();
-          if (data.access_token && data.refresh_token) {
-            /* tokens in HttpOnly cookies */;
-            /* tokens in HttpOnly cookies */;
-            return gw<T>(path, options, false);
-          }
-        }
-      } catch {
-        // Refresh failed — fall through to force logout
+    try {
+      const refreshed = await refreshSession();
+      if (refreshed) {
+        return gw<T>(path, options, false);
       }
+    } catch {
+      // Refresh failed — fall through
     }
-    // Session unrecoverable
-    /* cleared by server */;
-    /* cleared by server */;
-    localStorage.removeItem('cloudvisor-user');
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login?error=session_expired';
-    }
+    // Don't force redirect — let AuthProvider detect expired session
     throw new Error('Session expired. Please sign in again.');
   }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    // Avoid leaking internal error details to the client for 5xx errors
+    // Avoid leaking internal error details for 5xx errors
     if (res.status >= 500) {
       throw new Error('A server error occurred. Please try again later.');
     }

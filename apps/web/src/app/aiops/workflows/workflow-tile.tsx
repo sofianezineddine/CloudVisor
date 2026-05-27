@@ -107,11 +107,11 @@ function WorkflowTile({ workflow }: { workflow: Workflow }) {
   };
 
   const handleViewClick = async () => {
-    router.push(`/workflows/${workflow.id}`);
+    router.push(`/aiops/workflows/${workflow.id}`);
   };
 
   const handleBuilderClick = async () => {
-    router.push(`/workflows/builder/${workflow.id}`);
+    router.push(`/aiops/workflows/builder/${workflow.id}`);
   };
 
   const lastExecutions = workflow?.last_executions?.slice(0, 15) || [];

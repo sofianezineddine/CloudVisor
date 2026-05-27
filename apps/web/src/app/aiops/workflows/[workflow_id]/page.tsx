@@ -10,7 +10,4 @@ export default async function Page(props: {
   return <WorkflowDetailPage params={params} initialData={initialData} />;
 }
 
-export const metadata: Metadata = {
-  title: "Keep - Workflow Executions",
-  description: "View and manage workflow executions.",
-};
+// metadata removed for dynamic rendering

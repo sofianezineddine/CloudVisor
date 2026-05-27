@@ -4,9 +4,9 @@ import WorkflowDetailHeader from "./workflow-detail-header";
 
 export default async function Layout(props: {
   children: React.ReactNode;
-  params: Promise<{ workflow_id: string }>;
+  params: { workflow_id: string };
 }) {
-  const params = await props.params;
+  const params = props.params;
 
   const { children } = props;
 

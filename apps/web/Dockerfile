@@ -1,5 +1,5 @@
 # ─── CloudVisor Web — Production Image ─────────────────────────────────────────
-# Uses pre-built Next.js standalone output
+# Uses pre-built Next.js standalone output (run `npm run build` locally first)
 FROM node:20-alpine
 
 WORKDIR /app

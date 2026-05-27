@@ -385,8 +385,8 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
 
     try {
       const API_BASE = process.env.NEXT_PUBLIC_COPILOT_URL || 'http://localhost:8010';
-      const GW_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+      const GW_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
+      const token = typeof window !== 'undefined' ? null /* token in HttpOnly cookie */ : null;
 
       let orgId: string | null = null;
       if (token) { try { const p = JSON.parse(atob(token.split('.')[1])); orgId = p?.organization_id ?? p?.org_id ?? null; } catch {} }

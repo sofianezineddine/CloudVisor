@@ -182,8 +182,8 @@ jest.mock("@/entities/workflows", () => ({
 }));
 
 const mockConfig: InternalConfig = {
-  API_URL: "http://localhost:8000",
-  API_URL_CLIENT: "http://localhost:8000",
+  API_URL: "http://localhost:8080/connector",
+  API_URL_CLIENT: "http://localhost:8080/connector",
   AUTH_TYPE: "test",
   PUSHER_DISABLED: false,
   PUSHER_HOST: "localhost",

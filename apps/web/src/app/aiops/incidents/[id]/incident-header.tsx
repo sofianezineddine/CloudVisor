@@ -68,7 +68,7 @@ export function IncidentHeader({
         <div className="flex flex-row justify-between items-end mb-2.5">
           <div>
             <Subtitle className="text-sm">
-              <Link href="/incidents">All Incidents</Link>{" "}
+              <Link href="/aiops/incidents">All Incidents</Link>{" "}
               <Icon icon={ArrowRightIcon} color="gray" size="xs" />{" "}
               {incident.is_candidate ? "" : "Possible "}
               {getIncidentName(incident)}

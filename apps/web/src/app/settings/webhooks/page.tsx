@@ -4,20 +4,31 @@ import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Webhook, Plus, Trash2, Loader2, AlertTriangle, CheckCircle2, X, Copy } from 'lucide-react';
+import { getCsrfToken } from '@/lib/csrf';
 
-const GW = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
+const GW = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
-function getToken() {
-  return typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-}
-
+/**
+ * CSRF-safe fetch through the API gateway.
+ * Authentication: HttpOnly cookies via credentials: 'include'
+ * Tokens are NEVER stored in or read from localStorage.
+ */
 function gwFetch(path: string, options: RequestInit = {}) {
-  const token = getToken();
+  const method = (options.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  // CSRF protection for state-changing requests
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
+
   return fetch(`${GW}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    credentials: 'include',
+    headers,
     ...options,
   }).then(r => {
     if (r.ok || r.status === 204) return r.status === 204 ? null : r.json();

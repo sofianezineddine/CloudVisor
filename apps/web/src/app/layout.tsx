@@ -7,10 +7,10 @@ import { QueryProvider } from '@/components/query-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import './globals.css';
 
-export const metadata: Metadata = {
-  title: 'CloudVisor - Cloud Security Platform',
-  description: 'Unified cloud security from code to runtime',
-};
+// metadata removed for dynamic rendering
+
+// Force all pages to render dynamically (no static generation at build time)
+export const dynamic = 'force-dynamic';
 
 export default function RootLayout({
   children,

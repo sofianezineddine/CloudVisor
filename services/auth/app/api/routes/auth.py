@@ -48,11 +48,17 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 async def register(
     data: RegisterRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
 ) -> TokenResponse:
-    """Register a new user and organization."""
+    """Register a new user and organization.
+
+    Sets HttpOnly cookies so the frontend doesn't need to store tokens
+    in localStorage (C-01 fix).
+    """
     from ...services.rate_limiter import RateLimiter
+    from ...core.cookies import set_auth_cookies
     ip = request.client.host if request.client else "unknown"
     limiter = RateLimiter(redis)
     if not await limiter.check_register_rate(ip):
@@ -72,7 +78,10 @@ async def register(
             first_name=data.first_name,
             last_name=data.last_name,
         )
-        return TokenResponse(**result["tokens"])
+        tokens = result["tokens"]
+        # Set HttpOnly cookies so frontend doesn't need localStorage token storage
+        set_auth_cookies(response, tokens["access_token"], tokens["refresh_token"])
+        return TokenResponse(**tokens)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -121,7 +130,7 @@ async def login(
         # Successful login — clear any lockout state
         await limiter.clear_failed_logins(data.email)
 
-        # Set HttpOnly cookies (Phase 1: alongside JSON response for backward compat)
+        # Set HttpOnly cookies (primary auth mechanism — no localStorage needed)
         from ...core.cookies import set_auth_cookies
         set_auth_cookies(response, tokens["access_token"], tokens["refresh_token"])
 
@@ -273,21 +282,35 @@ async def reset_password(
 @router.get("/me", response_model=UserResponse)
 async def get_current_user(
     authorization: str | None = Header(default=None, alias="Authorization"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
-    """Get current user profile."""
+    """Get current user profile.
+
+    Accepts auth via:
+    1. Authorization: Bearer <token> header (programmatic access)
+    2. cv_access HttpOnly cookie (browser session — C-01 fix)
+    """
     from ...models import UserModel
     from ...services.rbac import RBACService
+    from ...core.cookies import get_access_token_from_cookie
     from sqlalchemy import select
 
-    if not authorization or not authorization.startswith("Bearer "):
+    # Extract token from Bearer header first, fall back to cv_access cookie
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+    elif request:
+        token = get_access_token_from_cookie(request)
+
+    if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     auth_settings = get_auth_settings_cached()
 
     try:
         payload = decode_token(
-            authorization.removeprefix("Bearer ").strip(),
+            token,
             auth_settings.secret_key,
             public_key=auth_settings.effective_public_key,
         )
@@ -571,36 +594,41 @@ async def oauth_callback(
     # Exchange code for access token (with async retry — S-11 fix)
     token_response = None
     for attempt in range(3):
-        async with httpx.AsyncClient() as client:
-            if provider == "google":
-                token_response = await client.post(
-                    config["token_url"],
-                    data={
-                        "code": code,
-                        "client_id": config["client_id"],
-                        "client_secret": config["client_secret"],
-                        "redirect_uri": config["redirect_uri"],
-                        "grant_type": "authorization_code",
-                    },
-                )
-            else:  # github
-                token_response = await client.post(
-                    config["token_url"],
-                    headers={"Accept": "application/json"},
-                    data={
-                        "code": code,
-                        "client_id": config["client_id"],
-                        "client_secret": config["client_secret"],
-                        "redirect_uri": config["redirect_uri"],
-                    },
-                )
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                if provider == "google":
+                    token_response = await client.post(
+                        config["token_url"],
+                        data={
+                            "code": code,
+                            "client_id": config["client_id"],
+                            "client_secret": config["client_secret"],
+                            "redirect_uri": config["redirect_uri"],
+                            "grant_type": "authorization_code",
+                        },
+                    )
+                else:  # github
+                    token_response = await client.post(
+                        config["token_url"],
+                        headers={"Accept": "application/json"},
+                        data={
+                            "code": code,
+                            "client_id": config["client_id"],
+                            "client_secret": config["client_secret"],
+                            "redirect_uri": config["redirect_uri"],
+                        },
+                    )
 
-            if token_response.status_code == 200:
-                break
+                if token_response.status_code == 200:
+                    break
 
+                if attempt < 2:
+                    logger.warning(f"Token exchange failed (attempt {attempt+1}): {token_response.status_code}")
+                    await asyncio.sleep(0.5 * (attempt + 1))  # S-11 fix: async sleep
+        except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError) as e:
+            logger.warning(f"Token exchange network error (attempt {attempt+1}): {e}")
             if attempt < 2:
-                logger.warning(f"Token exchange failed (attempt {attempt+1}): {token_response.status_code}")
-                await asyncio.sleep(0.5 * (attempt + 1))  # S-11 fix: async sleep
+                await asyncio.sleep(1.0 * (attempt + 1))
 
     if not token_response or token_response.status_code != 200:
         logger.error(f"Token exchange failed after retries")
@@ -611,7 +639,7 @@ async def oauth_callback(
     # Fetch user info from provider (with async retry — S-11 fix)
     userinfo = None
     for attempt in range(3):
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             if provider == "google":
                 userinfo_response = await client.get(
                     config["userinfo_url"],

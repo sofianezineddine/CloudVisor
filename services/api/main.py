@@ -226,7 +226,7 @@ def create_app() -> FastAPI:
         # Check Keep service health
         try:
             async with _httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{settings.keep_service_url.rstrip('/')}/health")
+                resp = await client.get(f"{settings.keep_service_url.rstrip('/')}/healthcheck")
                 services_health["keep"] = "healthy" if resp.status_code == 200 else "unhealthy"
         except Exception:
             services_health["keep"] = "unreachable"

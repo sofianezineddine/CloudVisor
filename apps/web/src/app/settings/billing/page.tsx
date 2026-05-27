@@ -28,9 +28,9 @@ interface BillingInfo {
 
 async function fetchBilling(): Promise<BillingInfo> {
   // Fetch org details from the auth service (GET /auth/org/me)
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const token = typeof window !== 'undefined' ? null /* token in HttpOnly cookie */ : null;
   const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002'}/auth/org/me`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080'}/auth/org/me`,
     {
       headers: {
         'Content-Type': 'application/json',

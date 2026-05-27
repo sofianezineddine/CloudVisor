@@ -6,10 +6,10 @@ import { IncidentLayoutClient } from "./incident-layout-client";
 export default async function Layout(
   props: {
     children: ReactNode;
-    params: Promise<{ id: string }>;
+    params: { id: string };
   }
 ) {
-  const serverParams = await props.params;
+  const serverParams = props.params;
 
   const {
     children

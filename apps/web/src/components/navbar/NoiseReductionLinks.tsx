@@ -126,7 +126,7 @@ export const NoiseReductionLinks = ({ session }: NoiseReductionLinksProps) => {
           disabledConfigKey={noiseReductionKeys.HIDE_NAVBAR_WORKFLOWS}
         >
           <li>
-            <LinkWithIcon href="/workflows" icon={Workflows} testId="workflows">
+            <LinkWithIcon href="/aiops/workflows" icon={Workflows} testId="workflows">
               <Subtitle className="text-xs">Workflows</Subtitle>
             </LinkWithIcon>
           </li>

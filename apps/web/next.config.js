@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@cloudvisor/ui', '@cloudvisor/hooks'],
+  transpilePackages: ['@cloudvisor/ui', '@cloudvisor/hooks', '@xyflow/react', '@xyflow/system', '@copilotkit/react-core', '@copilotkit/react-ui', '@copilotkit/react-textarea'],
   reactStrictMode: false,
   swcMinify: true,
   compiler: {
@@ -15,7 +15,6 @@ const nextConfig = {
   },
 
   // Output standalone build for Docker deployment
-  // Note: standalone mode traces dependencies and only includes what's needed
   output: 'standalone',
 
   // Ensure all pages are included in the build
@@ -74,15 +73,15 @@ const nextConfig = {
 
   async rewrites() {
     return [
-      // Keep UI backend API — proxied to AIOps service
+      // Keep UI backend API — proxied to Keep service
       {
         source: '/api/:path*',
-        destination: 'http://localhost:8011/:path*',
+        destination: 'http://cv-keep:8007/:path*',
       },
       // Keep UI backend route (used by Keep UI client via /backend prefix)
       {
         source: '/backend/:path*',
-        destination: 'http://localhost:8011/:path*',
+        destination: 'http://cv-keep:8007/:path*',
       },
     ];
   },

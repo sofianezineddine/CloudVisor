@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 
 export const WorkflowYAMLEditor = dynamic(
-  () => import('./editor.client').then((mod) => mod.default || mod),
+  () => import('./editor.client').then((mod) => mod.MonacoYAMLEditor),
   { ssr: false }
 );
 

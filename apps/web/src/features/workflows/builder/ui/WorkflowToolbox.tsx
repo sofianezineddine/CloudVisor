@@ -183,7 +183,7 @@ export const WorkflowToolbox = ({ isDraggable }: { isDraggable?: boolean }) => {
     );
 
   const filteredGroups = useMemo(() => {
-    if (!toolboxConfiguration) {
+    if (!toolboxConfiguration?.groups) {
       return [];
     }
     return (

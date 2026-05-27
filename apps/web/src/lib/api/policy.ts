@@ -1,70 +1,50 @@
 /**
- * Policy Service API Client — Foundation Service 4
+ * Policy Service API Client
  *
- * All calls go through the API gateway at :8005/v1/
- * The gateway handles JWT validation, tenant isolation, and routing.
+ * All calls go through the API gateway at :8080/v1/
+ * Authentication: HttpOnly cookies via credentials: 'include'
+ * Tokens are NEVER stored in or read from localStorage.
+ * Refresh is handled server-side via cv_refresh HttpOnly cookie.
  */
 
+import { getCsrfToken } from '@/lib/csrf';
+import { refreshSession } from '@/lib/api/auth';
+
 const API_GATEWAY_BASE_URL =
-  process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
+  process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
-function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return null /* HttpOnly cookie */;
-}
-
-function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return null /* HttpOnly cookie */;
-}
-
-/** Silent token refresh on 401. */
-async function silentRefresh(): Promise<string | null> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
-  try {
-    const authBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
-    const res = await fetch(`${authBase}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.access_token && data.refresh_token) {
-      /* tokens in HttpOnly cookies */;
-      /* tokens in HttpOnly cookies */;
-      return data.access_token;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-async function policyFetch(endpoint: string, options: RequestInit = {}, _retry = true): Promise<any> {
+async function policyFetch(
+  endpoint: string,
+  options: RequestInit = {},
+  _retry = true,
+): Promise<any> {
   const url = `${API_GATEWAY_BASE_URL}${endpoint}`;
-  const token = getAccessToken();
+  const method = (options.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  // CSRF protection for state-changing requests
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
 
   const response = await fetch(url, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
+    credentials: 'include', // Send HttpOnly cookies automatically
+    headers,
     ...options,
   });
 
-  // Auto-refresh on 401
+  // Auto-refresh on 401 — server reads cv_refresh cookie, sets new cv_access
   if (response.status === 401 && _retry) {
-    const newToken = await silentRefresh();
-    if (newToken) return policyFetch(endpoint, options, false);
-    /* cleared by server */;
-    /* cleared by server */;
-    if (typeof window !== 'undefined') window.location.href = '/login?error=session_expired';
-    throw new Error('Session expired');
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      return policyFetch(endpoint, options, false);
+    }
+    // Don't force redirect — let AuthProvider detect expired session
+    throw new Error('Session expired. Please sign in again.');
   }
 
   if (!response.ok) {

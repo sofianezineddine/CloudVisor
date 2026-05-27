@@ -11,11 +11,11 @@ import {
 } from '@/hooks/use-cspm';
 import { cspmAPI } from '@/lib/api/cspm';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
+const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
 /** Download a report file with the auth token attached. */
 async function downloadReportWithAuth(reportId: string, filename: string) {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const token = typeof window !== 'undefined' ? null /* token in HttpOnly cookie */ : null;
   const url = `${API_BASE}/v1/cspm/reports/${reportId}/download`;
   const res = await fetch(url, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},

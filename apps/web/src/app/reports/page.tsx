@@ -10,11 +10,11 @@ import {
   CheckCircle2, XCircle, RefreshCw, X,
 } from 'lucide-react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
+const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
 function getToken() {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('access_token');
+  return null /* token in HttpOnly cookie */;
 }
 
 async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {

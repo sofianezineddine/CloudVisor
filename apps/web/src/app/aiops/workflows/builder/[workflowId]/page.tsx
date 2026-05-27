@@ -26,7 +26,4 @@ export default async function PageWithId(props: {
   );
 }
 
-export const metadata: Metadata = {
-  title: "Keep - Workflow Builder",
-  description: "Build workflows with a UI builder.",
-};
+// metadata removed for dynamic rendering

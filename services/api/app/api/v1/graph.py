@@ -25,26 +25,46 @@ class CypherQueryRequest(BaseModel):
 @router.get("/risk/attack-paths")
 async def get_attack_paths(
     max_hops: int = Query(6, ge=1, le=10),
+    type: str | None = Query(None, description="Filter by type: 'pii' for internet→sensitive DB paths"),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Get all computed attack paths for the organization."""
+    """Get all computed attack paths for the organization.
+
+    Supports optional `type=pii` filter to return paths from internet-exposed
+    resources to resources containing sensitive data (PII).
+    """
     t0 = time.monotonic()
     graph = get_graph_proxy()
     try:
-        # Use Cypher to find attack paths from public assets
+        # Build query based on type filter
+        if type == "pii":
+            # PII-specific query: internet-exposed → contains_sensitive_data
+            query = f"""
+            MATCH path = (entry:Asset)-[*1..{max_hops}]->(target:Asset)
+            WHERE entry.organization_id = $org_id
+              AND entry.is_public = true
+              AND (target.contains_sensitive_data = true OR target.contains_pii = true)
+              AND entry.id <> target.id
+            RETURN path, length(path) AS hops, target.risk_score AS target_risk
+            ORDER BY target_risk DESC, hops ASC
+            LIMIT 20
+            """
+        else:
+            query = f"""
+            MATCH path = (entry:Asset)-[*1..{max_hops}]->(target:Asset)
+            WHERE entry.organization_id = $org_id
+              AND entry.is_public = true
+              AND target.risk_score > 50
+              AND entry.id <> target.id
+            RETURN path, length(path) AS hops, target.risk_score AS target_risk
+            ORDER BY target_risk DESC, hops ASC
+            LIMIT 20
+            """
+
         result = await graph.post(
             "/internal/assets/query",
             json={
-                "query": f"""
-                MATCH path = (entry:Asset)-[*1..{max_hops}]->(target:Asset)
-                WHERE entry.organization_id = $org_id
-                  AND entry.is_public = true
-                  AND target.risk_score > 50
-                  AND entry.id <> target.id
-                RETURN path, length(path) AS hops, target.risk_score AS target_risk
-                ORDER BY target_risk DESC, hops ASC
-                LIMIT 20
-                """,
+                "query": query,
                 "parameters": {"org_id": user.organization_id},
             },
             headers=user.auth_headers,

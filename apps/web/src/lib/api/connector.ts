@@ -1,17 +1,20 @@
 /**
  * Connector Service API Client
  *
- * Every request includes the Authorization header so the connector can
- * extract the organization_id from the JWT and enforce tenant isolation.
+ * Routes through the API gateway (/v1/accounts) which:
+ * 1. Reads auth from HttpOnly cookie
+ * 2. Validates the JWT and extracts org_id
+ * 3. Proxies to the connector service with proper tenant isolation
+ *
+ * Authentication: HttpOnly cookies via credentials: 'include'
+ * Tokens are NEVER stored in or read from localStorage.
+ * Refresh is handled server-side via cv_refresh HttpOnly cookie.
  */
 
-const CONNECTOR_BASE_URL = process.env.NEXT_PUBLIC_CONNECTOR_BASE_URL || 'http://localhost:8000';
+import { getCsrfToken } from '@/lib/csrf';
+import { refreshSession } from '@/lib/api/auth';
 
-/** Read the access token from localStorage (set by use-auth.tsx on login). */
-function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return null /* HttpOnly cookie */;
-}
+const API_GATEWAY_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -205,24 +208,56 @@ export interface ResourceTypeCatalog {
 }
 
 // ─── API Client ──────────────────────────────────────────────────────────────
+// All endpoints route through /v1/accounts on the API gateway.
+// The gateway handles internal path mapping (/v1/accounts/* → /internal/accounts/*).
 
 async function connectorFetch(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  _retry = true,
 ): Promise<any> {
-  const url = `${CONNECTOR_BASE_URL}${endpoint}`;
-  const token = getAccessToken();
+  // Map internal paths to public gateway paths
+  // /internal/accounts/{path} → /v1/accounts/{path}
+  // /internal/{resource} → /v1/accounts/{resource}
+  // /health → /api/health
+  let path = endpoint;
+  if (path.startsWith('/internal/accounts')) {
+    path = path.replace('/internal/accounts', '');
+  } else if (path.startsWith('/internal/')) {
+    // Map /internal/onboarding → /onboarding, /internal/resources → /resources
+    path = path.replace('/internal', '');
+  }
+
+  const url = path === '/health'
+    ? `${API_GATEWAY_URL}/api/health`
+    : `${API_GATEWAY_URL}/v1/accounts${path}`;
+
+  const method = (options.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  // CSRF protection for state-changing requests
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
 
   const response = await fetch(url, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      // Always send the JWT so the connector can extract org_id for tenant isolation
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
+    credentials: 'include', // Send HttpOnly cookies for auth
+    headers,
     ...options,
   });
+
+  // Auto-refresh on 401
+  if (response.status === 401 && _retry) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      return connectorFetch(endpoint, options, false);
+    }
+    throw new Error('Session expired. Please sign in again.');
+  }
 
   if (!response.ok) {
     let errorData: any;

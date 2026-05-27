@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState } from "react";
 import { ExecutionsTable } from "../../../../../components/table/ExecutionsTable";
 import {
   Card,
@@ -31,9 +31,9 @@ interface Pagination {
 }
 
 export default function MappingExecutionsPage(props: {
-  params: Promise<{ rule_id: string }>;
+  params: { rule_id: string };
 }) {
-  const params = use(props.params);
+  const params = props.params;
   const [pagination, setPagination] = useState<Pagination>({
     limit: 20,
     offset: 0,

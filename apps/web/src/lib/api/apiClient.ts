@@ -2,7 +2,7 @@
  * API Gateway Client
  *
  * All public-facing operations should go through the API gateway at
- * localhost:8005/v1 rather than calling individual microservices directly.
+ * localhost:8080/v1 rather than calling individual microservices directly.
  *
  * The gateway handles:
  *  - JWT validation and tenant isolation
@@ -11,46 +11,11 @@
  *  - Unified error responses
  */
 
+import { getCsrfToken } from '@/lib/csrf';
+import { refreshSession } from '@/lib/api/auth';
+
 const API_GATEWAY_BASE_URL =
-  process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
-
-const AUTH_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
-
-/** Read the access token from localStorage (set by use-auth.tsx on login). */
-function getAccessToken(): string | null {
-  // No longer needed — auth is via HttpOnly cookies
-  return null;
-}
-
-function getRefreshToken(): string | null {
-  // No longer needed — refresh is via HttpOnly cookie
-  return null;
-}
-
-/** Attempt a silent token refresh via cookie. */
-async function silentRefresh(): Promise<string | null> {
-  try {
-    const res = await fetch(`${AUTH_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include', // Send cv_refresh cookie
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-    if (!res.ok) return null;
-    return 'refreshed'; // Server set new cookies
-  } catch {
-    return null;
-  }
-}
-
-/** Clear tokens and redirect to login. */
-function forceLogout(): void {
-  localStorage.removeItem('cloudvisor-user');
-  if (typeof window !== 'undefined') {
-    window.location.href = '/login?error=session_expired';
-  }
-}
+  process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -158,10 +123,14 @@ async function apiFetch<T = unknown>(
     'Content-Type': 'application/json',
     ...options.headers as Record<string, string>,
   };
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && typeof document !== 'undefined') {
-    const csrfMatch = document.cookie.match(/(?:^|; )cv_csrf=([^;]*)/);
-    if (csrfMatch) headers['X-CSRF-Token'] = decodeURIComponent(csrfMatch[1]);
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
   }
+
+  // Authentication is handled entirely via HttpOnly cookies (cv_access, cv_refresh).
+  // No Authorization header is needed — credentials: 'include' sends cookies automatically.
+  // Tokens are NEVER stored in or read from localStorage.
 
   const response = await fetch(url, {
     credentials: 'include', // Send HttpOnly cookies
@@ -171,12 +140,12 @@ async function apiFetch<T = unknown>(
 
   // ── Auto-refresh on 401 ───────────────────────────────────────────────────
   if (response.status === 401 && _retry) {
-    const refreshed = await silentRefresh();
+    const refreshed = await refreshSession();
     if (refreshed) {
       // Retry once — server set new cookies
       return apiFetch<T>(endpoint, options, false);
     }
-    // Don't clear tokens — let AuthProvider handle session state
+    // Don't force redirect — let AuthProvider handle session state
     throw new Error('Session expired. Please sign in again.');
   }
 

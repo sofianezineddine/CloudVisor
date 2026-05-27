@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState } from "react";
 import { Card, Title, Icon, Subtitle } from "@tremor/react";
 import { useEnrichmentEvents } from "@/utils/hooks/useEnrichmentEvents";
 import { Link } from "@/components/ui";
@@ -14,9 +14,9 @@ interface Pagination {
 }
 
 export default function ExtractionExecutionsPage(props: {
-  params: Promise<{ rule_id: string }>;
+  params: { rule_id: string };
 }) {
-  const params = use(props.params);
+  const params = props.params;
   const [pagination, setPagination] = useState<Pagination>({
     limit: 20,
     offset: 0,

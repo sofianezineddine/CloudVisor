@@ -1,4 +1,4 @@
-import { ExclamationCircleIcon } from "@heroicons/react/24/outline";
+import { ExclamationCircleIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { Card, Callout } from "@tremor/react";
 import dynamic from "next/dynamic";
 import { Suspense } from "react";
@@ -33,6 +33,10 @@ export function WorkflowBuilderCard({
     isLoading,
   } = useProviders();
 
+  // Handle case where API returns error (e.g., auth required) or data is malformed
+  const safeProviders = providers || [];
+  const safeInstalledProviders = installedProviders || [];
+
   const cardClassName = clsx(
     "p-0 overflow-hidden",
     standalone
@@ -40,27 +44,16 @@ export function WorkflowBuilderCard({
       : "h-full rounded-none border-t border-gray-200 shadow-none ring-0"
   );
 
-  if (!providers || isLoading)
+  if (isLoading)
     return (
       <Card className={cardClassName}>
         <KeepLoader loadingText="Loading providers..." />
       </Card>
     );
 
-  if (error) {
-    return (
-      <Card className={cardClassName}>
-        <Callout
-          className="mt-4"
-          title="Error"
-          icon={ExclamationCircleIcon}
-          color="rose"
-        >
-          Failed to load providers
-        </Callout>
-      </Card>
-    );
-  }
+  // If error or no providers, show warning but still allow builder to load
+  // This allows testing AI features even when providers API fails
+  const hasError = error || !providers;
 
   if (loadedYamlFileContents == "" && !workflowRaw) {
     return (
@@ -75,9 +68,19 @@ export function WorkflowBuilderCard({
       fallback={<KeepLoader loadingText="Loading workflow builder..." />}
     >
       <Card className={cardClassName}>
+        {hasError && (
+          <Callout
+            className="m-4"
+            title="Providers unavailable"
+            icon={ExclamationTriangleIcon}
+            color="yellow"
+          >
+            Could not load providers. AI features may still work, but provider actions will be limited.
+          </Callout>
+        )}
         <Builder
-          providers={providers}
-          installedProviders={installedProviders}
+          providers={safeProviders}
+          installedProviders={safeInstalledProviders}
           loadedYamlFileContents={loadedYamlFileContents}
           workflowRaw={workflowRaw}
           workflowId={workflowId}

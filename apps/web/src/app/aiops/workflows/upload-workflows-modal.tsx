@@ -76,7 +76,7 @@ export const UploadWorkflowsModal: React.FC<UploadWorkflowsModalProps> = ({
     onClose();
     if (uploadedWorkflowsIds.length === 1) {
       // If there is only one file, redirect to the workflow detail page
-      router.push(`/workflows/${uploadedWorkflowsIds[0]}`);
+      router.push(`/aiops/workflows/${uploadedWorkflowsIds[0]}`);
     }
   };
 

@@ -57,7 +57,7 @@ const PresetGridItem: React.FC<GridItemProps> = ({ item }) => {
   const router = useRouter();
 
   function handleGoToPresetClick() {
-    router.push(`/alerts/${preset?.name.toLowerCase()}`);
+    router.push(`/aiops/alerts/${preset?.name.toLowerCase()}`);
   }
 
   const getColor = () => {

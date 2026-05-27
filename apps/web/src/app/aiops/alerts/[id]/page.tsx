@@ -9,7 +9,4 @@ export default function Page({ params }: PageProps) {
   return <AlertsPage presetName={params.id} initialFacets={[]} />;
 }
 
-export const metadata = {
-  title: "Keep - Alerts",
-  description: "Single pane of glass for all your alerts.",
-};
+// metadata removed for dynamic rendering

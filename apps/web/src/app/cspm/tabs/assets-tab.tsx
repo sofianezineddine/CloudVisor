@@ -408,7 +408,7 @@ export function AssetsTab() {
               q: debSearch,
               org_id: orgId,
               provider: globalProvider || undefined,
-              page_size: 200,
+              limit: 200,
             });
             items = searchResp?.hits ?? [];
           }
@@ -419,14 +419,14 @@ export function AssetsTab() {
               account_id: globalAccountId, 
               provider: !globalAccountId ? globalProvider : undefined, 
               search: debSearch, 
-              limit: 2000, 
+              limit: 200, 
               offset: 0 
             });
             items = (resp?.resources as any[]) ?? [];
           } catch {
             const searchResp = await apiClient.assets.search(debSearch, { 
               provider: globalProvider || undefined, 
-              limit: 2000,
+              limit: 200,
             });
             items = (searchResp?.data as any[]) ?? [];
           }
@@ -437,11 +437,9 @@ export function AssetsTab() {
         try {
           if (orgId) {
             const graphResp = await graphAPI.listAssets({
-              org_id: orgId,
               provider: globalProvider || (!globalAccountId ? undefined : undefined),
               resource_type: typeFilter || undefined,
-              page: 1,
-              page_size: 2000,
+              limit: 100,
             });
             items = graphResp?.assets ?? [];
             // If graph returned data with risk scores, use it
@@ -458,7 +456,7 @@ export function AssetsTab() {
           try {
             let allItems: any[] = [];
             let offset = 0;
-            const batchSize = 1000;
+            const batchSize = 200;
             let hasMore = true;
             
             while (hasMore && allItems.length < 10000) {
@@ -480,8 +478,7 @@ export function AssetsTab() {
               account_id: globalAccountId, 
               provider: !globalAccountId ? globalProvider : undefined, 
               resource_type: typeFilter || undefined, 
-              limit: 5000, 
-              offset: 0 
+              limit: 200,
             });
             items = (resp?.data as any[]) ?? [];
           }

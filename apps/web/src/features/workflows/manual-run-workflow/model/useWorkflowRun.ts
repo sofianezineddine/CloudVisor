@@ -192,7 +192,7 @@ export const useWorkflowRun = (workflow: Workflow) => {
       revalidateForWorkflow(workflow.id);
 
       const { workflow_execution_id } = result;
-      router.push(`/workflows/${workflow.id}/runs/${workflow_execution_id}`);
+      router.push(`/aiops/workflows/${workflow.id}/runs/${workflow_execution_id}`);
     } catch (error) {
       showErrorToast(error, undefined, {
         messagePrefix: "Failed to start workflow",

@@ -79,7 +79,7 @@ const WidgetAlertCountPanel: React.FC<WidgetAlertCountPanelProps> = ({
   const router = useRouter();
 
   function handleGoToPresetClick() {
-    router.push(`/alerts/${preset?.name.toLowerCase()}`);
+    router.push(`/aiops/alerts/${preset?.name.toLowerCase()}`);
   }
 
   function handleCustomLinkClick() {

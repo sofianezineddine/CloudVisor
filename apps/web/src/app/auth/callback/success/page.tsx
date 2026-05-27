@@ -3,20 +3,19 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
+import { authAPI } from '@/lib/api/auth';
 
 /**
  * OAuth callback success page.
  *
- * The backend redirects here with a short-lived one-time exchange code:
- *   /auth/callback/success?code=<exchange_code>
+ * Flow:
+ * 1. Backend redirects here with ?code=<exchange_code>
+ * 2. We POST to /auth/oauth/exchange (same origin via nginx — relative URL)
+ * 3. Server sets HttpOnly cookies (cv_access, cv_refresh) in response
+ * 4. We set cv_session cookie (JS-readable session indicator)
+ * 5. Redirect to /console
  *
- * We POST that code to /auth/oauth/exchange which:
- * 1. Validates the code
- * 2. Sets HttpOnly cookies (cv_access, cv_refresh, cv_csrf, cv_session)
- * 3. Returns user info (no tokens in response body)
- *
- * Tokens are NEVER accessible to JavaScript — they're in HttpOnly cookies.
+ * NO tokens are stored in localStorage — everything is in HttpOnly cookies.
  */
 export default function OAuthCallbackSuccessPage() {
   const [status, setStatus] = useState('Completing sign-in…');
@@ -39,22 +38,19 @@ export default function OAuthCallbackSuccessPage() {
       return;
     }
 
-    // Exchange the one-time code — server sets HttpOnly cookies in response
-    fetch(`${API_BASE_URL}/auth/oauth/exchange`, {
-      method: 'POST',
-      credentials: 'include', // IMPORTANT: receive Set-Cookie from server
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: exchangeCode }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Exchange failed' }));
-          throw new Error(err.detail || 'Token exchange failed');
-        }
-        return res.json();
-      })
+    // Exchange code via authAPI — uses relative URL (/auth/oauth/exchange)
+    // All API calls go through nginx on the same origin — no CORS issues.
+    authAPI.exchangeOAuthCode(exchangeCode)
       .then((data) => {
-        // Store only non-sensitive user display data in localStorage
+        // authAPI.exchangeOAuthCode already parsed the JSON response
+        // Server set HttpOnly cookies (cv_access, cv_refresh) in the response
+
+        // Set session indicator cookie (non-HttpOnly, JS-readable)
+        document.cookie = 'cv_session=1; path=/; max-age=3600; samesite=lax';
+
+        // Note: The exchange endpoint returns TokenResponse (no user object).
+        // User profile is fetched separately by AuthProvider via /auth/me.
+        // Store ONLY non-sensitive display data (name, org) — NO tokens
         if (data?.user) {
           localStorage.setItem('cloudvisor-user', JSON.stringify({
             id: data.user.id,
@@ -67,11 +63,10 @@ export default function OAuthCallbackSuccessPage() {
         }
 
         setStatus('Sign-in successful! Redirecting…');
-        // Full reload so AuthProvider detects the cv_session cookie
         window.location.href = '/console';
       })
       .catch((err) => {
-        console.error('OAuth exchange failed:', err);
+        console.error('OAuth exchange failed:', err instanceof Error ? err.message : err);
         setStatus('Authentication failed. Redirecting to login…');
         setTimeout(() => router.replace('/login?error=oauth_failed'), 2000);
       });

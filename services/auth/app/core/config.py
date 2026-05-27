@@ -32,7 +32,7 @@ class AuthSettings(BaseSettings):
     # Set AUTH_RSA_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n..." in .env
     rsa_public_key: str = Field(default="")
 
-    access_token_expire_minutes: int = Field(default=15)
+    access_token_expire_minutes: int = Field(default=60)
     refresh_token_expire_days: int = Field(default=30)
     bcrypt_rounds: int = Field(default=12)
     mfa_issuer: str = Field(default="CloudVisor")

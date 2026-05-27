@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ShieldOff, Plus, Trash2, Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import apiClient from '@/lib/api/apiClient';
+import { getCsrfToken } from '@/lib/csrf';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,39 +24,44 @@ interface SuppressionRule {
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
+// Authentication: HttpOnly cookies via credentials: 'include'
+// Tokens are NEVER stored in or read from localStorage.
+// CSRF token is attached for state-changing requests.
+
+const GW = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
+
+/** Build headers with CSRF token for state-changing requests */
+function buildHeaders(method: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())) {
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
+  return headers;
+}
 
 const suppressionsAPI = {
-  list: () => apiClient['findings'] // reuse apiFetch via gateway
-    ? fetch(`${process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005'}/v1/suppressions`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(typeof window !== 'undefined' && localStorage.getItem('access_token')
-            ? { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-            : {}),
-        },
-      }).then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-    : Promise.resolve({ data: [] }),
+  list: () =>
+    fetch(`${GW}/v1/suppressions`, {
+      credentials: 'include',
+      headers: buildHeaders('GET'),
+    }).then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))),
 
   create: (data: Partial<SuppressionRule>) =>
-    fetch(`${process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005'}/v1/suppressions`, {
+    fetch(`${GW}/v1/suppressions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(typeof window !== 'undefined' && localStorage.getItem('access_token')
-          ? { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-          : {}),
-      },
+      credentials: 'include',
+      headers: buildHeaders('POST'),
       body: JSON.stringify(data),
     }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(new Error(e.detail || `HTTP ${r.status}`)))),
 
   delete: (id: string) =>
-    fetch(`${process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005'}/v1/suppressions/${id}`, {
+    fetch(`${GW}/v1/suppressions/${id}`, {
       method: 'DELETE',
-      headers: {
-        ...(typeof window !== 'undefined' && localStorage.getItem('access_token')
-          ? { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-          : {}),
-      },
+      credentials: 'include',
+      headers: buildHeaders('DELETE'),
     }).then(r => r.ok || r.status === 204 ? null : Promise.reject(new Error(`HTTP ${r.status}`))),
 };
 

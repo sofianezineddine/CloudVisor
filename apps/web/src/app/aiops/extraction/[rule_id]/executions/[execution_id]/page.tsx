@@ -1,7 +1,5 @@
 "use client";
 
-import { use } from "react";
-
 import { Card, Title, Badge, Icon, Subtitle } from "@tremor/react";
 import { LogViewer } from "@/components/LogViewer";
 import { useEnrichmentEvent } from "@/utils/hooks/useEnrichmentEvents";
@@ -11,9 +9,9 @@ import { useExtractions } from "@/utils/hooks/useExtractionRules";
 import { getIconForStatusString } from "@/shared/ui";
 
 export default function ExtractionExecutionDetailsPage(props: {
-  params: Promise<{ rule_id: string; execution_id: string }>;
+  params: { rule_id: string; execution_id: string };
 }) {
-  const params = use(props.params);
+  const params = props.params;
   const { execution, isLoading } = useEnrichmentEvent({
     ruleId: params.rule_id,
     executionId: params.execution_id,

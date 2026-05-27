@@ -105,7 +105,7 @@ export function ServiceNode({ data, selected }: NodeProps<ServiceNodeType>) {
 
   const handleAlertClick = () => {
     const cel = `service=="${data.display_name}"`;
-    router.push(`/alerts/feed?cel=${encodeURIComponent(cel)}`);
+    router.push(`/aiops/alerts/feed?cel=${encodeURIComponent(cel)}`);
   };
 
   const incidentsCount = data.incidents ?? 0;

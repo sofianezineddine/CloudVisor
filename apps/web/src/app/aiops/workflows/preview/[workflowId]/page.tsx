@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react";
 import { KeepLoader } from "@/shared/ui";
 import { WorkflowBuilderWidget } from "@/widgets/workflow-builder";
 import { Subtitle } from "@tremor/react";
@@ -7,12 +7,11 @@ import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import { Icon } from "@tremor/react";
 import { Link } from "@/components/ui";
 
-export default function PageWithId(
-  props: {
-    params: Promise<{ workflowId: string }>;
-  }
-) {
-  const params = use(props.params);
+export default function PageWithId({
+  params,
+}: {
+  params: { workflowId: string };
+}) {
   const [workflowPreviewData, setWorkflowPreviewData] = useState<any>(null);
   const key = params?.workflowId;
 
@@ -30,7 +29,7 @@ export default function PageWithId(
   return (
     <div className="flex flex-col h-full gap-4">
       <Subtitle className="text-sm">
-        <Link href="/workflows">All Workflows</Link>{" "}
+        <Link href="/aiops/workflows">All Workflows</Link>{" "}
         <Icon icon={ArrowRightIcon} color="gray" size="xs" /> Preview workflow
         template
       </Subtitle>
@@ -49,7 +48,7 @@ export default function PageWithId(
           <>
             <Link
               className="p-2 bg-orange-500 text-white hover:bg-orange-600 rounded"
-              href="/workflows"
+              href="/aiops/workflows"
             >
               Go Back
             </Link>

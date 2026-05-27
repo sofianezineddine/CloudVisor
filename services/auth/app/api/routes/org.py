@@ -13,7 +13,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,11 +30,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth/org", tags=["organization"])
 
 
-def _require_auth(authorization: str | None) -> dict:
-    """Extract and validate JWT payload from Authorization header."""
-    if not authorization or not authorization.startswith("Bearer "):
+def _require_auth(
+    authorization: str | None,
+    request: Request | None = None,
+) -> dict:
+    """Extract and validate JWT payload from Authorization header or cv_access cookie.
+
+    Accepts auth via:
+    1. Authorization: Bearer <token> header (programmatic access)
+    2. cv_access HttpOnly cookie (browser session — C-01 fix)
+    """
+    from ...core.cookies import get_access_token_from_cookie
+
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+    elif request:
+        token = get_access_token_from_cookie(request)
+
+    if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    token = authorization.removeprefix("Bearer ").strip()
+
     auth_settings = get_auth_settings_cached()
     try:
         payload = decode_token(
@@ -70,10 +86,11 @@ async def _require_role(
 @router.get("/me")
 async def get_my_organization(
     authorization: str | None = Header(default=None, alias="Authorization"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Get the current user's organization details."""
-    payload = _require_auth(authorization)
+    payload = _require_auth(authorization, request)
     user_id = payload.get("sub")
     org_id = payload.get("org_id")
 
@@ -108,11 +125,12 @@ class UpdateOrgRequest(BaseModel):
 async def update_my_organization(
     data: UpdateOrgRequest,
     authorization: str | None = Header(default=None, alias="Authorization"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
     kafka_producer=Depends(get_kafka_producer),
 ) -> dict:
     """Update organization name or billing email. Requires owner or admin role."""
-    payload = _require_auth(authorization)
+    payload = _require_auth(authorization, request)
     user_id = payload.get("sub")
     org_id = payload.get("org_id")
 
@@ -141,6 +159,7 @@ class ChangePlanRequest(BaseModel):
 async def change_plan(
     data: ChangePlanRequest,
     authorization: str | None = Header(default=None, alias="Authorization"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
     kafka_producer=Depends(get_kafka_producer),
 ) -> dict:
@@ -148,7 +167,7 @@ async def change_plan(
 
     Emits org.plan_changed Kafka event per spec §3.3.
     """
-    payload = _require_auth(authorization)
+    payload = _require_auth(authorization, request)
     user_id = payload.get("sub")
     org_id = payload.get("org_id")
 
@@ -196,6 +215,7 @@ async def change_plan(
 @router.delete("/me")
 async def delete_organization(
     authorization: str | None = Header(default=None, alias="Authorization"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
     kafka_producer=Depends(get_kafka_producer),
 ) -> dict:
@@ -204,7 +224,7 @@ async def delete_organization(
     Requires owner role. Emits org.deleted Kafka event per spec §3.3.
     This is a soft-delete — sets is_deleted=True and deactivates all users/sessions.
     """
-    payload = _require_auth(authorization)
+    payload = _require_auth(authorization, request)
     user_id = payload.get("sub")
     org_id = payload.get("org_id")
 
@@ -263,10 +283,11 @@ async def delete_organization(
 @router.get("/me/members")
 async def list_members(
     authorization: str | None = Header(default=None, alias="Authorization"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """List all members of the organization. Requires owner or admin role."""
-    payload = _require_auth(authorization)
+    payload = _require_auth(authorization, request)
     user_id = payload.get("sub")
     org_id = payload.get("org_id")
 
@@ -312,6 +333,7 @@ class InviteMemberRequest(BaseModel):
 async def invite_member(
     data: InviteMemberRequest,
     authorization: str | None = Header(default=None, alias="Authorization"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
     kafka_producer=Depends(get_kafka_producer),
@@ -324,7 +346,7 @@ async def invite_member(
     import secrets
     import uuid
 
-    payload = _require_auth(authorization)
+    payload = _require_auth(authorization, request)
     inviter_id = payload.get("sub")
     org_id = payload.get("org_id")
 
@@ -396,13 +418,14 @@ async def invite_member(
 async def remove_member(
     member_id: str,
     authorization: str | None = Header(default=None, alias="Authorization"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Remove a member from the organization. Requires owner or admin role.
 
     Owners cannot be removed by admins. Only owners can remove other owners.
     """
-    payload = _require_auth(authorization)
+    payload = _require_auth(authorization, request)
     requester_id = payload.get("sub")
     org_id = payload.get("org_id")
 
@@ -459,13 +482,14 @@ async def update_member_role(
     member_id: str,
     data: UpdateMemberRoleRequest,
     authorization: str | None = Header(default=None, alias="Authorization"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Change a member's role. Requires owner or admin role.
 
     Admins cannot assign the owner role — only owners can do that.
     """
-    payload = _require_auth(authorization)
+    payload = _require_auth(authorization, request)
     requester_id = payload.get("sub")
     org_id = payload.get("org_id")
 
@@ -507,6 +531,7 @@ async def update_member_role(
 @router.get("/me/audit-log")
 async def get_audit_log(
     authorization: str | None = Header(default=None, alias="Authorization"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
@@ -520,7 +545,7 @@ async def get_audit_log(
     Spec §3.3: Record every authentication and authorization event.
     Accessible by: owner, admin, security_engineer, auditor.
     """
-    payload = _require_auth(authorization)
+    payload = _require_auth(authorization, request)
     requester_id = payload.get("sub")
     org_id = payload.get("org_id")
 

@@ -471,7 +471,7 @@ export function AlertMenu({
         label: "Workflow",
         onClick: () =>
           router.push(
-            `/workflows/builder?alertName=${encodeURIComponent(
+            `/aiops/workflows/builder?alertName=${encodeURIComponent(
               alert.name
             )}&alertSource=${alert.source![0]}`
           ),

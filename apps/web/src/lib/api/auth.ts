@@ -59,20 +59,43 @@
  * —  POST   /internal/auth/users/{id}/role    (internal — called by API gateway, not frontend)
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
+const API_BASE_URL = ''; // Relative URLs — proxy (nginx/Next.js rewrite) handles routing
 
 function getAdminToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('admin_access_token');
 }
-  return localStorage.getItem('admin_access_token');
+
+/**
+ * Shared silent token refresh using HttpOnly cookies.
+ * Server reads cv_refresh cookie and sets new cv_access cookie.
+ * Uses relative URL (same origin via nginx proxy) — works in dev and production.
+ * This is exported for use by all API clients across the codebase.
+ */
+export async function refreshSession(): Promise<boolean> {
+  try {
+    const res = await fetch('/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (res.ok) {
+      // Renew the JS-readable session indicator cookie
+      document.cookie = 'cv_session=1; path=/; max-age=3600; samesite=lax';
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
-/** Authenticated fetch to the auth service using HttpOnly cookies.
- *  Cookies are sent automatically via credentials: 'include'. */
+/** Authenticated fetch to the auth service.
+ *  All services are behind nginx on the same origin — cookies work natively. */
 async function authFetch(path: string, options: RequestInit = {}, _retry = true): Promise<any> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
-    credentials: 'include', // Send HttpOnly cookies
+    credentials: 'include', // Same-origin cookies sent automatically
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -80,8 +103,17 @@ async function authFetch(path: string, options: RequestInit = {}, _retry = true)
     ...options,
   });
 
-  // On 401, session has expired — just throw, let AuthProvider handle
-  if (res.status === 401) {
+  // On 401, try refresh (server reads cv_refresh cookie, sets new cv_access cookie)
+  if (res.status === 401 && _retry) {
+    const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (refreshRes.ok) {
+      return authFetch(path, options, false);
+    }
     throw new Error('Session expired. Please sign in again.');
   }
 
@@ -166,10 +198,10 @@ export const authAPI = {
     return res.json();
   },
 
-  /** GET /auth/me — current user profile (uses HttpOnly cookie) */
-  getCurrentUser: async (_token?: string) => {
+  /** GET /auth/me — current user profile (cookie-authenticated) */
+  getCurrentUser: async () => {
     const res = await fetch(`${API_BASE_URL}/auth/me`, {
-      credentials: 'include', // HttpOnly cookie sent automatically
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to fetch user'); }

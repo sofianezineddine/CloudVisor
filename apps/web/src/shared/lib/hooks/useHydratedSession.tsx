@@ -8,15 +8,15 @@
  * User metadata is stored in localStorage (non-sensitive display data only).
  */
 
-import { hasSessionCookie } from '@/lib/csrf';
+import { hasSessionCookie, getCookie } from '@/lib/csrf';
 
 export function useHydratedSession() {
+  // Auth check via cv_session cookie only — tokens are HttpOnly and never in localStorage (C-01 fix)
   const isAuthenticated = hasSessionCookie();
 
   const getUser = () => {
     if (typeof window === 'undefined') return null;
     try {
-      // Only non-sensitive display data (name, org) is in localStorage
       const stored = localStorage.getItem('cloudvisor-user');
       return stored ? JSON.parse(stored) : null;
     } catch {

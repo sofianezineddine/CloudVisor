@@ -1,20 +1,13 @@
+"use client";
+
 import { WorkflowBuilderWidget } from "@/widgets/workflow-builder";
-import { Metadata } from "next";
 
-type PageProps = {
-  params: { workflow: string; workflowId: string };
-  searchparams: { [key: string]: string | string[] | undefined };
-};
-
-export default async function WorkflowBuilderPage(props: PageProps) {
-  const params = props.params;
+export default function WorkflowBuilderPage() {
   return (
     <WorkflowBuilderWidget
-      workflowRaw={params.workflow}
-      workflowId={params.workflowId}
+      workflowRaw={undefined}
+      workflowId={undefined}
       standalone={true}
     />
   );
 }
-
-

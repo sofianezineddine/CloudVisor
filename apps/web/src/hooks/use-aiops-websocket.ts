@@ -49,7 +49,7 @@ interface UseAIOpsWebSocketReturn {
 
 const PUSHER_KEY = process.env.NEXT_PUBLIC_PUSHER_KEY || 'cloudvisor-key';
 const PUSHER_HOST = process.env.NEXT_PUBLIC_PUSHER_HOST || 'localhost';
-const PUSHER_PORT = parseInt(process.env.NEXT_PUBLIC_PUSHER_PORT || '6001', 10);
+const PUSHER_PORT = parseInt(process.env.NEXT_PUBLIC_PUSHER_PORT || '8080', 10);
 
 const MAX_EVENTS_BUFFER = 50;
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -168,7 +168,7 @@ export function useAIOpsWebSocket(
       disableStats: true,
       enabledTransports: ['ws', 'wss'],
       cluster: 'mt1', // Required by Pusher.js but unused with Soketi
-      authEndpoint: `${process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005'}/v1/keep/pusher/auth`,
+      authEndpoint: `${process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080'}/v1/keep/pusher/auth`,
       auth: {
         headers: {
           // Auth via HttpOnly cookies — no Authorization header needed

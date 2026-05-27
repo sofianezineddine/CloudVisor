@@ -210,7 +210,7 @@ export default function IncidentAlerts({ incident }: Props) {
             variant="secondary"
             size="md"
             onClick={() => {
-              router.push(`/alerts/feed`);
+              router.push(`/aiops/alerts/feed`);
             }}
           >
             Add Alerts Manually
@@ -220,7 +220,7 @@ export default function IncidentAlerts({ incident }: Props) {
             variant="primary"
             size="md"
             onClick={() => {
-              router.push(`/alerts/feed?createIncidentsFromLastAlerts=50`);
+              router.push(`/aiops/alerts/feed?createIncidentsFromLastAlerts=50`);
             }}
           >
             Try AI Correlation

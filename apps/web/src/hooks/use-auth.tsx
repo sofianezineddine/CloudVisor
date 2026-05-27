@@ -34,9 +34,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const ACCESS_TOKEN_KEY = 'access_token';
-const REFRESH_TOKEN_KEY = 'refresh_token';
-
 // ─── Cookie-based auth ───────────────────────────────────────────────────────
 // Tokens are stored in HttpOnly cookies (set by auth service).
 // JavaScript cannot read them — we use the cv_session cookie to check auth status.
@@ -49,9 +46,9 @@ function hasSession(): boolean {
 
 function clearLocalUserData() {
   localStorage.removeItem('cloudvisor-user');
-  // Legacy cleanup — remove any old localStorage tokens
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  if (typeof document !== 'undefined') {
+    document.cookie = 'cv_session=; path=/; max-age=0';
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -65,7 +62,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      // getCurrentUser uses credentials: 'include' — cookie sent automatically
       const userData = await authAPI.getCurrentUser();
       setUser(userData);
       // Store only non-sensitive display data
@@ -104,8 +100,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser]);
 
   const login = async (email: string, password: string, mfaCode?: string) => {
-    // Server sets HttpOnly cookies on successful login
+    // Server sets HttpOnly cookies — no localStorage needed (C-01 fix)
     await authAPI.login({ email, password, mfa_code: mfaCode });
+    // Set session indicator cookie (non-HttpOnly, JS-visible indicator)
+    document.cookie = 'cv_session=1; path=/; max-age=3600; samesite=lax';
     await refreshUser();
   };
 

@@ -63,6 +63,55 @@ async def list_accounts(
         raise HTTPException(status_code=502, detail=f"Connector service unavailable: {e}")
 
 
+# ─── Resources (must be BEFORE /{account_id} to avoid route conflict) ─────────
+
+@router.get("/resources")
+async def list_resources(
+    request: Request,
+    account_id: str | None = Query(None),
+    provider: str | None = Query(None),
+    resource_type: str | None = Query(None),
+    region: str | None = Query(None),
+    search: str | None = Query(None),
+    is_public: bool | None = Query(None),
+    environment: str | None = Query(None),
+    limit: int = Query(100, ge=1),
+    offset: int = Query(0, ge=0),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """List discovered resources from the connector service."""
+    t0 = time.monotonic()
+    proxy = get_connector_proxy()
+
+    params: dict[str, Any] = {"limit": limit, "offset": offset}
+    if account_id:
+        params["account_id"] = account_id
+    if provider:
+        params["provider"] = provider
+    if resource_type:
+        params["resource_type"] = resource_type
+    if region:
+        params["region"] = region
+    if search:
+        params["search"] = search
+    if is_public is not None:
+        params["is_public"] = str(is_public).lower()
+    if environment:
+        params["environment"] = environment
+
+    try:
+        result = await proxy.get("/internal/resources", params=params, headers=user.auth_headers)
+        resources = result.get("resources", [])
+        total = result.get("total", len(resources))
+        return ok(
+            data=resources,
+            total=total,
+            took_ms=int((time.monotonic() - t0) * 1000),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Connector service unavailable: {e}")
+
+
 @router.post("", status_code=201)
 async def connect_account(
     data: ConnectAccountRequest,

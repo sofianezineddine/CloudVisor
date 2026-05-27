@@ -484,13 +484,13 @@ function useAccountLoader() {
   const setAccountsRef = React.useRef(useScopeStore.getState().setAccounts);
   const selectProviderRef = React.useRef(useScopeStore.getState().selectProvider);
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
+  const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
   React.useEffect(() => {
     if (_accountsLoaded) return;
     _accountsLoaded = true;
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const token = typeof window !== 'undefined' ? null /* token in HttpOnly cookie */ : null;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

@@ -450,7 +450,7 @@ export const AlertsRulesBuilder = ({
               onClick={() =>
                 deletePreset(selectedPreset!.id!, selectedPreset!.name).then(
                   () => {
-                    router.push("/alerts/feed");
+                    router.push("/aiops/alerts/feed");
                   }
                 )
               }

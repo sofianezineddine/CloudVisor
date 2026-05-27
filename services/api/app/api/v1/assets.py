@@ -43,7 +43,7 @@ async def list_assets(
     search: str | None = Query(None, description="Full-text search by name"),
     # Cursor-based pagination
     cursor: str | None = Query(None, description="Opaque pagination cursor"),
-    limit: int = Query(50, ge=1, le=500, description="Results per page"),
+    limit: int = Query(50, ge=1, description="Results per page"),
     # Sorting
     sort: str | None = Query(None, description="Sort fields, e.g. sort=risk_score,-created_at"),
     # Sparse field sets
@@ -80,8 +80,8 @@ async def list_assets(
 
     params: dict[str, Any] = {
         "org_id": user.organization_id,  # Add org_id parameter for graph service
-        "limit": limit,
-        "offset": offset,
+        "page_size": limit,
+        "page": (offset // limit) + 1 if limit > 0 else 1,
         **filters,
     }
 
@@ -276,7 +276,7 @@ async def get_asset_history(
     asset_id: str,
     start_time: str | None = Query(None, description="ISO timestamp for range start"),
     end_time: str | None = Query(None, description="ISO timestamp for range end"),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get historical snapshots for an asset (time-travel queries)."""
@@ -309,7 +309,7 @@ async def get_asset_findings(
     status: str | None = Query(None),
     severity: str | None = Query(None),
     cursor: str | None = Query(None, description="Opaque pagination cursor"),
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get all findings for a specific asset (cursor-based pagination)."""

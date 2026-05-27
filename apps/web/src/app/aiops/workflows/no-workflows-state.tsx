@@ -45,7 +45,7 @@ export function NoWorkflowsState({}: {
                 color="blue"
                 size="xs"
                 variant="primary"
-                onClick={() => router.push("/workflows/builder")}
+                onClick={() => router.push("/aiops/workflows/builder")}
               >
                 Start from scratch
               </Button>

@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { findingKeys } from './use-findings';
 import { dashboardKeys } from './use-dashboard';
+import { useAuth } from './use-auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,13 +24,18 @@ interface UseWebSocketReturn {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const WS_BASE_URL =
-  (process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005')
+  (process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080')
     .replace(/^http/, 'ws');
+
+const PUSHER_KEY = process.env.NEXT_PUBLIC_PUSHER_KEY || 'cloudvisor-key';
+const PUSHER_HOST = process.env.NEXT_PUBLIC_PUSHER_HOST || 'localhost';
+const PUSHER_PORT = parseInt(process.env.NEXT_PUBLIC_PUSHER_PORT || '8080', 10);
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useWebSocket(): UseWebSocketReturn {
   const queryClient = useQueryClient();
+  const { user, isLoading: authLoading } = useAuth();
   const [status, setStatus] = React.useState<WSStatus>('disconnected');
   const wsRef = React.useRef<WebSocket | null>(null);
   const reconnectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -39,14 +45,20 @@ export function useWebSocket(): UseWebSocketReturn {
   const connect = React.useCallback(() => {
     if (!mountedRef.current) return;
 
-    // Get access token from localStorage
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    if (!token) {
+    // Auth via HttpOnly cookies — no token needed in query param.
+    // The WebSocket server reads the cv_access cookie for authentication.
+    // If the user is not authenticated, don't attempt connection.
+    const sessionCookie =
+      typeof document !== 'undefined' && document.cookie.includes('cv_session=1');
+    if (!sessionCookie && !authLoading) {
       setStatus('disconnected');
       return;
     }
 
-    const url = `${WS_BASE_URL}/ws/events?token=${encodeURIComponent(token)}`;
+    // Use Pusher/Soketi for WebSocket — matches the AIOps pattern
+    // The server-side Pusher auth endpoint handles cookie-based authentication.
+    // For direct events WebSocket, connect to the Soketi endpoint.
+    const url = `${WS_BASE_URL}/app/?key=${PUSHER_KEY}`;
 
     try {
       const ws = new WebSocket(url);
@@ -78,7 +90,6 @@ export function useWebSocket(): UseWebSocketReturn {
 
             // Show toast for new critical findings
             if (msg.type === 'finding.created' && msg.data?.severity === 'CRITICAL') {
-              // Use the Sonner toast if available
               try {
                 const { toast } = require('sonner');
                 toast.error(`Critical finding: ${msg.data?.title ?? 'New critical finding detected'}`, {
@@ -109,7 +120,7 @@ export function useWebSocket(): UseWebSocketReturn {
       setStatus('reconnecting');
       scheduleReconnect();
     }
-  }, [queryClient]);
+  }, [queryClient, authLoading]);
 
   const scheduleReconnect = React.useCallback(() => {
     if (!mountedRef.current) return;
@@ -129,7 +140,7 @@ export function useWebSocket(): UseWebSocketReturn {
       mountedRef.current = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (wsRef.current) {
-        wsRef.current.onclose = null; // prevent reconnect on intentional close
+        wsRef.current.onclose = null;
         wsRef.current.close();
         wsRef.current = null;
       }

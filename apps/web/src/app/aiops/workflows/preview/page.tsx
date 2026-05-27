@@ -1,17 +1,17 @@
 "use client";
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react";
 import { KeepLoader } from "@/shared/ui";
 import { WorkflowBuilderWidget } from "@/widgets/workflow-builder";
 import Link from "next/link";
 
 type PageProps = {
-  params: Promise<{ workflowId: string }>;
-  searchParams: Promise<{ [key: string]: string | undefined }>;
+  params: { workflowId: string };
+  searchParams: { [key: string]: string | undefined };
 };
 
 export default function Page(props: PageProps) {
-  const searchParams = use(props.searchParams);
-  const params = use(props.params);
+  const searchParams = props.searchParams;
+  const params = props.params;
   const [workflowPreviewData, setWorkflowPreviewData] = useState<any>(null);
   const key = params.workflowId || searchParams.workflowId;
 
@@ -42,7 +42,7 @@ export default function Page(props: PageProps) {
         <>
           <Link
             className="p-2 bg-orange-500 text-white hover:bg-orange-600 rounded"
-            href="/workflows"
+            href="/aiops/workflows"
           >
             Go Back
           </Link>

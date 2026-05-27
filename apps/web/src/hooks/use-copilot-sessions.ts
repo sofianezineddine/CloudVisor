@@ -1,53 +1,46 @@
 import { useCallback, useState } from 'react';
 import { useCloudVisorQStore, ChatSession } from '@/stores/cloudvisor-q';
+import { getCsrfToken } from '@/lib/csrf';
+import { refreshSession } from '@/lib/api/auth';
 
-const COPILOT_BASE_URL = process.env.NEXT_PUBLIC_COPILOT_URL || 'http://localhost:8010';
-// Gateway URL — used for session management endpoints proxied through the API gateway
-const GW_BASE_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
+// All API calls go through the API gateway (/v1/copilot/*)
+// The gateway handles auth via HttpOnly cookies, rate limiting, and routing
+// to the copilot service. No direct service calls — single origin through nginx.
+const GW_BASE_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
-function getAuthHeaders(): Record<string, string> {
-  const token =
-    typeof window !== 'undefined'
-      ? localStorage.getItem('access_token')
-      : null;
+/**
+ * Copilot fetch through the API gateway.
+ * Authentication: HttpOnly cookies via credentials: 'include'
+ * CSRF protection: X-CSRF-Token header on state-changing requests
+ */
+async function copilotFetch(path: string, options: RequestInit = {}, _retry = true): Promise<any> {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
 
-  // Never fall back to a hardcoded dev token — fail loudly if unauthenticated
-  if (!token) return {};
-
-  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const orgId = payload?.organization_id ?? payload?.org_id;
-    if (orgId) {
-      headers['X-Org-ID'] = orgId;
-    }
-  } catch {
-    // Silently fail if token parsing fails
+  // CSRF token for state-changing requests
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
   }
 
-  return headers;
-}
-
-// Helper: try gateway first, fall back to direct copilot URL
-async function copilotFetch(path: string, options: RequestInit = {}) {
-  // Try gateway first (preferred — goes through rate limiting + auth)
-  try {
-    const gwResp = await fetch(`${GW_BASE_URL}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-      ...options,
-    });
-    if (gwResp.ok || gwResp.status === 204) {
-      return gwResp.status === 204 ? null : gwResp.json();
-    }
-  } catch {
-    // Gateway unavailable — fall through to direct
-  }
-  // Fallback: direct copilot service
-  const resp = await fetch(`${COPILOT_BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+  const resp = await fetch(`${GW_BASE_URL}${path}`, {
+    credentials: 'include', // Send HttpOnly cookies automatically
+    headers,
     ...options,
   });
+
+  // Auto-refresh on 401
+  if (resp.status === 401 && _retry) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      return copilotFetch(path, options, false);
+    }
+    throw new Error('Session expired. Please sign in again.');
+  }
+
   if (!resp.ok) throw new Error(`${resp.status}: ${resp.statusText}`);
   return resp.status === 204 ? null : resp.json();
 }

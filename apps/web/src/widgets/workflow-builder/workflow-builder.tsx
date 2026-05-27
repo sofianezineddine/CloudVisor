@@ -74,7 +74,8 @@ export function WorkflowBuilder({
 
   useEffect(
     function syncProviders() {
-      setProviders(providers);
+      // Ensure providers are always arrays to prevent undefined errors
+      setProviders(providers ?? []);
       setInstalledProviders(installedProviders ?? []);
     },
     // setProviders and setInstalledProviders shouldn't change
@@ -94,16 +95,20 @@ export function WorkflowBuilder({
     function updateDefinitionFromInput() {
       setIsLoading(true);
       try {
+        // Ensure providers is always an array to prevent "undefined.map()" errors
+        const safeProviders = providers ?? [];
+        const safeInstalledProviders = installedProviders ?? [];
+        
         if (workflowRaw) {
           setDefinition(
             wrapDefinitionV2({
-              ...parseWorkflow(workflowRaw, providers),
+              ...parseWorkflow(workflowRaw, safeProviders),
               isValid: true,
             })
           );
           initializeWorkflow(workflowId ?? null, {
-            providers,
-            installedProviders: installedProviders ?? [],
+            providers: safeProviders,
+            installedProviders: safeInstalledProviders,
             secrets: workflowSecrets ?? {},
           });
         } else if (loadedYamlFileContents == null) {
@@ -130,14 +135,14 @@ export function WorkflowBuilder({
           });
           setDefinition(wrappedDefinition);
           initializeWorkflow(workflowId ?? null, {
-            providers,
-            installedProviders: installedProviders ?? [],
+            providers: safeProviders,
+            installedProviders: safeInstalledProviders,
             secrets: workflowSecrets ?? {},
           });
         } else {
           const parsedDefinition = parseWorkflow(
             loadedYamlFileContents!,
-            providers
+            safeProviders
           );
           setDefinition(
             wrapDefinitionV2({
@@ -146,8 +151,8 @@ export function WorkflowBuilder({
             })
           );
           initializeWorkflow(workflowId ?? null, {
-            providers,
-            installedProviders: installedProviders ?? [],
+            providers: safeProviders,
+            installedProviders: safeInstalledProviders,
             secrets: workflowSecrets ?? {},
           });
         }
@@ -196,7 +201,7 @@ export function WorkflowBuilder({
       } else {
         const response = await createWorkflow(definition.value);
         if (response?.workflow_id) {
-          router.push(`/workflows/${response.workflow_id}`);
+          router.push(`/aiops/workflows/${response.workflow_id}`);
         }
       }
       setLastDeployedAt(Date.now());

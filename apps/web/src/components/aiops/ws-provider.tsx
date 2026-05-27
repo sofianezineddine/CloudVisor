@@ -30,12 +30,12 @@ const AIOpsWSContext = createContext<AIOpsWSContextValue>({
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PUSHER_HOST = process.env.NEXT_PUBLIC_PUSHER_HOST || process.env.NEXT_PUBLIC_SOKETI_HOST || 'localhost';
-const PUSHER_PORT = Number(process.env.NEXT_PUBLIC_PUSHER_PORT || process.env.NEXT_PUBLIC_SOKETI_PORT || '6001');
+const PUSHER_PORT = Number(process.env.NEXT_PUBLIC_PUSHER_PORT || process.env.NEXT_PUBLIC_SOKETI_PORT || '8080');
 const PUSHER_KEY = process.env.NEXT_PUBLIC_PUSHER_KEY || process.env.NEXT_PUBLIC_SOKETI_KEY || 'cloudvisor-key';
 const PUSHER_CLUSTER = process.env.NEXT_PUBLIC_SOKETI_CLUSTER || 'mt1';
 
 const API_GATEWAY_BASE_URL =
-  process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8005';
+  process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 

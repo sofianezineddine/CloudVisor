@@ -6,15 +6,15 @@ import { TopologyApplication, TopologyService } from "./model";
 import { PageSubtitle, PageTitle } from "@/shared/ui";
 
 type PageProps = {
-  searchParams: Promise<{
+  searchParams: {
     providerIds?: string[];
     services?: string[];
     environment?: string;
-  }>;
+  };
 };
 
 export default async function Page(props: PageProps) {
-  const searchParams = await props.searchParams;
+  const searchParams = props.searchParams;
   const api = await createServerApiClient();
 
   let applications: TopologyApplication[] | undefined;

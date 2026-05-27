@@ -43,8 +43,8 @@ export class ApiClient {
       ...this.additionalHeaders,
     };
 
-    // CSRF token for state-changing requests (read from non-HttpOnly cv_csrf cookie)
-    // Note: actual auth token is sent via HttpOnly cookie automatically
+    // Auth via HttpOnly cookies (sent automatically by credentials: 'include')
+    // No localStorage token storage — tokens are never accessible to JS (C-01 fix)
 
     return headers;
   }

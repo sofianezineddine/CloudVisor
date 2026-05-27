@@ -44,7 +44,7 @@ export function IncidentAlertsActions({
           icon={LiaElementor}
           onClick={() => {
             const cel = encodeURIComponent(`incident.id=="${incidentId}"`)
-            router.push(`/alerts/feed?cel=${cel}`);
+            router.push(`/aiops/alerts/feed?cel=${cel}`);
           }}
         >
           View in feed

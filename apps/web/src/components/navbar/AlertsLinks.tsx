@@ -109,7 +109,7 @@ export const AlertsLinks = ({ session }: AlertsLinksProps) => {
               {shouldShowFeed && (
                 <li>
                   <LinkWithIcon
-                    href="/alerts/feed"
+                    href="/aiops/alerts/feed"
                     icon={AiOutlineSwap}
                     count={feedAlertsTotalCount}
                     testId="menu-alerts-feed"

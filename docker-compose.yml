@@ -11,6 +11,29 @@ networks:
 
 services:
 
+  # ─── Reverse Proxy (port 80) — single origin for all services ─────────────
+
+  nginx:
+    image: nginx:alpine
+    container_name: cv-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+      - auth-service
+      - api-service
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO/dev/null", "http://127.0.0.1:80/auth/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   # ─── Infrastructure ───────────────────────────────────────────────────────
 
   postgres:
@@ -19,7 +42,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: cvadmin
-      POSTGRES_PASSWORD: cvpassword
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cvpassword}
       POSTGRES_DB: cloudvisor
     volumes:
       - ./infra/db/postgres:/var/lib/postgresql/data
@@ -39,7 +62,7 @@ services:
     container_name: cv-neo4j
     restart: unless-stopped
     environment:
-      NEO4J_AUTH: "neo4j/password"
+      NEO4J_AUTH: "${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}"
     ports:
       - "7687:7687"
       - "7474:7474"
@@ -55,7 +78,9 @@ services:
     environment:
       - discovery.type=single-node
       - ES_JAVA_OPTS=-Xms512m -Xmx1g
-      - xpack.security.enabled=false
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-elasticpassword}
+      - xpack.security.transport.ssl.enabled=false
     ports:
       - "9200:9200"
       - "9300:9300"
@@ -84,8 +109,6 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: cv-zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://cv-kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     ports:
@@ -104,6 +127,7 @@ services:
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: cv-kafka:9092
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
       SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 1
+      SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: PLAINTEXT
     ports:
       - "8081:8081"
     depends_on:
@@ -141,7 +165,7 @@ services:
     container_name: cv-adminer
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8082:8080"
     depends_on:
       - postgres
     networks:
@@ -210,9 +234,10 @@ services:
       - services/auth/.env
     environment:
       # Docker network overrides — replace localhost with container names
-      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      DB_URL: postgresql+asyncpg://cvadmin:${POSTGRES_PASSWORD:-cvpassword}@cv-postgres:5432/cloudvisor
       REDIS_URL: redis://cv-redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
+      FRONTEND_URL: http://localhost:8080
       APP_ENVIRONMENT: production
     depends_on:
       postgres:
@@ -242,10 +267,9 @@ services:
       - services/connector/.env
     environment:
       # Docker network overrides
-      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      DB_URL: postgresql+asyncpg://cvadmin:${POSTGRES_PASSWORD:-cvpassword}@cv-postgres:5432/cloudvisor
       REDIS_URL: redis://cv-redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
-      KAFKA_SCHEMA_REGISTRY_URL: http://cv-schema-registry:8081
       APP_ENVIRONMENT: production
       # Vault — use container name and token file written by vault-init
       VAULT_ENABLED: "true"
@@ -305,12 +329,14 @@ services:
       - services/graph/.env
     environment:
       # Docker network overrides
-      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      DB_URL: postgresql+asyncpg://cvadmin:${POSTGRES_PASSWORD:-cvpassword}@cv-postgres:5432/cloudvisor
       REDIS_URL: redis://cv-redis:6379/1
       KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
       APP_ENVIRONMENT: production
       GRAPH_NEO4J_URI: bolt://cv-neo4j:7687
       GRAPH_ELASTICSEARCH_URL: http://cv-elasticsearch:9200
+      ELASTICSEARCH_USERNAME: ${ELASTIC_USERNAME:-elastic}
+      ELASTICSEARCH_PASSWORD: ${ELASTIC_PASSWORD:-elasticpassword}
     depends_on:
       postgres:
         condition: service_healthy
@@ -345,7 +371,7 @@ services:
       - services/policy/.env
     environment:
       # Docker network overrides
-      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      DB_URL: postgresql+asyncpg://cvadmin:${POSTGRES_PASSWORD:-cvpassword}@cv-postgres:5432/cloudvisor
       REDIS_URL: redis://cv-redis:6379/2
       KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
       APP_ENVIRONMENT: production
@@ -383,7 +409,7 @@ services:
       - services/alert/.env
     environment:
       # Docker network overrides
-      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      DB_URL: postgresql+asyncpg://cvadmin:${POSTGRES_PASSWORD:-cvpassword}@cv-postgres:5432/cloudvisor
       REDIS_URL: redis://cv-redis:6379/3
       KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
       APP_ENVIRONMENT: production
@@ -457,7 +483,7 @@ services:
       - services/security/cspm/.env
     environment:
       # Docker network overrides
-      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      DB_URL: postgresql+asyncpg://cvadmin:${POSTGRES_PASSWORD:-cvpassword}@cv-postgres:5432/cloudvisor
       REDIS_URL: redis://cv-redis:6379/5
       KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
       APP_ENVIRONMENT: production
@@ -513,7 +539,7 @@ services:
       - services/copilot/.env
     environment:
       # Docker network overrides
-      DB_URL: postgresql+asyncpg://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      DB_URL: postgresql+asyncpg://cvadmin:${POSTGRES_PASSWORD:-cvpassword}@cv-postgres:5432/cloudvisor
       REDIS_URL: redis://cv-redis:6379/6
       KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
       APP_ENVIRONMENT: production
@@ -529,6 +555,8 @@ services:
       COPILOT_GRAPH_SERVICE_URL: http://cv-graph:8001
       COPILOT_POLICY_SERVICE_URL: http://cv-policy:8003
       COPILOT_ELASTICSEARCH_URL: http://cv-elasticsearch:9200
+      ELASTICSEARCH_USERNAME: ${ELASTIC_USERNAME:-elastic}
+      ELASTICSEARCH_PASSWORD: ${ELASTIC_PASSWORD:-elasticpassword}
       PYTHONUNBUFFERED: "1"
     depends_on:
       postgres:
@@ -603,7 +631,7 @@ services:
     environment:
       AUTH_TYPE: NOAUTH
       KEEP_TENANT_FROM_HEADER: "true"
-      DATABASE_CONNECTION_STRING: postgresql://cvadmin:cvpassword@cv-postgres:5432/cloudvisor
+      DATABASE_CONNECTION_STRING: postgresql://cvadmin:${POSTGRES_PASSWORD:-cvpassword}@cv-postgres:5432/cloudvisor
       KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
       KAFKA_TOPIC: cloudvisor.alerts
       KAFKA_GROUP_ID: keep-alert-ingestion
@@ -621,6 +649,10 @@ services:
       PROVISION_RESOURCES: "false"
       SCHEDULER: "false"
       CONSUMER: "false"
+      # Enable AI features in workflow builder
+      OPENAI_API_KEY: ${COPILOT_NVIDIA_API_KEY:-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}
+      OPENAI_BASE_URL: https://integrate.api.nvidia.com/v1
+      OPENAI_MODEL_NAME: minimaxai/minimax-m2.7
     depends_on:
       postgres:
         condition: service_healthy
@@ -658,26 +690,25 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_BASE_URL: http://cv-auth:8002
-      NEXT_PUBLIC_API_GATEWAY_URL: http://cv-api:8005
-      NEXT_PUBLIC_CONNECTOR_BASE_URL: http://cv-connector:8000
-      NEXT_PUBLIC_GRAPH_SERVICE_URL: http://cv-graph:8001
-      NEXT_PUBLIC_POLICY_SERVICE_URL: http://cv-policy:8003
-      NEXT_PUBLIC_ALERT_SERVICE_URL: http://cv-alert:8004
-      NEXT_PUBLIC_CSPM_SERVICE_URL: http://cv-cspm:8006
-      NEXT_PUBLIC_COPILOT_URL: http://cv-copilot:8010
-      NEXT_PUBLIC_API_URL_CLIENT: http://localhost:8005/v1/keep
+      # All API calls go through nginx same-origin proxy (/auth/, /v1/, etc.)
+      # No direct service URLs needed — HttpOnly cookies work on same origin
+      # NEXT_PUBLIC_ vars are baked into the JS at BUILD time, set them here
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
       NEXT_PUBLIC_PUSHER_KEY: cloudvisor-key
       NEXT_PUBLIC_PUSHER_HOST: localhost
       NEXT_PUBLIC_PUSHER_PORT: "6001"
       API_URL: http://cv-keep:8007
+      # CopilotKit AI — uses NVIDIA API via OpenAI-compatible interface
+      OPEN_AI_API_KEY: ${COPILOT_NVIDIA_API_KEY:-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}
+      OPENAI_BASE_URL: https://integrate.api.nvidia.com/v1
+      OPENAI_MODEL_NAME: minimaxai/minimax-m2.7
     depends_on:
       - api-service
     networks:
       - cloudvisor
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000"]
       interval: 30s
       timeout: 5s
       retries: 3

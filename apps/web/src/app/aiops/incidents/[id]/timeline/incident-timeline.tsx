@@ -265,7 +265,7 @@ const IncidentTimelineNoAlerts: React.FC = () => {
           color="orange"
           variant="primary"
           size="md"
-          onClick={() => router.push("/alerts/feed")}
+          onClick={() => router.push("/aiops/alerts/feed")}
         >
           Assign Alerts
         </Button>

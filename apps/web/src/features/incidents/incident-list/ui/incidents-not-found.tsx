@@ -37,7 +37,7 @@ export const IncidentsNotFoundPlaceholder = () => {
           variant="secondary"
           size="md"
           onClick={() => {
-            router.push(`/alerts/feed`);
+            router.push(`/aiops/alerts/feed`);
           }}
         >
           Correlate Alerts Manually
@@ -47,7 +47,7 @@ export const IncidentsNotFoundPlaceholder = () => {
           variant="primary"
           size="md"
           onClick={() => {
-            router.push(`/alerts/feed?createIncidentsFromLastAlerts=50`);
+            router.push(`/aiops/alerts/feed?createIncidentsFromLastAlerts=50`);
           }}
         >
           Try AI Correlation

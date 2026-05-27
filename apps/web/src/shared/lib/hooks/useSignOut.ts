@@ -7,8 +7,8 @@ import { useCallback } from "react";
  */
 export function useSignOut() {
   return useCallback(() => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    /* cleared by server via Set-Cookie max-age=0 */;
+    /* cleared by server via Set-Cookie max-age=0 */;
     localStorage.removeItem('cloudvisor-user');
     window.location.href = '/login';
   }, []);

@@ -155,7 +155,7 @@ req.end();
 
     const resp = await fetch(data.webhookApi, requestOptions);
     if (resp.ok) {
-      router.push("/alerts/feed");
+      router.push("/aiops/alerts/feed");
     } else {
       showErrorToast(resp, "Something went wrong! Please try again.");
     }
