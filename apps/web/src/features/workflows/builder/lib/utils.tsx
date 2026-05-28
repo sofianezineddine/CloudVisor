@@ -108,7 +108,7 @@ export const conditionAssertTemplate: Omit<V2StepConditionAssert, "id"> = {
 };
 
 export function getToolboxConfiguration(
-  providers: Provider[]
+  providers: Provider[] | null | undefined
 ): ToolboxConfiguration {
   /**
    * Generates the toolbox items
@@ -116,7 +116,7 @@ export function getToolboxConfiguration(
   const steps: Omit<V2StepStep, "id">[] = [];
   const actions: Omit<V2ActionStep, "id">[] = [];
 
-  for (const provider of providers) {
+  for (const provider of (providers ?? [])) {
     if (provider.can_query) {
       steps.push({
         componentType: "task",

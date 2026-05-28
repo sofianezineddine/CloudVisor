@@ -3,7 +3,7 @@ import Image from "next/image";
 import { SparklesIcon } from "@heroicons/react/24/outline";
 import { Text, Title } from "@tremor/react";
 import { Link } from "@/components/ui";
-import { DefinitionV2 } from "@/entities/workflows";
+import { DefinitionV2, useWorkflowStore } from "@/entities/workflows";
 import {
   WorkflowBuilderChat,
   WorkflowBuilderChatProps,
@@ -22,6 +22,7 @@ export function WorkflowBuilderChatSafe({
   ...props
 }: WorkflowBuilderChatSafeProps) {
   const { data: config } = useConfig();
+  const isInitialized = useWorkflowStore((state) => state.isInitialized);
 
   // If AI is not enabled, return null to collapse the chat section
   if (!config?.OPEN_AI_API_KEY_SET) {
@@ -53,7 +54,10 @@ export function WorkflowBuilderChatSafe({
     );
   }
 
-  if (definition == null) {
+  // Guard: wait until the workflow store is fully initialized.
+  // This prevents CopilotKit hooks from registering with undefined
+  // data (toolboxConfiguration, nodes, steps) during intermediate renders.
+  if (definition == null || !isInitialized) {
     return null;
   }
 

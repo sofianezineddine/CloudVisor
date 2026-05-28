@@ -176,6 +176,15 @@ export function convertCelAstToQueryBuilderAst(
 ): DefaultRuleGroupType {
   let rulesGroup = visitCelAstNode(node);
 
+  // Defensive guard: ensure rulesGroup has a valid rules array
+  if (!rulesGroup || !Array.isArray(rulesGroup.rules)) {
+    console.error(
+      '[convertCelAstToQueryBuilderAst] Invalid result from visitCelAstNode:',
+      rulesGroup
+    );
+    return { combinator: 'and', rules: [] };
+  }
+
   if (rulesGroup.combinator === "or") {
     // React Query Builder requires all rules to be within "and" combinator groups to function correctly.
     // Therefore, if an "or" group contains any element that is not itself an "or" or "and" group,

@@ -244,7 +244,7 @@ export default function ProviderTile({ provider, onClick }: Props) {
             {provider.last_alert_received ? (
               <Text>
                 Last alert:{" "}
-                <TimeAgo date={provider.last_alert_received + "Z"} />
+                <TimeAgo date={new Date(provider.last_alert_received + "Z")} />
               </Text>
             ) : (
               <p></p>

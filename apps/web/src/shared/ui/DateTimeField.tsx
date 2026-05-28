@@ -6,7 +6,7 @@ export const DateTimeField = ({ date }: { date: Date }) => {
   return (
     <div>
       <p className="">
-        <TimeAgo date={date + "Z"} />
+        <TimeAgo date={date} />
       </p>
       <p className="text-gray-500 text-xs">
         {format(new Date(date), formatString)}

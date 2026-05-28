@@ -241,7 +241,7 @@ function WorkflowTile({ workflow }: { workflow: Workflow }) {
                 workflow?.last_execution_started && (
                   <div className="text-gray-500 text-sm text-right cursor-pointer truncate max-w-full mt-2 grow min-w-[max-content]">
                     <TimeAgo
-                      date={workflow?.last_execution_started + "Z"}
+                      date={new Date(workflow?.last_execution_started + "Z")}
                       formatter={customFormatter}
                     />
                   </div>

@@ -131,7 +131,7 @@ export function TriggerEditor() {
               <div className="flex items-center mt-1 relative">
                 <CelInput
                   staticPositionForSuggestions={true}
-                  value={properties.alert.cel}
+                  value={properties.alert?.cel}
                   placeholder="CEL expression based trigger"
                   onValueChange={(value: string) => updateAlertCel(value)}
                   onClearValue={() => updateAlertCel("")}
@@ -141,7 +141,7 @@ export function TriggerEditor() {
               <div className="mt-4">
                 <AlertsCountBadge
                   vertical
-                  presetCEL={properties.alert.cel}
+                  presetCEL={properties.alert?.cel}
                   isDebouncing={false}
                   description="The number of alerts from the past that would have triggered this workflow"
                 />
@@ -165,8 +165,8 @@ export function TriggerEditor() {
                   Add Filter
                 </Button>
               </div>
-              {properties.alert.filters &&
-                Object.keys(properties.alert.filters ?? {}).map((filter) => (
+              {properties.alert?.filters &&
+                Object.keys(properties.alert?.filters ?? {}).map((filter) => (
                   <div key={filter}>
                     <Subtitle className="mt-2.5">{filter}</Subtitle>
                     <div className="flex items-center mt-1">
@@ -177,7 +177,7 @@ export function TriggerEditor() {
                           updateAlertFilter(filter, e.target.value)
                         }
                         value={
-                          (properties.alert.filters as any)[filter] ||
+                          (properties.alert?.filters as any)?.[filter] ||
                           ("" as string)
                         }
                       />
@@ -199,13 +199,13 @@ export function TriggerEditor() {
         return (
           <>
             <Subtitle className="mt-2.5">Incident events</Subtitle>
-            {Array("created", "updated", "deleted").map((event) => (
+            {["created", "updated", "deleted"].map((event) => (
               <div key={`incident-${event}`} className="flex">
                 <Switch
                   id={event}
-                  checked={properties.incident.events?.indexOf(event) > -1}
+                  checked={(properties.incident?.events ?? []).indexOf(event) > -1}
                   onChange={() => {
-                    let events = properties.incident.events || [];
+                    let events = properties.incident?.events || [];
                     if (events.indexOf(event) > -1) {
                       events = (events as string[]).filter((e) => e !== event);
                       updateV2Properties({

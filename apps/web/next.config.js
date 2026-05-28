@@ -74,8 +74,9 @@ const nextConfig = {
   async rewrites() {
     return [
       // Keep UI backend API — proxied to Keep service
+      // Exclude CopilotKit API route (handled by Next.js route handler)
       {
-        source: '/api/:path*',
+        source: '/api/:path((?!copilotkit).*)',
         destination: 'http://cv-keep:8007/:path*',
       },
       // Keep UI backend route (used by Keep UI client via /backend prefix)
@@ -105,7 +106,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://*.googleapis.com https://*.googleusercontent.com",
-              "connect-src 'self' http://localhost:* ws://localhost:* https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com",
+              "connect-src 'self' http://localhost:* ws://localhost:* https://cdn.copilotkit.ai https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com",
               "frame-src 'self' https://accounts.google.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",

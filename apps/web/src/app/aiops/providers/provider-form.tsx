@@ -771,7 +771,7 @@ const ProviderForm = ({
         {installedProvidersMode && provider.last_pull_time && (
           <Subtitle>
             Provider last pull time:{" "}
-            <TimeAgo date={provider.last_pull_time + "Z"} />
+            <TimeAgo date={new Date(provider.last_pull_time + "Z")} />
           </Subtitle>
         )}
 
