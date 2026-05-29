@@ -54,25 +54,27 @@ export function ExecutionsTable({ executions, setPagination }: Props) {
     columnHelper.display({
       id: "started",
       header: "Started",
-      cell: ({ row }) => (
-        <TimeAgo
-          date={row.original.timestamp + "Z"}
-          formatter={(value, unit, suffix) => {
-            if (!row.original.timestamp) return "";
-            return formatDistanceToNowStrict(
-              new Date(row.original.timestamp + "Z"),
-              {
-                addSuffix: true,
-              }
-            )
-              .replace("about ", "")
-              .replace("minute", "min")
-              .replace("second", "sec")
-              .replace("hour", "hr");
-          }}
-        />
-      ),
-    }),
+      cell: ({ row }) => {
+          if (!row.original.timestamp) return "";
+          return (
+            <TimeAgo
+              date={row.original.timestamp + "Z"}
+              formatter={(value, unit, suffix) => {
+                return formatDistanceToNowStrict(
+                  new Date(row.original.timestamp + "Z"),
+                  {
+                    addSuffix: true,
+                  }
+                )
+                  .replace("about ", "")
+                  .replace("minute", "min")
+                  .replace("second", "sec")
+                  .replace("hour", "hr");
+              }}
+            />
+          );
+        },
+      }),
   ] as DisplayColumnDef<EnrichmentEvent>[];
 
   return (

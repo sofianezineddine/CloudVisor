@@ -24,12 +24,11 @@ interface UseWebSocketReturn {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const WS_BASE_URL =
-  (process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080')
-    .replace(/^http/, 'ws');
+  `ws://${process.env.NEXT_PUBLIC_PUSHER_HOST || 'localhost'}:${process.env.NEXT_PUBLIC_PUSHER_PORT || '6001'}`;
 
 const PUSHER_KEY = process.env.NEXT_PUBLIC_PUSHER_KEY || 'cloudvisor-key';
 const PUSHER_HOST = process.env.NEXT_PUBLIC_PUSHER_HOST || 'localhost';
-const PUSHER_PORT = parseInt(process.env.NEXT_PUBLIC_PUSHER_PORT || '8080', 10);
+const PUSHER_PORT = parseInt(process.env.NEXT_PUBLIC_PUSHER_PORT || '6001', 10);
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 

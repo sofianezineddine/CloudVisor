@@ -652,7 +652,7 @@ services:
       # Enable AI features in workflow builder
       OPENAI_API_KEY: ${COPILOT_NVIDIA_API_KEY:-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}
       OPENAI_BASE_URL: https://integrate.api.nvidia.com/v1
-      OPENAI_MODEL_NAME: minimaxai/minimax-m2.7
+      OPENAI_MODEL_NAME: meta/llama-3.1-8b-instruct
     depends_on:
       postgres:
         condition: service_healthy
@@ -701,7 +701,7 @@ services:
       # CopilotKit AI — uses NVIDIA API via OpenAI-compatible interface
       OPEN_AI_API_KEY: ${COPILOT_NVIDIA_API_KEY:-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}
       OPENAI_BASE_URL: https://integrate.api.nvidia.com/v1
-      OPENAI_MODEL_NAME: minimaxai/minimax-m2.7
+      OPENAI_MODEL_NAME: meta/llama-3.1-8b-instruct
     depends_on:
       - api-service
     networks:

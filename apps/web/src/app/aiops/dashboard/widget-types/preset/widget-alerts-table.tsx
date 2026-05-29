@@ -107,7 +107,7 @@ const WidgetAlertsTable: React.FC<WidgetAlertsTableProps> = ({
       },
       lastReceived: {
         gridColumnTemplate: "min-content",
-        renderValue: (alert: any) => <TimeAgo date={alert.lastReceived} />,
+        renderValue: (alert: any) => (alert?.lastReceived ? <TimeAgo date={alert.lastReceived} /> : <span className="text-gray-400">—</span>),
       },
     }),
     [columnRenameMapping]

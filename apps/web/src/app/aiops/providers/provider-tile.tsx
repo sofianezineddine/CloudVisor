@@ -73,6 +73,9 @@ const OAuthIcon = (props: any) => (
 
 // add +1 to each distribution to avoid 0 values
 const addOneToDistribution = (distribution: any[]) => {
+  if (!distribution || !Array.isArray(distribution)) {
+    return getEmptyDistribution();
+  }
   let dist = distribution.map((data) => ({
     ...data,
     number: data.number + 1,
@@ -117,7 +120,7 @@ export default function ProviderTile({ provider, onClick }: Props) {
     }
     return (
       <div className="labels flex flex-wrap gap-1">
-        {provider.tags.map((tag) => {
+        {(provider.tags ?? []).map((tag) => {
           return (
             <Badge key={tag} icon={getIconForTag(tag)} size="xs" color="slate">
               <p>{tag}</p>

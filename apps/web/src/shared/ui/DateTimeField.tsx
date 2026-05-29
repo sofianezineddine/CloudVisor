@@ -3,6 +3,9 @@ import { format } from "date-fns";
 
 export const DateTimeField = ({ date }: { date: Date }) => {
   const formatString = "dd MMM yy, HH:mm.ss 'UTC'";
+  if (!date || isNaN(date.getTime())) {
+    return <div><p className="text-gray-400">—</p></div>;
+  }
   return (
     <div>
       <p className="">

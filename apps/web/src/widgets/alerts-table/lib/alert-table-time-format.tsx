@@ -18,10 +18,13 @@ export const formatDateTime = (
   dateValue: string | Date,
   formatOption: TimeFormatOption = "timeago"
 ) => {
+  if (!dateValue) {
+    return "—";
+  }
   const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
 
   if (isNaN(date.getTime())) {
-    return "Invalid date";
+    return "—";
   }
 
   switch (formatOption) {

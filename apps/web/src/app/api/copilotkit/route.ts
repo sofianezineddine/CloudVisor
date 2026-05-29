@@ -1,50 +1,55 @@
 import {
   CopilotRuntime,
-  OpenAIAdapter,
   copilotRuntimeNextJSAppRouterEndpoint,
 } from "@copilotkit/runtime";
-import OpenAI, { OpenAIError } from "openai";
+import { BuiltInAgent } from "@copilotkit/runtime/v2";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { NextRequest } from "next/server";
 
-export const POST = async (req: NextRequest) => {
-  function initializeCopilotRuntime() {
-    try {
-      const openai = new OpenAI({
-        organization: process.env.OPEN_AI_ORGANIZATION_ID,
-        apiKey: process.env.OPEN_AI_API_KEY,
-        // Support OpenAI-compatible providers (OpenRouter, NVIDIA, etc.)
-        ...(process.env.OPENAI_BASE_URL
-          ? { baseURL: process.env.OPENAI_BASE_URL }
-          : {}),
-      });
-      const serviceAdapter = new OpenAIAdapter({
-        openai,
-        ...(process.env.OPENAI_MODEL_NAME
-          ? { model: process.env.OPENAI_MODEL_NAME }
-          : {}),
-      });
-      const runtime = new CopilotRuntime();
-      return { runtime, serviceAdapter };
-    } catch (error) {
-      if (error instanceof OpenAIError) {
-        console.log("Error connecting to OpenAI", error);
-      } else {
-        console.error("Error initializing Copilot Runtime", error);
-      }
-      return null;
-    }
-  }
+function createRuntime() {
+  const apiKey =
+    process.env.OPEN_AI_API_KEY ||
+    process.env.OPENAI_API_KEY ||
+    process.env.OPENROUTER_API_KEY ||
+    "";
 
-  const runtimeOptions = initializeCopilotRuntime();
+  const baseURL =
+    process.env.OPENAI_BASE_URL ||
+    process.env.OPENROUTER_SITE_URL ||
+    "https://openrouter.ai/api/v1";
 
-  if (!runtimeOptions) {
-    return new Response("Error initializing Copilot Runtime", { status: 500 });
-  }
-  const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
-    runtime: runtimeOptions.runtime,
-    serviceAdapter: runtimeOptions.serviceAdapter,
-    endpoint: "/api/copilotkit",
+  const modelName =
+    process.env.OPENAI_MODEL_NAME ||
+    process.env.COPILOT_OPENROUTER_MODEL ||
+    "meta-llama/llama-3.3-70b-instruct:free";
+
+  const provider = createOpenAICompatible({ name: "nvidia", apiKey, baseURL });
+
+  const builtInAgent = new BuiltInAgent({
+    model: provider(modelName),
+    maxSteps: 5,
+    forwardSystemMessages: true,
   });
 
+  return new CopilotRuntime({
+    agents: { default: builtInAgent },
+  });
+}
+
+export const POST = async (req: NextRequest) => {
+  const runtime = createRuntime();
+  const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
+    runtime,
+    endpoint: "/api/copilotkit",
+  });
+  return handleRequest(req);
+};
+
+export const GET = async (req: NextRequest) => {
+  const runtime = createRuntime();
+  const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
+    runtime,
+    endpoint: "/api/copilotkit",
+  });
   return handleRequest(req);
 };

@@ -223,20 +223,19 @@ export function WorkflowExecutionsTable({
       id: "started",
       header: "Started at",
       cell: ({ row }) => {
+        if (!row?.original?.started) {
+          return "";
+        }
         const customFormatter: Formatter = (
           value: number,
           unit: Unit,
           suffix: Suffix
         ) => {
-          if (!row?.original?.started) {
-            return "";
-          }
-
-          const formattedString = formatDistanceToNowStrict(
-            new Date(row.original.started + "Z"),
-            { addSuffix: true }
-          );
-
+          const datetime = new Date(row.original.started + "Z");
+          if (isNaN(datetime.getTime())) return "";
+          const formattedString = formatDistanceToNowStrict(datetime, {
+            addSuffix: true,
+          });
           return formattedString
             .replace("about ", "")
             .replace("minute", "min")

@@ -102,6 +102,9 @@ export function WorkflowBuilderChat({
       description: "Installed providers",
       value: installedProviders,
       convert: (description, installedProviders: Provider[]) => {
+        if (!installedProviders || !Array.isArray(installedProviders)) {
+          return "";
+        }
         return installedProviders
           .map((p) => `${p.type}, id: ${p.id}`)
           .join(", ");

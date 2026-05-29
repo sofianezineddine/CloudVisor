@@ -42,7 +42,7 @@ export function IncidentActivityItem({ activity }: { activity: IncidentActivity 
           )}
         <span className="font-semibold mr-2.5">{title}</span>
         <span className="text-gray-300">
-          {subTitle} <TimeAgo date={new Date(activity.timestamp + "Z")} />
+          {subTitle} {activity.timestamp ? <TimeAgo date={new Date(activity.timestamp + "Z")} /> : null}
         </span>
       </div>
       {activity.text && (
