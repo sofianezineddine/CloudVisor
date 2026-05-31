@@ -9,9 +9,17 @@ export const useMaintenanceRules = (
 ) => {
   const api = useApi();
 
-  return useSWR<MaintenanceRule[]>(
+  const swrValue = useSWR<MaintenanceRule[]>(
     api.isReady() ? "/maintenance" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? [];
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

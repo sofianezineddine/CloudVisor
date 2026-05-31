@@ -6,9 +6,17 @@ import { useApi } from "@/shared/lib/hooks/useApi";
 export const useGroups = (options: SWRConfiguration = {}) => {
   const api = useApi();
 
-  return useSWRImmutable<Group[]>(
+  const swrValue = useSWRImmutable<Group[]>(
     api.isReady() ? "/auth/groups" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? [];
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

@@ -6,19 +6,35 @@ import { useApi } from "@/shared/lib/hooks/useApi";
 export const useDeduplicationRules = (options: SWRConfiguration = {}) => {
   const api = useApi();
 
-  return useSWRImmutable<DeduplicationRule[]>(
+  const swrValue = useSWRImmutable<DeduplicationRule[]>(
     api.isReady() ? "/deduplications" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? [];
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };
 
 export const useDeduplicationFields = (options: SWRConfiguration = {}) => {
   const api = useApi();
 
-  return useSWRImmutable<Record<string, string[]>>(
+  const swrValue = useSWRImmutable<Record<string, string[]>>(
     api.isReady() ? "/deduplications/fields" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? {};
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

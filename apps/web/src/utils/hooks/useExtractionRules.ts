@@ -9,9 +9,17 @@ export const useExtractions = (
 ) => {
   const api = useApi();
 
-  return useSWR<ExtractionRule[]>(
+  const swrValue = useSWR<ExtractionRule[]>(
     api.isReady() ? "/extraction" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? [];
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

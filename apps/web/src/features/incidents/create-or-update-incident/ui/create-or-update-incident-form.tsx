@@ -17,7 +17,7 @@ import type { IncidentDto } from "@/entities/incidents/model";
 import { getIncidentName } from "@/entities/incidents/lib/utils";
 import "react-quill-new/dist/quill.snow.css";
 import "./react-quill-override.css";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/hooks/use-auth";
 import dynamic from "next/dynamic";
 import { IncidentSeveritySelect } from "@/features/incidents/change-incident-severity";
 import { Severity } from "@/entities/incidents/model/models";
@@ -38,8 +38,7 @@ export function CreateOrUpdateIncidentForm({
   const [incidentSeverity, setIncidentSeverity] = useState<Severity>(
     Severity.Critical
   );
-  const { data: session } = useSession();
-  const currentUser = session?.user;
+  const { user: currentUser } = useAuth();
   const [incidentName, setIncidentName] = useState<string>("");
   const [incidentUserSummary, setIncidentUserSummary] = useState<string>("");
   const [incidentAssignee, setIncidentAssignee] = useState<string>(currentUser?.email || "");

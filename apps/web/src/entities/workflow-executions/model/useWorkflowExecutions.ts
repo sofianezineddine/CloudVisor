@@ -12,9 +12,17 @@ export const useWorkflowExecutions = (
 ) => {
   const api = useApi();
 
-  return useSWR<AlertToWorkflowExecution[]>(
+  const swrValue = useSWR<AlertToWorkflowExecution[]>(
     api.isReady() ? "/workflows/executions" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? [];
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

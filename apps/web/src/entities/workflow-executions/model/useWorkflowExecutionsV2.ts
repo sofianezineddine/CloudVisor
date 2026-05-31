@@ -42,5 +42,13 @@ export const useWorkflowExecutionsV2 = (
     filteredParams.toString() ? `&${filteredParams.toString()}` : ""
   }`;
 
-  return useSWR<PaginatedWorkflowExecutionDto>(cacheKey, () => api.get(url));
+  const swrValue = useSWR<PaginatedWorkflowExecutionDto>(cacheKey, () => api.get(url));
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? { items: [], count: 0, limit, offset };
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

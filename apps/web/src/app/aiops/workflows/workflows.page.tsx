@@ -5,6 +5,7 @@ import { useWorkflowsV2 } from "@/entities/workflows/model/useWorkflowsV2";
 import { InitialFacetsData } from "@/features/filter/api";
 import { ExistingWorkflowsState } from "./existing-workflows-state";
 import { NoWorkflowsState } from "./no-workflows-state";
+import { WorkflowModalProvider } from "@/features/workflows/manual-run-workflow";
 
 export function WorkflowsPage({
   initialFacetsData,
@@ -29,8 +30,12 @@ export function WorkflowsPage({
   }
 
   if ((totalCount as number) > 0) {
-    return <ExistingWorkflowsState initialFacetsData={initialFacetsData} />;
+    return (
+      <WorkflowModalProvider>
+        <ExistingWorkflowsState initialFacetsData={initialFacetsData} />
+      </WorkflowModalProvider>
+    );
   }
 
-  return <NoWorkflowsState></NoWorkflowsState>;
+  return <NoWorkflowsState />;
 }

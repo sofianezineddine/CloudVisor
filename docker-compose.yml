@@ -453,6 +453,7 @@ services:
       API_CSPM_SERVICE_URL: http://cv-cspm:8006
       API_COPILOT_SERVICE_URL: http://cv-copilot:8010
       API_KEEP_SERVICE_URL: http://cv-keep:8007
+      API_AI_ROUTER_SERVICE_URL: http://cv-ai-router:8015
     depends_on:
       redis:
         condition: service_started
@@ -649,7 +650,9 @@ services:
       PROVISION_RESOURCES: "false"
       SCHEDULER: "false"
       CONSUMER: "false"
-      # Enable AI features in workflow builder
+      # AI Router - unified LLM gateway (replaces direct OpenAI/NVIDIA calls)
+      AI_ROUTER_URL: http://cv-ai-router:8015/v1
+      # Fallback: direct NVIDIA for legacy compatibility
       OPENAI_API_KEY: ${COPILOT_NVIDIA_API_KEY:-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}
       OPENAI_BASE_URL: https://integrate.api.nvidia.com/v1
       OPENAI_MODEL_NAME: meta/llama-3.1-8b-instruct
@@ -661,6 +664,8 @@ services:
       redis:
         condition: service_started
       soketi:
+        condition: service_started
+      ai-router:
         condition: service_started
     networks:
       - cloudvisor
@@ -694,16 +699,21 @@ services:
       # No direct service URLs needed — HttpOnly cookies work on same origin
       # NEXT_PUBLIC_ vars are baked into the JS at BUILD time, set them here
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+      NEXT_PUBLIC_API_URL_CLIENT: http://localhost:8080/v1/keep
       NEXT_PUBLIC_PUSHER_KEY: cloudvisor-key
       NEXT_PUBLIC_PUSHER_HOST: localhost
       NEXT_PUBLIC_PUSHER_PORT: "6001"
       API_URL: http://cv-keep:8007
-      # CopilotKit AI — uses NVIDIA API via OpenAI-compatible interface
+      # AI Router - unified LLM gateway for CopilotKit
+      AI_ROUTER_URL: http://cv-ai-router:8015/v1
+      AI_ROUTER_MODEL: meta/llama-llama-3.3-70b-instruct:free
+      # Fallback: direct NVIDIA for legacy compatibility
       OPEN_AI_API_KEY: ${COPILOT_NVIDIA_API_KEY:-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}
       OPENAI_BASE_URL: https://integrate.api.nvidia.com/v1
       OPENAI_MODEL_NAME: meta/llama-3.1-8b-instruct
     depends_on:
       - api-service
+      - ai-router
     networks:
       - cloudvisor
     restart: unless-stopped
@@ -713,6 +723,60 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # ─── AI Router Service (port 8015) ───────────────────────────────────────
+  # Unified LLM gateway for OpenAI, OpenRouter, NVIDIA NIM
+
+  ai-router:
+    build:
+      context: .
+      dockerfile: services/ai-router/Dockerfile
+    container_name: cv-ai-router
+    ports:
+      - "8015:8015"
+    env_file:
+      - services/ai-router/.env
+    environment:
+      APP_ENVIRONMENT: production
+      PORT: "8015"
+      # Provider configurations (fallbacks)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      DEFAULT_PROVIDER: ${DEFAULT_PROVIDER:-openai}
+      RATE_LIMIT_RPM: "60"
+      REQUEST_TIMEOUT: "60"
+      MAX_TOKENS: "4096"
+      REDIS_URL: redis://cv-redis:6379/8
+      ENABLE_CACHE: "true"
+    depends_on:
+      redis:
+        condition: service_started
+    networks:
+      - cloudvisor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8015/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   esdata1:

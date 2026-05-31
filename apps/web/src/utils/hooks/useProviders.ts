@@ -8,11 +8,19 @@ export const useProviders = (
 ) => {
   const api = useApi();
 
-  return useSWRImmutable<ProvidersResponse>(
+  const swrValue = useSWRImmutable<ProvidersResponse>(
     api.isReady() ? "/providers" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? { providers: [], installed_providers: [] };
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };
 
 export const useProvidersWithHealthCheck = (
@@ -20,9 +28,17 @@ export const useProvidersWithHealthCheck = (
 ) => {
   const api = useApi();
 
-  return useSWRImmutable<ProvidersResponse>(
+  const swrValue = useSWRImmutable<ProvidersResponse>(
     api.isReady() ? "/providers/healthcheck" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? { providers: [], installed_providers: [] };
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

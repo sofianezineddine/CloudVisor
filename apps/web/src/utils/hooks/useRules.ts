@@ -34,9 +34,17 @@ export type Rule = {
 export const useRules = (options?: SWRConfiguration) => {
   const api = useApi();
 
-  return useSWR<Rule[]>(
+  const swrValue = useSWR<Rule[]>(
     api.isReady() ? "/rules" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? [];
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

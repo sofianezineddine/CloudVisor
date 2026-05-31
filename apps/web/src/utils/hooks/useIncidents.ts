@@ -127,10 +127,13 @@ export const useIncidents = (
     }
   );
 
+  // Provide safe default when data is undefined (e.g., during errors or initial load)
+  const safeData = swrValue.data?.result ?? { items: [], count: 0, limit: 20, offset: 0 };
+
   return {
     ...swrValue,
-    data: swrValue.data?.result as PaginatedIncidentsDto,
-    responseTimeMs: swrValue.data?.responseTimeMs,
+    data: safeData as PaginatedIncidentsDto,
+    responseTimeMs: swrValue.data?.responseTimeMs ?? 0,
     isLoading: swrValue.isLoading || (!options.fallbackData && !api.isReady()),
   };
 };
@@ -144,7 +147,7 @@ export const useIncidentAlerts = (
   }
 ) => {
   const api = useApi();
-  return useSWR<PaginatedIncidentAlertsDto>(
+  const swrValue = useSWR<PaginatedIncidentAlertsDto>(
     () =>
       api.isReady()
         ? `/incidents/${incidentId}/alerts?limit=${limit}&offset=${offset}`
@@ -152,6 +155,14 @@ export const useIncidentAlerts = (
     async (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? { items: [], count: 0, limit, offset };
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };
 
 export const useIncidentFutureIncidents = (
@@ -162,11 +173,19 @@ export const useIncidentFutureIncidents = (
 ) => {
   const api = useApi();
 
-  return useSWR<PaginatedIncidentsDto>(
+  const swrValue = useSWR<PaginatedIncidentsDto>(
     () => (api.isReady() ? `/incidents/${incidentId}/future_incidents` : null),
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? { items: [], count: 0, limit: 20, offset: 0 };
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };
 
 export const useIncident = (
@@ -177,11 +196,14 @@ export const useIncident = (
 ) => {
   const api = useApi();
 
-  return useSWR<IncidentDto>(
+  const swrValue = useSWR<IncidentDto>(
     () => (api.isReady() && incidentId ? `/incidents/${incidentId}` : null),
     (url) => api.get(url),
     options
   );
+
+  // Return as-is since IncidentDto doesn't have safe defaults (single item)
+  return swrValue;
 };
 
 export const useIncidentWorkflowExecutions = (
@@ -193,7 +215,7 @@ export const useIncidentWorkflowExecutions = (
   }
 ) => {
   const api = useApi();
-  return useSWR<PaginatedWorkflowExecutionDto>(
+  const swrValue = useSWR<PaginatedWorkflowExecutionDto>(
     () =>
       api.isReady()
         ? `/incidents/${incidentId}/workflows?limit=${limit}&offset=${offset}`
@@ -201,6 +223,14 @@ export const useIncidentWorkflowExecutions = (
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? { items: [], count: 0, limit, offset };
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };
 
 export const usePollIncidentComments = (incidentId: string) => {
@@ -274,9 +304,23 @@ export const useIncidentsMeta = (
 ) => {
   const api = useApi();
 
-  return useSWR<IncidentsMetaDto>(
+  const swrValue = useSWR<IncidentsMetaDto>(
     api.isReady() ? "/incidents/meta" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? {
+    statuses: [],
+    severities: [],
+    assignees: [],
+    services: [],
+    sources: [],
+  };
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

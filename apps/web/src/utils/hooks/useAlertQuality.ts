@@ -20,7 +20,7 @@ export const useAlertQualityMetrics = (
     return params.toString();
   }, [fields, searchParams]);
   // TODO: Proper type needs to be defined.
-  return useSWRImmutable<Record<string, Record<string, any>>>(
+  const swrValue = useSWRImmutable<Record<string, Record<string, any>>>(
     () =>
       api.isReady()
         ? `/alerts/quality/metrics${filters ? `?${filters}` : ""}`
@@ -28,4 +28,12 @@ export const useAlertQualityMetrics = (
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? {};
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

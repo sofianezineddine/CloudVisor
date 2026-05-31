@@ -6,9 +6,17 @@ import { useApi } from "@/shared/lib/hooks/useApi";
 export const useUsers = (options: SWRConfiguration = {}) => {
   const api = useApi();
 
-  return useSWRImmutable<User[]>(
+  const swrValue = useSWRImmutable<User[]>(
     api.isReady() ? "/auth/users" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined (e.g., during errors or initial load)
+  const safeData = swrValue.data ?? [];
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

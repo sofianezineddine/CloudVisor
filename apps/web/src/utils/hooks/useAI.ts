@@ -11,11 +11,23 @@ export const useAIStats = (
 ) => {
   const api = useApi();
 
-  return useSWR<AIStats>(
+  const swrValue = useSWR<AIStats>(
     api.isReady() ? "/ai/stats" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? {
+    alert_statistics: [],
+    incidents: [],
+    external_ai: [],
+  };
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };
 
 export const usePollAILogs = (mutateAILogs: (logs: AILogs) => void) => {

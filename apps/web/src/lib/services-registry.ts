@@ -112,10 +112,33 @@ export const SERVICES: ServiceDefinition[] = [
     path: '/aiops',
     defaultTab: 'alerts',
     sections: [
-      { label: 'Alert Management', tabs: [{ id: 'alerts', label: 'Alerts' }, { id: 'incidents', label: 'Incidents' }] },
-      { label: 'Automation', tabs: [{ id: 'workflows', label: 'Workflows' }] },
-      { label: 'Infrastructure', tabs: [{ id: 'providers', label: 'Providers' }, { id: 'topology', label: 'Topology' }] },
-      { label: 'Analytics', tabs: [{ id: 'dashboards', label: 'Dashboards' }] },
+      { label: 'Alert Management', tabs: [
+        { id: 'alerts', label: 'Alerts' },
+        { id: 'incidents', label: 'Incidents' },
+        { id: 'deduplication', label: 'Deduplication' },
+      ]},
+      { label: 'Intelligence', tabs: [
+        { id: 'ai', label: 'AI Plugins' },
+        { id: 'rules', label: 'Correlation Rules' },
+      ]},
+      { label: 'Enrichment', tabs: [
+        { id: 'mapping', label: 'Mapping' },
+        { id: 'extraction', label: 'Extraction' },
+      ]},
+      { label: 'Automation', tabs: [
+        { id: 'workflows', label: 'Workflows' },
+        { id: 'maintenance', label: 'Maintenance Windows' },
+      ]},
+      { label: 'Infrastructure', tabs: [
+        { id: 'providers', label: 'Providers' },
+        { id: 'topology', label: 'Topology' },
+      ]},
+      { label: 'Analytics', tabs: [
+        { id: 'dashboard', label: 'Dashboard' },
+      ]},
+      { label: 'Settings', tabs: [
+        { id: 'settings', label: 'Settings' },
+      ]},
     ],
   },
   {

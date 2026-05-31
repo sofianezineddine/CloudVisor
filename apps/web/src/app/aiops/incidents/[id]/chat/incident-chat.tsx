@@ -19,7 +19,7 @@ import { useIncidentActions } from "@/entities/incidents/model";
 import { TraceData, SimpleTraceViewer } from "@/shared/ui/TraceViewer";
 import { useProviders } from "@/utils/hooks/useProviders";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/hooks/use-auth";
 import { StopIcon, TrashIcon } from "@radix-ui/react-icons";
 import { toast } from "react-toastify";
 import { capture } from "@/shared/lib/capture";
@@ -41,7 +41,7 @@ export function IncidentChat({
   incident: IncidentDto;
   mutateIncident: () => void;
 }) {
-  const { data: session } = useSession();
+  const { user } = useAuth();
   const { data: alerts, isLoading: alertsLoading } = useIncidentAlerts(
     incident.id
   );
@@ -134,7 +134,7 @@ export function IncidentChat({
   // Chat context
   useCopilotReadable({
     description: "The user who is chatting with the assistant",
-    value: session?.user,
+    value: user,
   });
   useCopilotReadable({
     description: "incidentDetails",

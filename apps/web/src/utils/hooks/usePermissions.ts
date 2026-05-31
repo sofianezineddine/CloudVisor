@@ -7,9 +7,17 @@ import { useApi } from "@/shared/lib/hooks/useApi";
 export const usePermissions = (options: SWRConfiguration = {}) => {
   const api = useApi();
 
-  return useSWRImmutable<Permission[]>(
+  const swrValue = useSWRImmutable<Permission[]>(
     api.isReady() ? "/auth/permissions" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? [];
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };

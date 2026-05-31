@@ -40,7 +40,21 @@ export function useHydratedSession() {
     accessToken: 'cookie-based', // Keep UI checks this exists, but value doesn't matter
     tenantId: user?.organization_id || 'default',
     userRole: user?.role || 'admin',
-  } : null;
+  } : {
+    // Provide a default unauthenticated session structure to prevent destructuring errors
+    user: {
+      id: 'anonymous',
+      name: 'Anonymous',
+      email: '',
+      image: null,
+      accessToken: '',
+      tenantId: 'default',
+      role: '',
+    },
+    accessToken: '',
+    tenantId: 'default',
+    userRole: '',
+  };
 
   return {
     data: session,

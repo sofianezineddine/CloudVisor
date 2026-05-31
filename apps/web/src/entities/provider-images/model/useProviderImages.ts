@@ -37,6 +37,9 @@ export function useProviderImages() {
     }
   );
 
+  // Provide safe default when data is undefined
+  const safeCustomImages = customImages ?? [];
+
   // Use SWR for image fetching
   const useProviderImage = (providerName: string) => {
     return useSWRImmutable(
@@ -108,7 +111,7 @@ export function useProviderImages() {
   };
 
   return {
-    customImages,
+    customImages: safeCustomImages,
     isLoading,
     error,
     refresh: mutate,

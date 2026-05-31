@@ -13,6 +13,7 @@ Registered route prefixes:
   /v1/cspm            cspm.py
   /v1/copilot         copilot.py
   /v1/keep            keep.py   (catch-all proxy to Keep AIOps)
+  /v1/ai              ai_router.py  (catch-all proxy to AI Router)
   /v1/reports         reports.py
   /v1/webhooks        webhooks.py
   /v1/scan            scans.py     (POST /v1/scan)
@@ -41,6 +42,7 @@ from .posture import router as posture_router
 from .activity import router as activity_router
 from .modules import router as modules_router
 from .keep import router as keep_router
+from .ai_router import router as ai_router_router
 
 
 v1_router = APIRouter(prefix="/v1")
@@ -62,6 +64,7 @@ v1_router.include_router(posture_router)
 v1_router.include_router(activity_router)
 v1_router.include_router(modules_router)
 v1_router.include_router(keep_router)
+v1_router.include_router(ai_router_router)
 
 
 # GraphQL is mounted at /graphql (no /v1 prefix — standard convention)

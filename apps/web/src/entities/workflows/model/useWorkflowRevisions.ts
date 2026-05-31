@@ -12,9 +12,17 @@ export function useWorkflowRevisions(
   const cacheKey =
     api.isReady() && workflowId ? workflowKeys.revisions(workflowId) : null;
 
-  return useSWR<WorkflowRevisionList>(
+  const swrValue = useSWR<WorkflowRevisionList>(
     cacheKey,
     () => api.get(`/workflows/${workflowId}/versions`),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? [];
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 }

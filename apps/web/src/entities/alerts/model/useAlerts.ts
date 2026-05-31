@@ -14,7 +14,7 @@ export const useAlerts = () => {
     selectedAlert?: AlertDto,
     options: SWRConfiguration = { revalidateOnFocus: false }
   ) => {
-    return useSWR<AlertDto[]>(
+    const swrValue = useSWR<AlertDto[]>(
       () =>
         api.isReady() && selectedAlert
           ? `/alerts/${selectedAlert.fingerprint}/history?provider_id=${
@@ -26,18 +26,34 @@ export const useAlerts = () => {
       (url) => api.get(url),
       options
     );
+
+    // Provide safe default when data is undefined
+    const safeData = swrValue.data ?? [];
+
+    return {
+      ...swrValue,
+      data: safeData,
+    };
   };
 
   const useAllAlerts = (
     presetName: string,
     options: SWRConfiguration = { revalidateOnFocus: false }
   ) => {
-    return useSWR<AlertDto[]>(
+    const swrValue = useSWR<AlertDto[]>(
       () =>
         api.isReady() && presetName ? `/preset/${presetName}/alerts` : null,
       (url) => api.get(url),
       options
     );
+
+    // Provide safe default when data is undefined
+    const safeData = swrValue.data ?? [];
+
+    return {
+      ...swrValue,
+      data: safeData,
+    };
   };
 
   const usePresetAlerts = (
@@ -84,7 +100,7 @@ export const useAlerts = () => {
       revalidateOnFocus: false,
     }
   ) => {
-    return useSWR<AuditEvent[]>(
+    const swrValue = useSWR<AuditEvent[]>(
       () =>
         api.isReady() && fingerprints && fingerprints?.length > 0
           ? `/alerts/audit`
@@ -92,6 +108,14 @@ export const useAlerts = () => {
       (url) => api.post(url, fingerprints),
       options
     );
+
+    // Provide safe default when data is undefined
+    const safeData = swrValue.data ?? [];
+
+    return {
+      ...swrValue,
+      data: safeData,
+    };
   };
 
   const useAlertAudit = (
@@ -100,12 +124,20 @@ export const useAlerts = () => {
       revalidateOnFocus: false,
     }
   ) => {
-    return useSWR<AuditEvent[]>(
+    const swrValue = useSWR<AuditEvent[]>(
       () =>
         api.isReady() && fingerprint ? `/alerts/${fingerprint}/audit` : null,
       (url) => api.get(url),
       options
     );
+
+    // Provide safe default when data is undefined
+    const safeData = swrValue.data ?? [];
+
+    return {
+      ...swrValue,
+      data: safeData,
+    };
   };
 
   const useErrorAlerts = (

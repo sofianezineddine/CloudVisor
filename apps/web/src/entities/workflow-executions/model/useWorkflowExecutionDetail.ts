@@ -22,9 +22,12 @@ export const useWorkflowExecutionDetail = (
     ? `/workflows/${workflowId}/runs/${workflowExecutionId}`
     : `/workflows/runs/${workflowExecutionId}`;
 
-  return useSWR<WorkflowExecutionDetail | WorkflowExecutionFailure>(
+  const swrValue = useSWR<WorkflowExecutionDetail | WorkflowExecutionFailure>(
     cacheKey,
     () => api.get(requestUrl),
     options
   );
+
+  // Return as-is for single item fetches
+  return swrValue;
 };

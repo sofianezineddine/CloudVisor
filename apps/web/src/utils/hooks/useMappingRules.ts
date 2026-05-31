@@ -9,11 +9,19 @@ export const useMappings = (
 ) => {
   const api = useApi();
 
-  return useSWR<MappingRule[]>(
+  const swrValue = useSWR<MappingRule[]>(
     api.isReady() ? "/mapping" : null,
     (url) => api.get(url),
     options
   );
+
+  // Provide safe default when data is undefined
+  const safeData = swrValue.data ?? [];
+
+  return {
+    ...swrValue,
+    data: safeData,
+  };
 };
 
 export const useMappingRule = (
@@ -21,9 +29,12 @@ export const useMappingRule = (
   options: SWRConfiguration = {}
 ) => {
   const api = useApi();
-  return useSWR<MappingRule>(
+  const swrValue = useSWR<MappingRule>(
     api.isReady() && id !== null ? `/mapping/${id}` : null,
     (url) => api.get(url),
     options
   );
+
+  // Return as-is for single item fetches
+  return swrValue;
 };
