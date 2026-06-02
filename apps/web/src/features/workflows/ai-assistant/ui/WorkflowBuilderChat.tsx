@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Provider } from "@/shared/api/providers";
 import {
   DefinitionV2,
@@ -408,6 +408,57 @@ export function WorkflowBuilderChat({
           trigger={trigger}
           respond={args.respond}
           result={undefined}
+          autoConfirm={true}
+        />
+      );
+    },
+  });
+
+  useCopilotAction({
+    name: "addAlertTrigger",
+    description:
+      "Add an alert trigger to the workflow. There could be only one alert trigger in the workflow, if you need more combine them into one alert trigger, using the CEL expression.",
+    parameters: [
+      {
+        name: "alertFilters",
+        description:
+          "The CEL expression to filter alerts. For all alerts, use empty string ''. For critical alerts use: alert.severity == 'critical'",
+        type: "string",
+      },
+    ],
+    renderAndWaitForResponse: (args) => {
+      const status = args.status as string;
+      const alertFilters = (args.args?.alertFilters as string) || "";
+
+      const properties = {
+        alert: {
+          cel: alertFilters,
+        },
+      };
+
+      const trigger = getTriggerDefinitionFromCopilotAction(
+        "alert",
+        properties
+      );
+
+      if (args.status === "complete" && "result" in args) {
+        return (
+          <AddTriggerUI
+            status="complete"
+            trigger={trigger}
+            respond={undefined}
+            result={args.result as SuggestionResult}
+          />
+        );
+      }
+
+      return (
+        <AddTriggerUI
+          status="executing"
+          trigger={trigger}
+          respond={args.respond}
+          result={undefined}
+          autoConfirm={true}
         />
       );
     },
@@ -525,6 +576,7 @@ export function WorkflowBuilderChat({
           trigger={trigger}
           respond={args.respond}
           result={undefined}
+          autoConfirm={true}
         />
       );
     },
@@ -549,9 +601,17 @@ export function WorkflowBuilderChat({
         return <AddTriggerOrStepSkeleton />;
       }
 
+      // Normalize incidentEvents to always be an array (handle string input from AI)
+      const incidentEvents = args.args.incidentEvents;
+      const normalizedEvents = Array.isArray(incidentEvents)
+        ? incidentEvents
+        : typeof incidentEvents === "string"
+        ? [incidentEvents]
+        : [];
+
       const properties = {
         incident: {
-          events: args.args.incidentEvents as IncidentEvent[],
+          events: normalizedEvents as IncidentEvent[],
         },
       };
 
@@ -577,6 +637,7 @@ export function WorkflowBuilderChat({
           trigger={trigger}
           respond={args.respond}
           result={undefined}
+          autoConfirm={true}
         />
       );
     },
@@ -747,6 +808,7 @@ export function WorkflowBuilderChat({
           addBeforeNodeId={args.addBeforeNodeId}
           result={undefined}
           respond={respond}
+          autoConfirm={true}
         />
       );
     },
@@ -877,6 +939,7 @@ export function WorkflowBuilderChat({
           result={undefined}
           addBeforeNodeId={args.addBeforeNodeId}
           respond={respond}
+          autoConfirm={true}
         />
       );
     },
@@ -1000,6 +1063,7 @@ Example: 'node_123__empty_true'`,
             result={undefined}
             addBeforeNodeId={args.addBeforeNodeId}
             respond={respond}
+            autoConfirm={true}
           />
         );
       } catch (e: any) {
@@ -1076,6 +1140,7 @@ Example: 'node_123__empty_true'`,
           addBeforeNodeId={args.addBeforeNodeId}
           result={undefined}
           respond={respond}
+          autoConfirm={true}
         />
       );
     },

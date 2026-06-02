@@ -1,25 +1,23 @@
 FROM python:3.12-slim
 
-# Install system dependencies
+WORKDIR /app
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
-    libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
-# Install shared utils package
+# Install shared packages
 COPY packages/utils /app/packages/utils
 RUN pip install --no-cache-dir /app/packages/utils
 
-# Install copilot service dependencies
-COPY services/copilot/requirements.txt /app/requirements.txt
+# Install service dependencies
+COPY services/security/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy copilot service source
-COPY services/copilot /app
+# Copy service source
+COPY services/security/ /app/
 
 # Create non-root user
 RUN groupadd -r appuser && useradd -r -g appuser appuser && \
@@ -27,20 +25,21 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser && \
 
 # Create health check script
 RUN echo '#!/bin/sh' > /usr/local/bin/healthcheck.sh && \
-    echo 'curl -f http://localhost:${PORT:-8010}/health || exit 1' >> /usr/local/bin/healthcheck.sh && \
+    echo 'curl -f http://localhost:${PORT:-8008}/health || exit 1' >> /usr/local/bin/healthcheck.sh && \
     chmod +x /usr/local/bin/healthcheck.sh && \
     chown appuser:appuser /usr/local/bin/healthcheck.sh
 
 USER appuser
 
-ENV PYTHONUNBUFFERED=1 \
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH=/home/appuser/.local/bin:$PATH \
-    PORT=8010
+    PORT=8008
 
-EXPOSE 8010
+EXPOSE 8008
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD /usr/local/bin/healthcheck.sh
 
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "2", "--graceful-timeout", "30"]
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8008", "--workers", "2", "--graceful-timeout", "30"]

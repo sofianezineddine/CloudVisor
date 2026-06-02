@@ -37,7 +37,7 @@ RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
 
 # Copy application source
 COPY keep/keep/ ./keep/
-COPY keep/ee/ ./keep/ee/
+COPY keep/ee/ ./ee/
 
 # Install the keep package
 RUN /venv/bin/pip install --use-deprecated=legacy-resolver . && \
@@ -69,6 +69,12 @@ COPY services/keep/gunicorn_config.py /app/gunicorn_config.py
 COPY keep/examples/workflows /examples/workflows
 RUN chmod +x /app/start.sh
 
+# Create health check script
+RUN echo '#!/bin/sh' > /usr/local/bin/healthcheck.sh && \
+    echo 'curl -f http://localhost:${PORT:-8007}/healthcheck || exit 1' >> /usr/local/bin/healthcheck.sh && \
+    chmod +x /usr/local/bin/healthcheck.sh && \
+    chown keep:keep /usr/local/bin/healthcheck.sh
+
 # Set ownership
 RUN chgrp -R 0 /app && chmod -R g=u /app && \
     chown -R keep:keep /app && \
@@ -78,8 +84,8 @@ USER keep
 
 EXPOSE 8007
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=15s \
-    CMD curl -f http://localhost:8007/healthcheck || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD /usr/local/bin/healthcheck.sh
 
 ENTRYPOINT ["/app/start.sh"]
 CMD ["gunicorn", "keep.api.api:get_app", "-c", "/app/gunicorn_config.py"]

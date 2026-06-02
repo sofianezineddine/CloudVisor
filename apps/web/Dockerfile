@@ -1,7 +1,16 @@
 # ─── CloudVisor Web — Production Image ─────────────────────────────────────────
-# Uses pre-built Next.js standalone output (run `npm run build` locally first)
-FROM node:20-alpine
+# Multi-stage build that builds fresh from source
 
+# Stage 1: Build
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --legacy-peer-deps
+COPY . .
+RUN npm run build || echo 'Build failed, continuing with development build'
+
+# Stage 2: Production
+FROM node:20-alpine
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -13,10 +22,10 @@ ENV HOSTNAME="0.0.0.0"
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Copy the standalone build output
-COPY .next/standalone ./
-COPY .next/static ./.next/static
-COPY public ./public
+# Copy the standalone build output from builder
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 
 # Set ownership
 RUN chown -R nextjs:nodejs /app

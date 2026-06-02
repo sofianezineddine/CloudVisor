@@ -20,14 +20,23 @@ COPY services/ai-router/app ./app
 # Create non-root user
 RUN groupadd -r ai-router && useradd -r -g ai-router ai-router
 RUN chown -R ai-router:ai-router /app
+
+# Create health check script
+RUN echo '#!/bin/sh' > /usr/local/bin/healthcheck.sh && \
+    echo 'curl -f http://localhost:${PORT:-8015}/health || exit 1' >> /usr/local/bin/healthcheck.sh && \
+    chmod +x /usr/local/bin/healthcheck.sh && \
+    chown ai-router:ai-router /usr/local/bin/healthcheck.sh
+
 USER ai-router
 
-# Expose port
+ENV PATH=/home/ai-router/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8015
+
 EXPOSE 8015
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8015/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD /usr/local/bin/healthcheck.sh
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8015", "--workers", "2"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8015", "--workers", "4", "--graceful-timeout", "30"]

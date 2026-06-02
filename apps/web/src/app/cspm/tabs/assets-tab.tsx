@@ -379,7 +379,6 @@ export function AssetsTab() {
 
   const globalAccountId = useScopeStore(s => s.mode === 'account' ? s.accountId : undefined);
   const globalProvider  = useScopeStore(s => s.mode === 'provider' ? s.provider : undefined);
-  const scopeAccountIds = useScopeStore(s => s.accountIds);
   const scopeMode       = useScopeStore(s => s.mode);
   const scopeAccounts   = useScopeStore(s => s.accounts);
 
@@ -395,35 +394,44 @@ export function AssetsTab() {
   React.useEffect(() => { setPage(1); }, [debSearch, typeFilter, catFilter, regionFilter, envFilter, globalAccountId, globalProvider]);
 
   const fetchResources = React.useCallback(async () => {
+    // Get fresh account IDs from store to avoid stale closure issues
+    const currentAccountIds = useScopeStore.getState().accountIds;
+    
+    // Don't fetch if no accounts are connected
+    if (currentAccountIds.length === 0) {
+      setLoading(false);
+      setResources([]);
+      return;
+    }
+
     setLoading(true); setError(null);
     try {
       let items: any[] = [];
-      const orgId = useScopeStore.getState().organizationId;
       
       if (debSearch && debSearch.length >= 2) {
         // Search: try graph service ES-backed search first (has risk scores)
         try {
-          if (orgId) {
-            const searchResp = await graphAPI.searchAssets({
-              q: debSearch,
-              org_id: orgId,
-              provider: globalProvider || undefined,
-              limit: 200,
-            });
-            items = searchResp?.hits ?? [];
-          }
-        } catch {
+          const searchResp = await graphAPI.searchAssets({
+            q: debSearch,
+            provider: globalProvider || undefined,
+            limit: 200,
+          });
+          items = searchResp?.hits ?? [];
+        } catch (err) {
+          console.warn('Graph search failed, falling back to connector:', err);
           // Fallback to connector search
           try {
             const resp = await connectorAPI.listResources({ 
               account_id: globalAccountId, 
-              provider: !globalAccountId ? globalProvider : undefined, 
+              account_ids: !globalAccountId ? currentAccountIds : undefined,
+              provider: !globalAccountId && currentAccountIds.length === 0 ? globalProvider : undefined, 
               search: debSearch, 
               limit: 200, 
               offset: 0 
             });
             items = (resp?.resources as any[]) ?? [];
-          } catch {
+          } catch (err2) {
+            console.warn('Connector search failed, falling back to API client:', err2);
             const searchResp = await apiClient.assets.search(debSearch, { 
               provider: globalProvider || undefined, 
               limit: 200,
@@ -431,27 +439,28 @@ export function AssetsTab() {
             items = (searchResp?.data as any[]) ?? [];
           }
         }
-        if (globalAccountId) items = items.filter((a: any) => a.account_id === globalAccountId);
+        // Client-side filter by account if in account mode
+        if (globalAccountId) {
+          items = items.filter((a: any) => a.account_id === globalAccountId);
+        } else if (currentAccountIds.length > 0) {
+          // Filter to only show resources from accounts in current scope
+          items = items.filter((a: any) => currentAccountIds.includes(a.account_id));
+        }
       } else {
         // Regular listing: try graph service first (has risk_score + open_findings_count)
         try {
-          if (orgId) {
-            const graphResp = await graphAPI.listAssets({
-              provider: globalProvider || (!globalAccountId ? undefined : undefined),
-              resource_type: typeFilter || undefined,
-              limit: 100,
-            });
-            items = graphResp?.assets ?? [];
-            // If graph returned data with risk scores, use it
-            if (items.length > 0 && items.some((a: any) => a.risk_score > 0)) {
-              console.log(`Fetched ${items.length} assets from graph service (with risk scores)`);
-            } else {
-              throw new Error('Graph returned no scored data, falling back');
-            }
-          } else {
-            throw new Error('No org_id available');
+          const graphResp = await graphAPI.listAssets({
+            provider: globalProvider || undefined,
+            resource_type: typeFilter || undefined,
+            limit: 100,
+          });
+          items = graphResp?.assets ?? [];
+          // If graph returned data with risk scores, use it
+          if (items.length > 0) {
+            console.log(`Fetched ${items.length} assets from graph service`);
           }
-        } catch {
+        } catch (err) {
+          console.warn('Graph listAssets failed, falling back to connector:', err);
           // Fallback: fetch from connector (no risk scores, but complete inventory)
           try {
             let allItems: any[] = [];
@@ -462,7 +471,8 @@ export function AssetsTab() {
             while (hasMore && allItems.length < 10000) {
               const resp = await connectorAPI.listResources({ 
                 account_id: globalAccountId, 
-                provider: !globalAccountId ? globalProvider : undefined, 
+                account_ids: !globalAccountId ? currentAccountIds : undefined,
+                provider: !globalAccountId && currentAccountIds.length === 0 ? globalProvider : undefined, 
                 resource_type: typeFilter || undefined, 
                 limit: batchSize, 
                 offset: offset 
@@ -473,7 +483,9 @@ export function AssetsTab() {
               offset += batchSize;
             }
             items = allItems;
-          } catch {
+            console.log(`Fetched ${items.length} assets from connector service`);
+          } catch (err2) {
+            console.warn('Connector listResources failed, falling back to API client:', err2);
             const resp = await apiClient.assets.list({ 
               account_id: globalAccountId, 
               provider: !globalAccountId ? globalProvider : undefined, 
@@ -482,6 +494,10 @@ export function AssetsTab() {
             });
             items = (resp?.data as any[]) ?? [];
           }
+        }
+        // Filter to only show resources from accounts in current scope
+        if (currentAccountIds.length > 0 && items.length > 0) {
+          items = items.filter((a: any) => currentAccountIds.includes(a.account_id));
         }
       }
       

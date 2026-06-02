@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { StepPreview } from "./StepPreview";
 import { SuggestionResult, SuggestionStatus } from "./SuggestionStatus";
@@ -9,6 +10,7 @@ import { getErrorMessage } from "../lib/utils";
 type AddStepUIPropsCommon = {
   step: V2Step;
   addBeforeNodeId: string;
+  autoConfirm?: boolean;
 };
 
 type AddStepUIPropsComplete = AddStepUIPropsCommon & {
@@ -31,8 +33,28 @@ export const AddStepUI = ({
   addBeforeNodeId,
   result,
   respond,
+  autoConfirm = false,
 }: AddStepUIProps) => {
   const { addNodeBetween, setSelectedNode, getNodeById } = useWorkflowStore();
+
+  // Auto-confirm immediately if enabled - run synchronously on first render
+  if (autoConfirm && status === "executing" && respond) {
+    // Execute immediately without waiting for useEffect
+    try {
+      addNodeBetween(addBeforeNodeId, step, "node");
+      respond({
+        status: "complete",
+        message: "Step added",
+      });
+    } catch (e) {
+      respond({
+        status: "error",
+        message: getErrorMessage(e),
+      });
+    }
+    // Return null to not render the confirmation UI at all
+    return null;
+  }
 
   const selectNode = () => {
     const node = getNodeById(addBeforeNodeId);
@@ -113,7 +135,7 @@ export const AddStepUI = ({
         <Button color="blue" variant="primary" onClick={onAdd}>
           Add (⌘+Enter)
         </Button>
-        <Button color="blue" variant="secondary" onClick={onCancel}>
+        <Button color="blue" variant="outline" onClick={onCancel}>
           No
         </Button>
       </div>

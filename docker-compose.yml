@@ -70,6 +70,12 @@ services:
       - ./infra/db/neo4j:/data
     networks:
       - cloudvisor
+    healthcheck:
+      test: ["CMD", "wget", "-qO/dev/null", "http://localhost:7474/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
@@ -88,6 +94,12 @@ services:
       - esdata1:/usr/share/elasticsearch/data
     networks:
       - cloudvisor
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-u", "elastic:${ELASTIC_PASSWORD:-elasticpassword}", "http://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -100,6 +112,12 @@ services:
       - "2181:2181"
     networks:
       - cloudvisor
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181", "|", "grep", "imok"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -117,6 +135,12 @@ services:
       - zookeeper
     networks:
       - cloudvisor
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   schema-registry:
     image: confluentinc/cp-schema-registry:7.5.0
@@ -149,6 +173,12 @@ services:
       - "6379:6379"
     networks:
       - cloudvisor
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   opa:
     image: openpolicyagent/opa:latest
@@ -159,6 +189,12 @@ services:
     command: ["run", "--server", "--addr=0.0.0.0:8181"]
     networks:
       - cloudvisor
+    healthcheck:
+      test: ["CMD", "wget", "-qO/dev/null", "http://localhost:8181/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   adminer:
     image: adminer:latest
@@ -170,6 +206,12 @@ services:
       - postgres
     networks:
       - cloudvisor
+    healthcheck:
+      test: ["CMD", "wget", "-qO/dev/null", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # ─── HashiCorp Vault ──────────────────────────────────────────────────────
 
@@ -205,7 +247,7 @@ services:
   vault-init:
     image: python:3.12-alpine
     container_name: cv-vault-init
-    restart: always
+    restart: "no"
     environment:
       VAULT_ADDR: "http://cv-vault:8200"
     command: >
@@ -215,7 +257,7 @@ services:
       - ./infra/vault:/vault/init:ro
     depends_on:
       vault:
-        condition: service_started
+        condition: service_healthy
     networks:
       - cloudvisor
 
@@ -615,10 +657,11 @@ services:
       - cloudvisor
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9601"]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:9601/usage', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))\""]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 30s
 
   # ─── Keep AIOps Service (port 8007) ───────────────────────────────────────
 
@@ -759,7 +802,7 @@ services:
       - cloudvisor
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8015/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8015/v1/health')"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -10,6 +10,7 @@ import { useConfig } from "@/utils/hooks/useConfig";
 
 type AddTriggerUIPropsCommon = {
   trigger: V2StepTrigger;
+  autoConfirm?: boolean;
 };
 
 type AddTriggerUIPropsComplete = AddTriggerUIPropsCommon & {
@@ -31,10 +32,37 @@ export const AddTriggerUI = ({
   trigger,
   respond,
   result,
+  autoConfirm = false,
 }: AddTriggerUIProps) => {
   const [isAddingTrigger, setIsAddingTrigger] = useState(false);
   const { addNodeBetween, getNextEdge } = useWorkflowStore();
   const { data: config } = useConfig();
+
+  // Auto-confirm immediately if enabled - run synchronously on first render
+  if (autoConfirm && status === "executing" && respond) {
+    const nextEdge = getNextEdge("trigger_start");
+    if (!nextEdge) {
+      respond({
+        status: "error",
+        message: "Can't find the edge to add the trigger after",
+      });
+    } else {
+      try {
+        addNodeBetween(nextEdge.id, trigger, "edge");
+        respond({
+          status: "complete",
+          message: "Trigger added",
+        });
+      } catch (e) {
+        respond({
+          status: "error",
+          message: getErrorMessage(e),
+        });
+      }
+    }
+    // Return null to not render the confirmation UI at all
+    return null;
+  }
 
   const handleAddTrigger = useCallback(() => {
     if (isAddingTrigger) {

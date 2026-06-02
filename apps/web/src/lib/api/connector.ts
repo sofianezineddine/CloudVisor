@@ -408,6 +408,7 @@ export const connectorAPI = {
    */
   async listResources(params?: {
     account_id?: string;
+    account_ids?: string[];
     provider?: string;
     resource_type?: string;
     region?: string;
@@ -419,6 +420,7 @@ export const connectorAPI = {
   }): Promise<ResourceListResponse> {
     const query = new URLSearchParams();
     if (params?.account_id) query.set('account_id', params.account_id);
+    if (params?.account_ids && params.account_ids.length > 0) query.set('account_ids', params.account_ids.join(','));
     if (params?.provider) query.set('provider', params.provider);
     if (params?.resource_type) query.set('resource_type', params.resource_type);
     if (params?.region) query.set('region', params.region);

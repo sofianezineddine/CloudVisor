@@ -10,12 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy shared utils package
-COPY packages/utils /build/packages/utils
-RUN pip install --no-cache-dir /build/packages/utils
+COPY packages/utils ./packages/utils
+RUN pip install --no-cache-dir --user ./packages/utils
 
 # Copy connector service requirements and install
-COPY services/connector/requirements.txt /build/requirements.txt
-RUN pip install --no-cache-dir -r /build/requirements.txt
+COPY services/connector/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --user -r ./requirements.txt
 
 # ─── Runtime stage ──────────────────────────────────────────────
 FROM python:3.12-slim
@@ -25,31 +25,38 @@ WORKDIR /app
 # Install runtime system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
 # Copy installed Python packages from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 
 # Copy Avro schemas (needed by avro_serializer.py at runtime)
-COPY packages/kafka-schemas /app/packages/kafka-schemas
+COPY --chown=appuser:appuser packages/kafka-schemas /app/packages/kafka-schemas
 
 # Copy connector service source
-COPY services/connector /app
+COPY --chown=appuser:appuser services/connector /app
 
-# Set working directory
-WORKDIR /app
+# Create health check script
+RUN echo '#!/bin/sh' > /usr/local/bin/healthcheck.sh && \
+    echo 'curl -f http://localhost:${PORT:-8000}/health || exit 1' >> /usr/local/bin/healthcheck.sh && \
+    chmod +x /usr/local/bin/healthcheck.sh && \
+    chown appuser:appuser /usr/local/bin/healthcheck.sh
+
+USER appuser
 
 # Environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+ENV PATH=/home/appuser/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
-
-# Expose port
 EXPOSE 8000
 
-# Run the service
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD /usr/local/bin/healthcheck.sh
+
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--graceful-timeout", "30"]
