@@ -12,6 +12,7 @@ import { graphAPI, GraphAsset } from '@/lib/api/graph';
 import { connectorAPI } from '@/lib/api/connector';
 import { useResourceTypeCatalog } from '@/hooks/use-connector';
 import { useScopeStore } from '@/stores/scope';
+import { useAuth } from '@/hooks/use-auth';
 
 // ─── Asset Explorer Page (UI Spec Page 3) ────────────────────────────────────
 
@@ -19,47 +20,47 @@ export default function AssetsPage() {
   const [search, setSearch] = useState('');
   const [provider, setProvider] = useState<string | undefined>();
   const [resourceType, setResourceType] = useState<string | undefined>();
+  const [cursor, setCursor] = useState<string | undefined>();
+  const [cursorHistory, setCursorHistory] = useState<(string | undefined)[]>([undefined]);
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const limit = 50;
 
   const scopeAccountId = useScopeStore(s => s.mode === 'account' ? s.accountId : undefined);
   const scopeProvider = useScopeStore(s => s.mode === 'provider' ? s.provider : undefined);
-  const orgId = useScopeStore(s => s.organizationId);
+  const { user } = useAuth();
+  const orgId = user?.organization_id;
 
   const effectiveProvider = provider || (!scopeAccountId ? scopeProvider : undefined);
 
   // Fetch assets from graph service
   const { data: assetsData, isLoading, refetch } = useQuery({
-    queryKey: ['graph', 'assets', orgId, effectiveProvider, resourceType, search, page],
+    queryKey: ['graph', 'assets', orgId, effectiveProvider, resourceType, search, cursor],
     queryFn: async () => {
-      if (!orgId) return { assets: [], total: 0, page: 1, page_size: pageSize };
       if (search.length > 0) {
         const result = await graphAPI.searchAssets({
           q: search,
           org_id: orgId,
           provider: effectiveProvider,
-          page,
-          page_size: pageSize,
+          limit,
         });
-        return { assets: result.hits, total: result.total, page: result.page, page_size: result.page_size };
+        return { assets: result.hits, total: result.total, next_cursor: undefined };
       }
-      return graphAPI.listAssets({
+      const result = await graphAPI.listAssets({
         org_id: orgId,
         provider: effectiveProvider,
         resource_type: resourceType,
-        page,
-        page_size: pageSize,
+        limit,
+        cursor,
       });
+      return { assets: result.assets, total: result.total, next_cursor: (result as any).next_cursor };
     },
-    enabled: !!orgId,
     staleTime: 30_000,
   });
 
   // Fetch summary stats
   const { data: stats } = useQuery({
     queryKey: ['graph', 'stats', orgId],
-    queryFn: () => orgId ? graphAPI.getStats(orgId) : null,
-    enabled: !!orgId,
+    queryFn: () => graphAPI.getStats(orgId),
     staleTime: 60_000,
   });
 
@@ -68,7 +69,9 @@ export default function AssetsPage() {
 
   const assets = assetsData?.assets ?? [];
   const total = assetsData?.total ?? 0;
-  const totalPages = Math.ceil(total / pageSize);
+  const nextCursor = assetsData?.next_cursor;
+  const hasPrev = page > 1;
+  const hasNext = !!nextCursor;
 
   return (
     <div className="space-y-6">
@@ -115,14 +118,14 @@ export default function AssetsPage() {
           <Input
             placeholder="Search by name, ID, or tags..."
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => { setSearch(e.target.value); setCursor(undefined); setCursorHistory([undefined]); setPage(1); }}
             className="pl-10"
           />
         </div>
         {catalog && (
           <select
             value={resourceType ?? ''}
-            onChange={(e) => { setResourceType(e.target.value || undefined); setPage(1); }}
+            onChange={(e) => { setResourceType(e.target.value || undefined); setCursor(undefined); setCursorHistory([undefined]); setPage(1); }}
             className="h-8 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 text-sm"
           >
             <option value="">All types</option>
@@ -211,28 +214,38 @@ export default function AssetsPage() {
         )}
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {(hasPrev || hasNext) && (
           <div className="px-5 py-3 border-t border-[var(--border-faint)] flex items-center justify-between">
             <span className="text-small text-[var(--text-secondary)]">
-              Showing {((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, total)} of {total}
+              Page {page} · {total.toLocaleString()} total resources
             </span>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage(p => p - 1)}
+                disabled={!hasPrev}
+                onClick={() => {
+                  const prev = cursorHistory[page - 2];
+                  setCursor(prev);
+                  setPage(p => p - 1);
+                }}
               >
                 Previous
               </Button>
               <span className="text-small text-[var(--text-secondary)]">
-                {page} / {totalPages}
+                {page}
               </span>
               <Button
                 variant="outline"
                 size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage(p => p + 1)}
+                disabled={!hasNext}
+                onClick={() => {
+                  if (nextCursor) {
+                    setCursorHistory(h => [...h, nextCursor]);
+                    setCursor(nextCursor);
+                    setPage(p => p + 1);
+                  }
+                }}
               >
                 Next
               </Button>

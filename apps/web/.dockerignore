@@ -1,5 +1,5 @@
 node_modules
-.next/cache
+.next
 .git
 .gitignore
 *.md
@@ -10,4 +10,3 @@ storybook-static
 coverage
 .vscode
 .idea
-src

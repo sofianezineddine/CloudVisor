@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:2.3.1, SOC2:CC6.1
 package cspm.aws.ec2
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::ec2::image"
     input.raw.Public == true
     finding := {

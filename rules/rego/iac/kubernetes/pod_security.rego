@@ -8,10 +8,6 @@
 
 package cloudvisor.iac.kubernetes.pod_security
 
-import future.keywords.if
-import future.keywords.in
-import future.keywords.contains
-
 violation contains finding if {
     _is_workload_resource
     spec := _pod_spec

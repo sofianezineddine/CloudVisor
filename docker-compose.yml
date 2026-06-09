@@ -348,10 +348,10 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 512M
+          memory: 1G
         reservations:
           cpus: "0.25"
-          memory: 128M
+          memory: 256M
     logging:
       driver: json-file
       options:
@@ -387,9 +387,9 @@ services:
       kafka:
         condition: service_started
       neo4j:
-        condition: service_started
+        condition: service_healthy
       elasticsearch:
-        condition: service_started
+        condition: service_healthy
     networks:
       - cloudvisor
     restart: unless-stopped
@@ -586,13 +586,13 @@ services:
       REDIS_URL: redis://cv-redis:6379/6
       KAFKA_BOOTSTRAP_SERVERS: cv-kafka:9092
       APP_ENVIRONMENT: production
-      COPILOT_LLM_PROVIDER: nvidia
+      COPILOT_LLM_PROVIDER: ${COPILOT_LLM_PROVIDER:-nvidia}
       # SECURITY: Load the API key from an environment variable or .env file.
       # Never hardcode API keys in docker-compose.yml — they end up in git history.
       # Set COPILOT_NVIDIA_API_KEY in your .env file or CI/CD secrets.
       COPILOT_NVIDIA_API_KEY: ${COPILOT_NVIDIA_API_KEY}
-      COPILOT_NVIDIA_BASE_URL: https://integrate.api.nvidia.com/v1
-      COPILOT_NVIDIA_MODEL: qwen/qwen3-coder-480b-a35b-instruct
+      COPILOT_NVIDIA_BASE_URL: ${COPILOT_NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      COPILOT_NVIDIA_MODEL: ${COPILOT_NVIDIA_MODEL:-meta/llama-3.1-70b-instruct}
       COPILOT_NVIDIA_MAX_TOKENS: "4096"
       COPILOT_NVIDIA_TEMPERATURE: "0.7"
       COPILOT_GRAPH_SERVICE_URL: http://cv-graph:8001

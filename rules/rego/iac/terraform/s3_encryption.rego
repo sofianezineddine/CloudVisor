@@ -9,10 +9,6 @@
 
 package cloudvisor.iac.terraform.s3_encryption
 
-import future.keywords.if
-import future.keywords.in
-import future.keywords.contains
-
 violation contains finding if {
     input.resource.type == "aws_s3_bucket"
     properties := input.resource.properties

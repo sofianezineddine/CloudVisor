@@ -20,9 +20,6 @@
 
 package cspm.aws.sg_unrestricted_all
 
-import future.keywords.if
-import future.keywords.in
-
 deny[finding] if {
     input.resource_type == "aws::ec2::securitygroup"
     rule := input.raw.IpPermissions[_]

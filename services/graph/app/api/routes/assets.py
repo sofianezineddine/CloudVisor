@@ -173,6 +173,7 @@ async def list_assets(
     environment: str | None = None,
     is_public: bool | None = None,
     risk_score_min: int | None = None,
+    search: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1),
     neo4j=Depends(get_neo4j),
@@ -206,6 +207,9 @@ async def list_assets(
     if risk_score_min is not None:
         conditions.append("a.risk_score >= $risk_score_min")
         params["risk_score_min"] = risk_score_min
+    if search:
+        conditions.append("(toLower(a.name) CONTAINS toLower($search) OR toLower(a.cloud_resource_id) CONTAINS toLower($search))")
+        params["search"] = search
 
     where_clause = " AND ".join(conditions)
     query = f"MATCH (a:Asset) WHERE {where_clause} RETURN a ORDER BY a.risk_score DESC SKIP $skip LIMIT $limit"

@@ -84,9 +84,15 @@ class PolicyEvaluationService:
                 "timestamp": datetime.utcnow().isoformat(),
             }
 
-            # OPA path: cloudvisor/cspm/aws_s3_public_access
-            rule_id_normalized = rule.rule_id.replace("-", "_")
-            policy_path = f"cloudvisor/{rule.category}/{rule_id_normalized}"
+            # OPA path: derived from the rego package name (e.g. cloudvisor/cspm/aws_s3_public_access)
+            # Fall back to constructed path for rules without rego_code
+            if rule.rego_code:
+                from ..opa import RegoParser
+                parser = RegoParser()
+                package_name = parser.extract_package(rule.rego_code)
+                policy_path = package_name.replace(".", "/") if package_name else f"cloudvisor/{rule.category}/{rule.rule_id.replace('-', '_')}"
+            else:
+                policy_path = f"cloudvisor/{rule.category}/{rule.rule_id.replace('-', '_')}"
             results = await self._opa.evaluate(input_data, policy_path)
 
             rule_findings = []
@@ -102,15 +108,24 @@ class PolicyEvaluationService:
 
         return findings
 
+    @staticmethod
+    def _normalize_resource_type(rt: str) -> str:
+        """Normalize resource type for fuzzy matching.
+
+        Handles differences between CloudFormation-style (aws::s3::bucket) and
+        connector-style (aws::s3bucket) resource type naming conventions.
+        """
+        return rt.lower().replace("::", "").replace("_", "").replace(" ", "")
+
     def _is_rule_applicable(self, rule: RuleModel, resource: dict[str, Any]) -> bool:
         """Check if rule is applicable to resource type and provider."""
         if rule.resource_type:
             resource_type = resource.get("resource_type", "")
-            rule_suffix = rule.resource_type.split("::")[-1].lower()
-            resource_suffix = resource_type.split("::")[-1].lower()
-            if (rule_suffix != resource_suffix
-                    and rule.resource_type not in resource_type
-                    and resource_type not in rule.resource_type):
+            rule_norm = self._normalize_resource_type(rule.resource_type)
+            resource_norm = self._normalize_resource_type(resource_type)
+            if (rule_norm != resource_norm
+                    and rule_norm not in resource_norm
+                    and resource_norm not in rule_norm):
                 return False
 
         if rule.provider:

@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:5.1, SOC2:CC6.1
 package cspm.aws.vpc
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::vpc::vpc"
     input.raw.IsDefault == true
     finding := {

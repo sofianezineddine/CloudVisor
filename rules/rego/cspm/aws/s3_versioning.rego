@@ -16,8 +16,6 @@
 
 package cspm.aws.s3_versioning
 
-import future.keywords.if
-
 deny[finding] if {
     input.resource_type == "aws::s3::bucket"
     versioning := input.raw.Versioning

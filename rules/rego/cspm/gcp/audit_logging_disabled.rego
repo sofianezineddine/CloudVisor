@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.gcp_audit_logging_disabled
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "gcp::iam::policy"
     not input.resource.raw.auditConfigs

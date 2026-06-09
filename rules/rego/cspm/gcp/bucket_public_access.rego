@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.gcp_bucket_public_access
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "gcp::storage::bucket"
     input.resource.is_public == true

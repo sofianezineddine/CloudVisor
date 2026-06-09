@@ -15,8 +15,6 @@
 
 package cloudvisor.cspm.azure_aks_rbac_disabled
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "azure::containerservice::managedcluster"
     not input.resource.raw.enable_rbac

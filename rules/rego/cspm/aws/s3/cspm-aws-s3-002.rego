@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:2.1.5, SOC2:CC6.1, PCI-DSS:1.3.2
 package cspm.aws.s3
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::s3::bucket"
     input.raw.ACL == "public-read"
     finding := {
@@ -23,7 +21,7 @@ deny[finding] {
     }
 }
 
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::s3::bucket"
     input.raw.ACL == "public-read-write"
     finding := {
@@ -35,7 +33,7 @@ deny[finding] {
     }
 }
 
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::s3::bucket"
     input.raw.ACL == "authenticated-read"
     finding := {

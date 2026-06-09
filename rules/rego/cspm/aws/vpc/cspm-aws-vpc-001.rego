@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:3.9, SOC2:CC7.2
 package cspm.aws.vpc
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::vpc::vpc"
     not input.raw.FlowLogsEnabled
     finding := {
@@ -23,7 +21,7 @@ deny[finding] {
     }
 }
 
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::vpc::vpc"
     input.raw.FlowLogsEnabled == false
     finding := {

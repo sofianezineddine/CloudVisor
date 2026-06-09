@@ -10,8 +10,6 @@
 
 package cloudvisor.iac.terraform_sg_unrestricted
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "terraform::aws_security_group"
     ingress := input.resource.raw.ingress[_]

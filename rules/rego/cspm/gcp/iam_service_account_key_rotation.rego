@@ -15,8 +15,6 @@
 
 package cloudvisor.cspm.gcp_iam_service_account_key_rotation
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "gcp::iam::serviceaccount"
     input.resource.raw.key_age_days > 90

@@ -15,8 +15,6 @@
 
 package cloudvisor.cspm.gcp_gke_legacy_auth
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "gcp::container::cluster"
     input.resource.raw.legacy_abac_enabled == true

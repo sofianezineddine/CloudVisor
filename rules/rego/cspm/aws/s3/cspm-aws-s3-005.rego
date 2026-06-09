@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:2.1.2, SOC2:CC7.2
 package cspm.aws.s3
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::s3::bucket"
     not input.raw.LoggingEnabled
     finding := {

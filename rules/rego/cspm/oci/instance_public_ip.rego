@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.oci_instance_public_ip
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "oci::compute::instance"
     input.resource.is_public == true

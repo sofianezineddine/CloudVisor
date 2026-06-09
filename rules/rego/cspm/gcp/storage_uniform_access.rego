@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.gcp_storage_uniform_access
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "gcp::storage::bucket"
     not input.resource.raw.iamConfiguration.uniformBucketLevelAccess.enabled

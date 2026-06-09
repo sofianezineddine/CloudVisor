@@ -6,6 +6,7 @@ DELETE /v1/accounts/{id}     — Remove cloud account
 POST   /v1/accounts/{id}/scan — Trigger on-demand scan (async, returns 202)
 """
 
+import logging
 import time
 from typing import Any
 
@@ -21,6 +22,7 @@ from app.schemas.envelope import (
     make_next_cursor,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 
@@ -50,9 +52,11 @@ async def list_accounts(
     params: dict[str, Any] = {"limit": limit, "offset": offset, **filters}
 
     try:
+        logger.info(f"list_accounts: org_id={user.organization_id}, user_id={user.user_id}, headers={user.auth_headers}")
         result = await proxy.get("/internal/accounts", params=params, headers=user.auth_headers)
         accounts = result.get("accounts", [])
         total = result.get("total", len(accounts))
+        logger.info(f"list_accounts: connector returned {len(accounts)} accounts, total={total}")
         return ok(
             data=accounts,
             total=total,
@@ -60,6 +64,7 @@ async def list_accounts(
             took_ms=int((time.monotonic() - t0) * 1000),
         )
     except Exception as e:
+        logger.error(f"list_accounts: connector error: {e}")
         raise HTTPException(status_code=502, detail=f"Connector service unavailable: {e}")
 
 

@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.gcp_firewall_unrestricted_ssh
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "gcp::compute::firewall"
     input.resource.raw.direction == "INGRESS"

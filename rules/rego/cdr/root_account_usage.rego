@@ -10,8 +10,6 @@
 
 package cloudvisor.cdr.root_account_usage
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::cloudtrail::event"
     input.resource.raw.userIdentity.type == "Root"

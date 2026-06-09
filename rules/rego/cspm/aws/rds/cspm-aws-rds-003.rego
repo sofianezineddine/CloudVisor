@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:2.3.3, SOC2:A1.2
 package cspm.aws.rds
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::rds::instance"
     input.raw.BackupRetentionPeriod < 7
     finding := {

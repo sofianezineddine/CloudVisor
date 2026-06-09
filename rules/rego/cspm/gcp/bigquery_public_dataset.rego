@@ -17,9 +17,6 @@
 
 package cloudvisor.cspm.gcp_bigquery_public_dataset
 
-import future.keywords.if
-import future.keywords.some
-
 deny[msg] if {
     input.resource.resource_type == "gcp::bigquery::dataset"
     some binding in input.resource.raw.iam_bindings

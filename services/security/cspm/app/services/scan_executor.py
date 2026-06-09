@@ -27,6 +27,19 @@ logger = logging.getLogger(__name__)
 
 POLICY_SERVICE_URL = os.environ.get("POLICY_SERVICE_URL", "http://cv-policy:8003")
 
+# Map connector resource types to rego resource types for OPA evaluation
+CONNECTOR_TO_REGO_RESOURCE_TYPE: dict[str, str] = {
+    "aws::s3bucket": "aws::s3::bucket",
+    "aws::securitygroup": "aws::ec2::securitygroup",
+    "aws::vpc": "aws::ec2::vpc",
+    "aws::subnet": "aws::ec2::subnet",
+    "aws::iamrole": "aws::iam::role",
+    "aws::iampolicy": "aws::iam::policy",
+    "aws::iamuser": "aws::iam::user",
+    "aws::kmskey": "aws::kms::key",
+    "aws::snstopic": "aws::sns::topic",
+}
+
 # Compliance framework → rule_id mapping (rules that cover each framework)
 COMPLIANCE_RULE_MAP: dict[str, list[str]] = {
     "CIS-AWS": [
@@ -82,22 +95,33 @@ def _fingerprint(rule_id: str, resource_id: str, account_id: str, org_id: str) -
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-async def _evaluate_resource(resource: dict[str, Any], org_id: str) -> list[dict]:
-    """Call Policy service /internal/policy/evaluate for one resource."""
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+async def _evaluate_batch(
+    resources: list[dict[str, Any]],
+    org_id: str,
+    client: httpx.AsyncClient,
+    max_retries: int = 3,
+) -> list[dict]:
+    """Call Policy service /internal/policy/evaluate for a batch of resources."""
+    import asyncio
+    for attempt in range(1, max_retries + 1):
+        try:
             resp = await client.post(
                 f"{POLICY_SERVICE_URL}/internal/policy/evaluate",
-                json={"resources": [resource], "org_id": org_id},
+                json={"resources": resources, "org_id": org_id},
                 headers={"X-Org-ID": org_id},
             )
             if resp.status_code == 200:
                 return resp.json().get("findings", [])
-            logger.warning(f"Policy evaluate {resp.status_code} for {resource.get('id')}")
-            return []
-    except Exception as e:
-        logger.error(f"Policy evaluate error: {e}")
-        return []
+            logger.warning(f"Policy evaluate {resp.status_code} (attempt {attempt})")
+        except httpx.ConnectError as e:
+            logger.warning(f"Policy service unreachable (attempt {attempt}/{max_retries}): {e}")
+            if attempt < max_retries:
+                await asyncio.sleep(2 ** attempt)
+        except Exception as e:
+            logger.error(f"Policy evaluate error (attempt {attempt}): {e}")
+            if attempt < max_retries:
+                await asyncio.sleep(1)
+    return []
 
 
 async def _publish_finding_event(
@@ -162,172 +186,192 @@ async def run_scan(
         resources = result.mappings().all()
         logger.info(f"Scan {scan_id}: {len(resources)} resources to evaluate")
 
-        # ── 2. Evaluate each resource ─────────────────────────────────────────
-        for row in resources:
-            resources_scanned += 1
-            resource_id = str(row["cloud_resource_id"] or row["id"])
-            acc_id = str(row["account_id"] or "")
-            org_id_str = str(row["organization_id"] or organization_id)
+        # ── 2. Evaluate resources in batches ──────────────────────────────────
+        BATCH_SIZE = 20
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for batch_start in range(0, len(resources), BATCH_SIZE):
+                batch_rows = resources[batch_start:batch_start + BATCH_SIZE]
+                batch_dicts = []
+                batch_meta = []  # (resource_id, acc_id, org_id_str, row)
 
-            resource_dict = {
-                "id": resource_id,
-                "cloud_resource_id": resource_id,
-                "resource_type": row["resource_type"] or "",
-                "name": row["name"] or "",
-                "provider": row["provider"] or "",
-                "account_id": acc_id,
-                "region": row["region"] or "",
-                "organization_id": org_id_str,
-                "is_public": bool(row["is_public"]),
-                "environment": row["environment"] or "unknown",
-                "tags": row["tags"] or {},
-                "raw": row["raw"] or {},
-            }
+                for row in batch_rows:
+                    resources_scanned += 1
+                    resource_id = str(row["cloud_resource_id"] or row["id"])
+                    acc_id = str(row["account_id"] or "")
+                    org_id_str = str(row["organization_id"] or organization_id)
 
-            policy_findings = await _evaluate_resource(resource_dict, org_id_str)
-
-            # ── 3. Upsert resource posture ────────────────────────────────────
-            sev_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
-            for f in policy_findings:
-                sev = f.get("severity", "MEDIUM").upper()
-                sev_counts[sev] = sev_counts.get(sev, 0) + 1
-
-            risk_score = compute_risk_score(
-                policy_findings,
-                is_internet_exposed=bool(row["is_public"]),
-                environment=row["environment"] or "unknown",
-            )
-
-            existing_posture = (await db.execute(
-                select(CSPMResourcePostureModel).where(
-                    CSPMResourcePostureModel.organization_id == org_id_str,
-                    CSPMResourcePostureModel.resource_id == resource_id,
-                )
-            )).scalar_one_or_none()
-
-            if existing_posture:
-                existing_posture.risk_score = risk_score
-                existing_posture.critical_count = sev_counts["CRITICAL"]
-                existing_posture.high_count = sev_counts["HIGH"]
-                existing_posture.medium_count = sev_counts["MEDIUM"]
-                existing_posture.low_count = sev_counts["LOW"]
-                existing_posture.is_internet_exposed = bool(row["is_public"])
-                existing_posture.last_scanned_at = datetime.utcnow()
-                existing_posture.updated_at = datetime.utcnow()
-                existing_posture.environment = row["environment"] or "unknown"
-            else:
-                db.add(CSPMResourcePostureModel(
-                    id=str(uuid.uuid4()),
-                    organization_id=org_id_str,
-                    resource_id=resource_id,
-                    resource_name=row["name"] or resource_id,
-                    resource_type=row["resource_type"] or "",
-                    provider=row["provider"] or "",
-                    account_id=acc_id,
-                    region=row["region"] or "",
-                    environment=row["environment"] or "unknown",
-                    risk_score=risk_score,
-                    is_internet_exposed=bool(row["is_public"]),
-                    critical_count=sev_counts["CRITICAL"],
-                    high_count=sev_counts["HIGH"],
-                    medium_count=sev_counts["MEDIUM"],
-                    low_count=sev_counts["LOW"],
-                    last_scanned_at=datetime.utcnow(),
-                ))
-
-            # ── 4. Upsert findings + detect regressions ───────────────────────
-            current_fps: set[str] = set()
-            for finding in policy_findings:
-                fp = _fingerprint(finding.get("rule_id", ""), resource_id, acc_id, org_id_str)
-                current_fps.add(fp)
-
-                existing_finding = (await db.execute(
-                    select(CSPMFindingModel).where(CSPMFindingModel.fingerprint == fp)
-                )).scalar_one_or_none()
-
-                if existing_finding:
-                    if existing_finding.status == "resolved":
-                        # Regression — finding came back
-                        existing_finding.status = "open"
-                        existing_finding.regression_count += 1
-                        existing_finding.resolved_at = None
-                        # Emit drift/regression event
-                        await _publish_finding_event(kafka_producer, "finding.regressed", {
-                            "fingerprint": fp,
-                            "finding_id": existing_finding.id,
-                            "rule_id": existing_finding.rule_id,
-                            "resource_id": resource_id,
-                            "organization_id": org_id_str,
-                            "regression_count": existing_finding.regression_count,
-                            "timestamp": datetime.utcnow().isoformat(),
-                        })
-                    existing_finding.last_seen_at = datetime.utcnow()
-                    existing_finding.updated_at = datetime.utcnow()
-                else:
-                    new_finding = CSPMFindingModel(
-                        id=str(uuid.uuid4()),
-                        organization_id=org_id_str,
-                        fingerprint=fp,
-                        rule_id=finding.get("rule_id", ""),
-                        title=finding.get("title", ""),
-                        description=finding.get("description", ""),
-                        severity=finding.get("severity", "MEDIUM").upper(),
-                        status="open",
-                        resource_id=resource_id,
-                        resource_name=row["name"] or resource_id,
-                        resource_type=row["resource_type"] or "",
-                        provider=row["provider"] or "",
-                        account_id=acc_id,
-                        region=row["region"] or "",
-                        remediation=finding.get("remediation", ""),
-                        compliance_mapping=finding.get("compliance_mapping", []),
-                        first_seen_at=datetime.utcnow(),
-                        last_seen_at=datetime.utcnow(),
+                    raw_resource_type = row["resource_type"] or ""
+                    rego_resource_type = CONNECTOR_TO_REGO_RESOURCE_TYPE.get(
+                        raw_resource_type, raw_resource_type
                     )
-                    db.add(new_finding)
-                    findings_created += 1
-                    # ── 5a. Emit finding.created to graph service ─────────────
-                    await _publish_finding_event(kafka_producer, "finding.created", {
-                        "finding_id": new_finding.id,
-                        "fingerprint": fp,
-                        "rule_id": finding.get("rule_id", ""),
-                        "title": finding.get("title", ""),
-                        "severity": finding.get("severity", "MEDIUM").upper(),
-                        "resource_id": resource_id,
-                        "resource_type": row["resource_type"] or "",
-                        "organization_id": org_id_str,
-                        "account_id": acc_id,
+
+                    resource_dict = {
+                        "id": resource_id,
+                        "cloud_resource_id": resource_id,
+                        "resource_type": rego_resource_type,
+                        "name": row["name"] or "",
                         "provider": row["provider"] or "",
-                        "timestamp": datetime.utcnow().isoformat(),
-                    })
-
-            # Auto-resolve findings that no longer fire
-            open_findings = (await db.execute(
-                select(CSPMFindingModel).where(
-                    CSPMFindingModel.organization_id == org_id_str,
-                    CSPMFindingModel.resource_id == resource_id,
-                    CSPMFindingModel.status == "open",
-                )
-            )).scalars().all()
-
-            for f in open_findings:
-                if f.fingerprint not in current_fps:
-                    f.status = "resolved"
-                    f.resolved_at = datetime.utcnow()
-                    f.updated_at = datetime.utcnow()
-                    findings_resolved += 1
-                    # ── 5b. Emit finding.resolved to graph service ────────────
-                    await _publish_finding_event(kafka_producer, "finding.resolved", {
-                        "finding_id": f.id,
-                        "fingerprint": f.fingerprint,
-                        "rule_id": f.rule_id,
-                        "resource_id": resource_id,
+                        "account_id": acc_id,
+                        "region": row["region"] or "",
                         "organization_id": org_id_str,
-                        "timestamp": datetime.utcnow().isoformat(),
-                    })
+                        "is_public": bool(row["is_public"]),
+                        "environment": row["environment"] or "unknown",
+                        "tags": row["tags"] or {},
+                        "raw": row["raw"] or {},
+                    }
+                    batch_dicts.append(resource_dict)
+                    batch_meta.append((resource_id, acc_id, org_id_str, row))
 
-            # Commit every 20 resources
-            if resources_scanned % 20 == 0:
+                all_findings = await _evaluate_batch(batch_dicts, org_id_str, client)
+
+                # Group findings by resource_id
+                from collections import defaultdict
+                findings_by_resource: dict[str, list[dict]] = defaultdict(list)
+                for f in all_findings:
+                    rid = f.get("resource_id", "")
+                    findings_by_resource[rid].append(f)
+
+                # ── 3-5. Process each resource in batch ──────────────────────
+                for resource_id, acc_id, org_id_str, row in batch_meta:
+                    policy_findings = findings_by_resource.get(resource_id, [])
+
+                    # ── 3. Upsert resource posture ───────────────────────────
+                    sev_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+                    for f in policy_findings:
+                        sev = f.get("severity", "MEDIUM").upper()
+                        sev_counts[sev] = sev_counts.get(sev, 0) + 1
+
+                    risk_score = compute_risk_score(
+                        policy_findings,
+                        is_internet_exposed=bool(row["is_public"]),
+                        environment=row["environment"] or "unknown",
+                    )
+
+                    existing_posture = (await db.execute(
+                        select(CSPMResourcePostureModel).where(
+                            CSPMResourcePostureModel.organization_id == org_id_str,
+                            CSPMResourcePostureModel.resource_id == resource_id,
+                        )
+                    )).scalar_one_or_none()
+
+                    if existing_posture:
+                        existing_posture.risk_score = risk_score
+                        existing_posture.critical_count = sev_counts["CRITICAL"]
+                        existing_posture.high_count = sev_counts["HIGH"]
+                        existing_posture.medium_count = sev_counts["MEDIUM"]
+                        existing_posture.low_count = sev_counts["LOW"]
+                        existing_posture.is_internet_exposed = bool(row["is_public"])
+                        existing_posture.last_scanned_at = datetime.utcnow()
+                        existing_posture.updated_at = datetime.utcnow()
+                        existing_posture.environment = row["environment"] or "unknown"
+                    else:
+                        db.add(CSPMResourcePostureModel(
+                            id=str(uuid.uuid4()),
+                            organization_id=org_id_str,
+                            resource_id=resource_id,
+                            resource_name=row["name"] or resource_id,
+                            resource_type=row["resource_type"] or "",
+                            provider=row["provider"] or "",
+                            account_id=acc_id,
+                            region=row["region"] or "",
+                            environment=row["environment"] or "unknown",
+                            risk_score=risk_score,
+                            is_internet_exposed=bool(row["is_public"]),
+                            critical_count=sev_counts["CRITICAL"],
+                            high_count=sev_counts["HIGH"],
+                            medium_count=sev_counts["MEDIUM"],
+                            low_count=sev_counts["LOW"],
+                            last_scanned_at=datetime.utcnow(),
+                        ))
+
+                    # ── 4. Upsert findings + detect regressions ──────────────
+                    current_fps: set[str] = set()
+                    for finding in policy_findings:
+                        fp = _fingerprint(finding.get("rule_id", ""), resource_id, acc_id, org_id_str)
+                        current_fps.add(fp)
+
+                        existing_finding = (await db.execute(
+                            select(CSPMFindingModel).where(CSPMFindingModel.fingerprint == fp)
+                        )).scalar_one_or_none()
+
+                        if existing_finding:
+                            if existing_finding.status == "resolved":
+                                existing_finding.status = "open"
+                                existing_finding.regression_count += 1
+                                existing_finding.resolved_at = None
+                                await _publish_finding_event(kafka_producer, "finding.regressed", {
+                                    "fingerprint": fp,
+                                    "finding_id": existing_finding.id,
+                                    "rule_id": existing_finding.rule_id,
+                                    "resource_id": resource_id,
+                                    "organization_id": org_id_str,
+                                    "regression_count": existing_finding.regression_count,
+                                    "timestamp": datetime.utcnow().isoformat(),
+                                })
+                            existing_finding.last_seen_at = datetime.utcnow()
+                            existing_finding.updated_at = datetime.utcnow()
+                        else:
+                            new_finding = CSPMFindingModel(
+                                id=str(uuid.uuid4()),
+                                organization_id=org_id_str,
+                                fingerprint=fp,
+                                rule_id=finding.get("rule_id", ""),
+                                title=finding.get("title", ""),
+                                description=finding.get("description", ""),
+                                severity=finding.get("severity", "MEDIUM").upper(),
+                                status="open",
+                                resource_id=resource_id,
+                                resource_name=row["name"] or resource_id,
+                                resource_type=row["resource_type"] or "",
+                                provider=row["provider"] or "",
+                                account_id=acc_id,
+                                region=row["region"] or "",
+                                remediation=finding.get("remediation", ""),
+                                compliance_mapping=finding.get("compliance_mapping", []),
+                                first_seen_at=datetime.utcnow(),
+                                last_seen_at=datetime.utcnow(),
+                            )
+                            db.add(new_finding)
+                            findings_created += 1
+                            await _publish_finding_event(kafka_producer, "finding.created", {
+                                "finding_id": new_finding.id,
+                                "fingerprint": fp,
+                                "rule_id": finding.get("rule_id", ""),
+                                "title": finding.get("title", ""),
+                                "severity": finding.get("severity", "MEDIUM").upper(),
+                                "resource_id": resource_id,
+                                "resource_type": row["resource_type"] or "",
+                                "organization_id": org_id_str,
+                                "account_id": acc_id,
+                                "provider": row["provider"] or "",
+                                "timestamp": datetime.utcnow().isoformat(),
+                            })
+
+                    # Auto-resolve findings that no longer fire
+                    open_findings = (await db.execute(
+                        select(CSPMFindingModel).where(
+                            CSPMFindingModel.organization_id == org_id_str,
+                            CSPMFindingModel.resource_id == resource_id,
+                            CSPMFindingModel.status == "open",
+                        )
+                    )).scalars().all()
+
+                    for f in open_findings:
+                        if f.fingerprint not in current_fps:
+                            f.status = "resolved"
+                            f.resolved_at = datetime.utcnow()
+                            f.updated_at = datetime.utcnow()
+                            findings_resolved += 1
+                            await _publish_finding_event(kafka_producer, "finding.resolved", {
+                                "finding_id": f.id,
+                                "fingerprint": f.fingerprint,
+                                "rule_id": f.rule_id,
+                                "resource_id": resource_id,
+                                "organization_id": org_id_str,
+                                "timestamp": datetime.utcnow().isoformat(),
+                            })
+
+                # Commit after each batch
                 await db.commit()
                 logger.info(f"Scan {scan_id}: {resources_scanned}/{len(resources)} done")
 

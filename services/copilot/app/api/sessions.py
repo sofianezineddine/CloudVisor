@@ -2,7 +2,7 @@
 
 import logging
 import re
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,35 +31,54 @@ class UpdateSessionRequest(BaseModel):
     is_active: bool | None = None
 
 
+def _resolve_bearer_token(authorization: str | None, request: Request) -> str:
+    """Resolve Bearer token from Authorization header or cv_access cookie."""
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+        if token:
+            return token
+    cookie_token = request.cookies.get("cv_access")
+    if cookie_token:
+        return cookie_token.strip()
+    raise HTTPException(status_code=401, detail="Not authenticated")
+
+
 def _extract_org_and_user(
     authorization: str | None,
     x_org_id: str | None,
+    request: Request | None = None,
 ) -> tuple[str, str]:
-    """Extract organization and user IDs from headers."""
+    """Extract organization and user IDs from headers or cv_access cookie."""
     import uuid
     
     extracted_org_id: str | None = None
     extracted_user_id: str | None = None
 
+    token = None
     if authorization and authorization.startswith("Bearer "):
         token = authorization.removeprefix("Bearer ").strip()
-        if token != "dev-token":
-            try:
-                import base64
-                import json as _json
+    elif request:
+        cookie_token = request.cookies.get("cv_access")
+        if cookie_token:
+            token = cookie_token.strip()
 
-                payload_b64 = token.split(".")[1]
-                payload_b64 += "=" * (4 - len(payload_b64) % 4)
-                payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
-                extracted_org_id = payload.get("organization_id") or payload.get("org_id")
-                extracted_user_id = payload.get("sub") or payload.get("user_id")
-            except Exception as jwt_err:
-                logger.warning(f"Failed to decode JWT payload: {jwt_err}")
+    if token and token != "dev-token":
+        try:
+            import base64
+            import json as _json
+
+            payload_b64 = token.split(".")[1]
+            payload_b64 += "=" * (4 - len(payload_b64) % 4)
+            payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
+            extracted_org_id = payload.get("organization_id") or payload.get("org_id")
+            extracted_user_id = payload.get("sub") or payload.get("user_id")
+        except Exception as jwt_err:
+            logger.warning(f"Failed to decode JWT payload: {jwt_err}")
 
     org_id = extracted_org_id if extracted_org_id and _UUID_RE.match(extracted_org_id) else x_org_id
     # For dev-token, use a consistent dev user ID
     if not extracted_user_id or not _UUID_RE.match(extracted_user_id):
-        user_id = "550e8400-e29b-41d4-a716-446655440001"  # Consistent dev user ID
+        user_id = "550e8400-e29b-41d4-a716-446655440001"
     else:
         user_id = extracted_user_id
 
@@ -76,23 +95,21 @@ def _extract_org_and_user(
     description="Start a new conversation session",
 )
 async def create_session(
-    request: CreateSessionRequest,
+    body: CreateSessionRequest,
+    request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_org_id: str | None = Header(default=None, alias="X-Org-ID"),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Create a new chat session."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    org_id, user_id = _extract_org_and_user(authorization, x_org_id)
+    org_id, user_id = _extract_org_and_user(authorization, x_org_id, request)
 
     session_repo = ChatSessionRepository(db)
     session = await session_repo.create(
         organization_id=org_id,
         user_id=user_id,
-        title=request.title,
-        description=request.description,
+        title=body.title,
+        description=body.description,
     )
 
     return {
@@ -112,6 +129,7 @@ async def create_session(
     description="Get all chat sessions for the current user",
 )
 async def list_sessions(
+    request: Request,
     limit: int = 50,
     offset: int = 0,
     active_only: bool = True,
@@ -120,10 +138,7 @@ async def list_sessions(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """List all chat sessions for the current user."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    org_id, user_id = _extract_org_and_user(authorization, x_org_id)
+    org_id, user_id = _extract_org_and_user(authorization, x_org_id, request)
 
     session_repo = ChatSessionRepository(db)
     sessions = await session_repo.get_user_sessions(
@@ -149,6 +164,7 @@ async def list_sessions(
 )
 async def get_session(
     session_id: str,
+    request: Request,
     limit: int = 100,
     offset: int = 0,
     authorization: str | None = Header(default=None, alias="Authorization"),
@@ -156,10 +172,7 @@ async def get_session(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Get a specific chat session with all messages."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    org_id, user_id = _extract_org_and_user(authorization, x_org_id)
+    org_id, user_id = _extract_org_and_user(authorization, x_org_id, request)
 
     session_repo = ChatSessionRepository(db)
     session = await session_repo.get_by_id(session_id, org_id)
@@ -198,16 +211,14 @@ async def get_session(
 )
 async def update_session(
     session_id: str,
-    request: UpdateSessionRequest,
+    body: UpdateSessionRequest,
+    http_request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_org_id: str | None = Header(default=None, alias="X-Org-ID"),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Update a chat session."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    org_id, user_id = _extract_org_and_user(authorization, x_org_id)
+    org_id, user_id = _extract_org_and_user(authorization, x_org_id, http_request)
 
     session_repo = ChatSessionRepository(db)
     session = await session_repo.get_by_id(session_id, org_id)
@@ -222,9 +233,9 @@ async def update_session(
     updated_session = await session_repo.update_session(
         session_id=session_id,
         organization_id=org_id,
-        title=request.title,
-        description=request.description,
-        is_active=request.is_active,
+        title=body.title,
+        description=body.description,
+        is_active=body.is_active,
     )
 
     return {
@@ -244,15 +255,13 @@ async def update_session(
 )
 async def delete_session(
     session_id: str,
+    request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_org_id: str | None = Header(default=None, alias="X-Org-ID"),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete a chat session."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    org_id, user_id = _extract_org_and_user(authorization, x_org_id)
+    org_id, user_id = _extract_org_and_user(authorization, x_org_id, request)
 
     session_repo = ChatSessionRepository(db)
     session = await session_repo.get_by_id(session_id, org_id)

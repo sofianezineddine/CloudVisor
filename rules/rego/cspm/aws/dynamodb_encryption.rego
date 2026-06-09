@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_dynamodb_encryption
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::dynamodb::table"
     sse := input.resource.raw.SSEDescription

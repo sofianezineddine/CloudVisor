@@ -18,8 +18,6 @@
 
 package cspm.aws.iam_access_key_rotation
 
-import future.keywords.if
-
 deny[finding] if {
     input.resource_type == "aws::iam::user"
     key := input.raw.AccessKeys[_]

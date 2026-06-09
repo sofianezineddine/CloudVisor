@@ -1,7 +1,7 @@
 """Pydantic settings specific to the Graph service."""
 
 from pathlib import Path
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +15,7 @@ class GraphSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="GRAPH_",
         extra="ignore",
+        populate_by_name=True,
     )
 
     service_name: str = Field(default="graph")
@@ -28,6 +29,9 @@ class GraphSettings(BaseSettings):
     query_timeout: int = Field(default=60)
     elasticsearch_url: str = Field(default="http://localhost:9200")
     elasticsearch_index_prefix: str = Field(default="cloudvisor")
+    # Credentials are passed without the GRAPH_ prefix from docker-compose
+    elasticsearch_username: str = Field(default="", alias="ELASTICSEARCH_USERNAME")
+    elasticsearch_password: str = Field(default="", alias="ELASTICSEARCH_PASSWORD")
     snapshot_retention_days: int = Field(default=90)
     risk_score_weights: dict[str, float] = Field(
         default_factory=lambda: {

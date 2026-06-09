@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_ebs_encryption
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::ec2::volume"
     not input.resource.raw.Encrypted

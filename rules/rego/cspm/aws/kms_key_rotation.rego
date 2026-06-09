@@ -18,8 +18,6 @@
 
 package cspm.aws.kms_key_rotation
 
-import future.keywords.if
-
 deny[finding] if {
     input.resource_type == "aws::kms::key"
     input.raw.KeyManager == "CUSTOMER"

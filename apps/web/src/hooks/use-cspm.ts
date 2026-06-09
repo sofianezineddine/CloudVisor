@@ -84,7 +84,7 @@ function filterByScope<T extends { account_id?: string; provider?: string }>(
   provider: string | undefined,
 ): T[] {
   if (accountId) return items.filter(i => i.account_id === accountId);
-  if (provider) return items.filter(i => i.provider === provider);
+  if (provider) return items.filter(i => i.provider?.toLowerCase() === provider.toLowerCase());
   if (accountIds.length > 0) return items.filter(i => i.account_id && accountIds.includes(i.account_id));
   return items;
 }
@@ -138,7 +138,7 @@ export function useCSPMStats() {
         const findingsData = await cspmAPI.listFindings({
           account_id: accountId,
           provider: !accountId ? provider : undefined,
-          page_size: 500,
+          page_size: 200,
         });
         const items = findingsData?.items ?? [];
         const scoped = filterByScope(items, accountIds, accountId, provider);
@@ -207,7 +207,7 @@ export function useCSPMPosture() {
         const findingsData = await cspmAPI.listFindings({
           account_id: accountId,
           provider: !accountId ? provider : undefined,
-          page_size: 500,
+          page_size: 200,
         });
         const items = findingsData?.items ?? [];
         const scoped = filterByScope(items, accountIds, accountId, provider);
@@ -501,6 +501,7 @@ export function useTriggerScan() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: cspmKeys.scans() });
       queryClient.invalidateQueries({ queryKey: cspmKeys.stats() });
+      queryClient.invalidateQueries({ queryKey: cspmKeys.findings() });
     },
   });
 }

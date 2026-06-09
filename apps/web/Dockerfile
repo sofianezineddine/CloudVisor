@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps
 COPY . .
-RUN npm run build || echo 'Build failed, continuing with development build'
+RUN npm run build
 
 # Stage 2: Production
 FROM node:20-alpine

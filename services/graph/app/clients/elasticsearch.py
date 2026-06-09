@@ -15,19 +15,26 @@ class ElasticsearchClient:
         self,
         url: str = "http://localhost:9200",
         index_prefix: str = "cloudvisor",
+        username: str = "",
+        password: str = "",
     ):
         self._url = url
         self._index_prefix = index_prefix
+        self._username = username
+        self._password = password
         self._client: AsyncElasticsearch | None = None
 
     async def connect(self) -> None:
         """Initialize Elasticsearch client — compatible with ES 8.x."""
         try:
-            self._client = AsyncElasticsearch(
-                [self._url],
+            kwargs: dict = dict(
+                hosts=[self._url],
                 verify_certs=False,
                 ssl_show_warn=False,
             )
+            if self._username and self._password:
+                kwargs["http_auth"] = (self._username, self._password)
+            self._client = AsyncElasticsearch(**kwargs)
             await self._client.info()
             logger.info(f"Connected to Elasticsearch at {self._url}")
         except Exception as e:
@@ -224,6 +231,7 @@ ASSET_MAPPINGS = {
         "region": {"type": "keyword"},
         "resource_type": {"type": "keyword"},
         "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+        "organization_id": {"type": "keyword"},
         "tags": {"type": "object", "enabled": True},
         "environment": {"type": "keyword"},
         "is_public": {"type": "boolean"},

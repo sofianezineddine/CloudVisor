@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_sqs_public_policy
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::sqs::queue"
     policy := input.resource.raw.Policy

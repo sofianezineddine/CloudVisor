@@ -9,8 +9,6 @@
 
 package cloudvisor.kspm.pod_security
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "kubernetes::pod"
     container := input.resource.raw.spec.containers[_]

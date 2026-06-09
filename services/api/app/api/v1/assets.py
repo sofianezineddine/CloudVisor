@@ -41,9 +41,12 @@ async def list_assets(
     account_id: str | None = Query(None, description="Filter by cloud account ID"),
     risk_score: str | None = Query(None, description="Filter by risk_score (e.g. >=50)"),
     search: str | None = Query(None, description="Full-text search by name"),
-    # Cursor-based pagination
+    # Cursor-based pagination (legacy)
     cursor: str | None = Query(None, description="Opaque pagination cursor"),
-    limit: int = Query(50, ge=1, description="Results per page"),
+    limit: int = Query(50, ge=1, le=1000, description="Results per page (legacy, use page_size)"),
+    # Page-based pagination (preferred — matches graph service)
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int | None = Query(None, ge=1, le=1000, description="Results per page"),
     # Sorting
     sort: str | None = Query(None, description="Sort fields, e.g. sort=risk_score,-created_at"),
     # Sparse field sets
@@ -54,8 +57,14 @@ async def list_assets(
     t0 = time.monotonic()
     proxy = get_graph_proxy()
 
+    # page_size takes precedence over limit for backwards compat
+    effective_page_size = page_size if page_size is not None else limit
+
     # Parse filter[field]=value params from raw query string
     filters = parse_filter_params(str(request.url.query))
+    # Remove pagination params that shouldn't be forwarded as filters
+    for _k in ("page", "page_size", "limit", "cursor", "sort"):
+        filters.pop(_k, None)
 
     # Merge explicit params into filters (explicit params take precedence)
     if provider:
@@ -71,17 +80,23 @@ async def list_assets(
     if search:
         filters["search"] = search
 
-    # Decode cursor → offset for upstream (upstream uses offset internally)
-    offset, _limit = cursor_to_offset(cursor, limit)
+    # Decode cursor → page for upstream when cursor is provided
+    offset = 0
+    if cursor:
+        offset, _limit = cursor_to_offset(cursor, effective_page_size)
+        effective_page = (offset // effective_page_size) + 1 if effective_page_size > 0 else 1
+    else:
+        effective_page = page
+        offset = (page - 1) * effective_page_size
 
     # Ensure org_id is always included and not None
     if not user.organization_id:
         raise HTTPException(status_code=401, detail="Missing organization ID in token")
 
     params: dict[str, Any] = {
-        "org_id": user.organization_id,  # Add org_id parameter for graph service
-        "page_size": limit,
-        "page": (offset // limit) + 1 if limit > 0 else 1,
+        "org_id": user.organization_id,
+        "page_size": effective_page_size,
+        "page": effective_page,
         **filters,
     }
 
@@ -168,7 +183,7 @@ async def search_assets(
             params=params,
             headers=user.auth_headers,
         )
-        resources = result.get("assets", result.get("results", []))
+        resources = result.get("hits", result.get("assets", result.get("results", [])))
         return ok(
             data=resources,
             total=result.get("total", len(resources)),

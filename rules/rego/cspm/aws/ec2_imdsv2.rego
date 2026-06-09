@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_ec2_imdsv2
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::ec2::instance"
     input.resource.raw.MetadataOptions.HttpTokens != "required"

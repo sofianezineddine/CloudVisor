@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:1.16, SOC2:CC6.3
 package cspm.aws.iam
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::iam::policy"
     some stmt in input.raw.PolicyDocument.Statement
     stmt.Effect == "Allow"
@@ -25,7 +23,7 @@ deny[finding] {
     }
 }
 
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::iam::policy"
     some stmt in input.raw.PolicyDocument.Statement
     stmt.Effect == "Allow"

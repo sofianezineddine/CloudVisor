@@ -16,8 +16,6 @@
 
 package cspm.aws.ec2_public_ip
 
-import future.keywords.if
-
 deny[finding] if {
     input.resource_type == "aws::ec2::instance"
     input.raw.PublicIpAddress

@@ -18,8 +18,6 @@
 
 package cspm.aws.s3_logging
 
-import future.keywords.if
-
 deny[finding] if {
     input.resource_type == "aws::s3::bucket"
     not input.raw.LoggingEnabled

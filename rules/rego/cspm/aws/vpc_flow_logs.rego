@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_vpc_flow_logs
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::ec2::vpc"
     not input.resource.raw.FlowLogsEnabled

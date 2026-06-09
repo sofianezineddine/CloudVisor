@@ -17,8 +17,6 @@
 
 package cloudvisor.cspm.gcp_kms_key_rotation
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "gcp::cloudkms::cryptokey"
     not input.resource.raw.rotation_period

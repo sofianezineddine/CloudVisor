@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_iam_root_mfa
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::iam::user"
     input.resource.name == "root"

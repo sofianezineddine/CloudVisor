@@ -15,8 +15,6 @@
 
 package cloudvisor.cspm.azure_keyvault_soft_delete
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "azure::keyvault::vault"
     not input.resource.raw.enable_soft_delete

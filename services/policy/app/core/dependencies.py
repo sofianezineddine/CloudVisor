@@ -161,10 +161,11 @@ async def _load_rego_files(session_factory, opa_service, rego_files: list, rules
                 if not metadata.get("title"):
                     continue  # Skip files without metadata
 
-                rule_id = os.path.basename(rego_file).replace(".rego", "")
+                relative_path = os.path.relpath(rego_file, rules_path)
+                rule_id = relative_path.replace("\\", "/").replace(".rego", "").replace("/", "_")
                 import uuid as _uuid
                 rule = RuleModel(
-                    id=str(_uuid.uuid5(_uuid.NAMESPACE_DNS, rule_id)),
+                    id=str(_uuid.uuid5(_uuid.NAMESPACE_DNS, relative_path.replace("\\", "/").replace(".rego", ""))),
                     rule_id=rule_id,
                     title=metadata.get("title", rule_id),
                     description=metadata.get("description"),
@@ -185,9 +186,9 @@ async def _load_rego_files(session_factory, opa_service, rego_files: list, rules
                 )
                 session.add(rule)
 
-                # Load into OPA with slash-based path
-                rule_id_normalized = rule_id.replace('-', '_')
-                policy_name = f"cloudvisor/{metadata.get('category', 'cspm')}/{rule_id_normalized}"
+                # Load into OPA using the rego package name as the path
+                package_name = parser.extract_package(rego_code)
+                policy_name = package_name.replace(".", "/") if package_name else f"cloudvisor/{metadata.get('category', 'cspm')}/{rule_id}"
                 await opa_service.load_policy(policy_name, rego_code)
                 loaded += 1
 
@@ -203,6 +204,9 @@ async def _load_rules_into_opa(session_factory, opa_service) -> None:
     """Load all existing DB rules into OPA (called on restart)."""
     from sqlalchemy import select
     from ..models import RuleModel
+    from ..opa import RegoParser
+
+    parser = RegoParser()
 
     async with session_factory() as session:
         result = await session.execute(
@@ -211,9 +215,8 @@ async def _load_rules_into_opa(session_factory, opa_service) -> None:
         rules = result.scalars().all()
         for rule in rules:
             try:
-                # OPA path uses slashes: cloudvisor/cspm/aws_s3_public_access
-                rule_id_normalized = rule.rule_id.replace('-', '_')
-                policy_name = f"cloudvisor/{rule.category}/{rule_id_normalized}"
+                package_name = parser.extract_package(rule.rego_code or "")
+                policy_name = package_name.replace(".", "/") if package_name else f"cloudvisor/{rule.category}/{rule.rule_id}"
                 await opa_service.load_policy(policy_name, rule.rego_code)
             except Exception as e:
                 logger.debug(f"OPA load for {rule.rule_id}: {e}")

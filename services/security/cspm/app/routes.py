@@ -474,7 +474,7 @@ async def list_resources(
             result.append(out)
         return result
     except Exception as e:
-        logger.error(f"list_resources error: {e}")
+        logger.error(f"list_resources error: {e}", exc_info=True)
         return []
 
 

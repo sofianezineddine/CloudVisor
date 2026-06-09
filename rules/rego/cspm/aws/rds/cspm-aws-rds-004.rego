@@ -9,9 +9,7 @@
 # compliance: SOC2:A1.2, CIS-AWS:2.3.4
 package cspm.aws.rds
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::rds::instance"
     not input.raw.DeletionProtection
     finding := {

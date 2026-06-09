@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_cloudtrail_disabled
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::cloudtrail::trail"
     not input.resource.raw.IsLogging

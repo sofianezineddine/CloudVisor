@@ -24,6 +24,8 @@ class Neo4jClient:
         self._user = user
         self._password = password
         self._database = database
+        self._max_connection_lifetime = max_connection_lifetime
+        self._max_connection_pool_size = max_connection_pool_size
         self._driver: AsyncDriver | None = None
 
     async def connect(self) -> None:
@@ -32,8 +34,8 @@ class Neo4jClient:
             self._driver = AsyncGraphDatabase.driver(
                 self._uri,
                 auth=(self._user, self._password),
-                max_connection_lifetime=3600,
-                max_connection_pool_size=50,
+                max_connection_lifetime=self._max_connection_lifetime,
+                max_connection_pool_size=self._max_connection_pool_size,
             )
             await self._driver.verify_connectivity()
             logger.info(f"Connected to Neo4j at {self._uri}")

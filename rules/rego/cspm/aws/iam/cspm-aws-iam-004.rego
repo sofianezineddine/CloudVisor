@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:1.12, SOC2:CC6.2
 package cspm.aws.iam
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::iam::user"
     input.raw.password_last_used_days > 90
     finding := {
@@ -23,7 +21,7 @@ deny[finding] {
     }
 }
 
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::iam::user"
     not input.raw.password_last_used
     finding := {

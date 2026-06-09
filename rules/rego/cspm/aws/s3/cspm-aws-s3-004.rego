@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:2.1.3, SOC2:A1.2
 package cspm.aws.s3
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::s3::bucket"
     not input.raw.VersioningConfiguration
     finding := {
@@ -23,7 +21,7 @@ deny[finding] {
     }
 }
 
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::s3::bucket"
     input.raw.VersioningConfiguration.Status != "Enabled"
     finding := {

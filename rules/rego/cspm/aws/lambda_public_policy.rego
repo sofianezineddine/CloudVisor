@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_lambda_public_policy
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::lambda::function"
     policy := input.resource.raw.Policy

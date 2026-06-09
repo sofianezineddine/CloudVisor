@@ -10,8 +10,6 @@
 
 package cloudvisor.cdr.suspicious_api_calls
 
-import future.keywords.if
-
 # Privilege escalation via IAM policy attachment
 deny[msg] if {
     input.resource.resource_type == "aws::cloudtrail::event"

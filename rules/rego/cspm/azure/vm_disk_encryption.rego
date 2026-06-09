@@ -17,8 +17,6 @@
 
 package cloudvisor.cspm.azure_vm_disk_encryption
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "azure::compute::virtualmachine"
     not input.resource.raw.os_disk_encryption_enabled

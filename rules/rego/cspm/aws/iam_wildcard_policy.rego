@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_iam_wildcard_policy
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::iam::policy"
     doc := input.resource.raw.PolicyDocument

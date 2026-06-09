@@ -20,8 +20,6 @@
 
 package cspm.aws.rds_encryption
 
-import future.keywords.if
-
 deny[finding] if {
     input.resource_type == "aws::rds::dbinstance"
     not input.raw.StorageEncrypted

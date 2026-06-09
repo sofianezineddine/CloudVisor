@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:3.7, SOC2:CC6.7
 package cspm.aws.kms
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::kms::key"
     input.raw.KeyManager == "CUSTOMER"
     not input.raw.KeyRotationEnabled

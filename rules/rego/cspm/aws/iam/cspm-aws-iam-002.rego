@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:1.14, SOC2:CC6.1
 package cspm.aws.iam
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::iam::access_key"
     input.raw.status == "Active"
     input.raw.key_age_days > 90
@@ -24,7 +22,7 @@ deny[finding] {
     }
 }
 
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::iam::access_key"
     input.raw.status == "Active"
     not input.raw.last_rotated

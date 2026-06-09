@@ -38,4 +38,4 @@ EXPOSE 8005
 HEALTHCHECK --interval=15s --timeout=10s --start-period=15s --retries=3 \
     CMD /usr/local/bin/healthcheck.sh
 
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8005", "--workers", "2", "--graceful-timeout", "30"]
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8005", "--workers", "2"]

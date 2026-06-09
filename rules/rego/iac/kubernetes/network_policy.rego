@@ -8,10 +8,6 @@
 
 package cloudvisor.iac.kubernetes.network_policy
 
-import future.keywords.if
-import future.keywords.in
-import future.keywords.contains
-
 violation contains finding if {
     input.resource.properties.kind == "NetworkPolicy"
     spec := input.resource.properties.spec

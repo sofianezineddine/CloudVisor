@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_s3_public_access
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::s3::bucket"
     input.resource.is_public == true

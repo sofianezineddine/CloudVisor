@@ -9,8 +9,6 @@
 
 package cloudvisor.kspm.host_network
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "kubernetes::pod"
     input.resource.raw.spec.hostNetwork == true

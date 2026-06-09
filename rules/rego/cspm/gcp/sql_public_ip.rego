@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.gcp_sql_public_ip
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "gcp::sql::instance"
     input.resource.is_public == true

@@ -143,17 +143,31 @@ export const graphAPI = {
     environment?: string;
     is_public?: boolean;
     risk_score_min?: number;
-    limit?: number; // Gateway uses cursor/limit pagination
+    limit?: number; // kept for backwards compat — maps to page_size
+    page?: number;
+    page_size?: number;
     cursor?: string;
-  }): Promise<{ assets: GraphAsset[]; total: number; limit: number }> {
+    account_ids?: string[]; // Optional — scope results to specific cloud accounts
+  }): Promise<{ assets: GraphAsset[]; total: number; limit: number; next_cursor?: string }> {
     const q = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && k !== 'org_id') q.set(k, String(v));
+      if (v !== undefined && v !== null && k !== 'org_id' && k !== 'account_ids' && k !== 'limit' && k !== 'cursor') {
+        q.set(k, String(v));
+      }
     });
+    // Map legacy limit → page_size if page_size not explicitly set
+    if (params.page_size !== undefined) {
+      q.set('page_size', String(params.page_size));
+    } else if (params.limit !== undefined) {
+      q.set('page_size', String(params.limit));
+    }
+    if (params.account_ids && params.account_ids.length > 0) {
+      q.set('account_ids', params.account_ids.join(','));
+    }
     const result = await graphFetch(`/v1/assets?${q}`);
     const assets = result?.data ?? [];
     const total = result?.total ?? (Array.isArray(assets) ? assets.length : 0);
-    return { assets, total, limit: params.limit || 50 };
+    return { assets, total, limit: params.limit || 50, next_cursor: result?.next_cursor };
   },
 
   /** Get a single asset */

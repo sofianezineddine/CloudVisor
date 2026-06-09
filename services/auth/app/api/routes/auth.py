@@ -157,6 +157,9 @@ async def refresh_token(
     from ...core.cookies import get_refresh_token_from_cookie, set_auth_cookies
     token = get_refresh_token_from_cookie(request) or data.refresh_token
 
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token provided")
+
     try:
         result = await auth_service.refresh_tokens(token)
         tokens = result["tokens"]

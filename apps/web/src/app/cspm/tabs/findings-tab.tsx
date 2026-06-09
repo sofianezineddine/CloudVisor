@@ -11,7 +11,7 @@ import {
   MoreHorizontal, RefreshCw, Loader2, X, CheckCircle2, SlidersHorizontal, Shield,
 } from 'lucide-react';
 import { Finding } from '@/lib/api/apiClient';
-import { useFindings, useFindingStats, useBulkUpdateFindings, useUpdateFinding, useAcceptRisk, useSuppressFinding } from '@/hooks/use-findings';
+import { useCSPMFindings, useUpdateFindingStatus } from '@/hooks/use-cspm';
 import { useQueryClient } from '@tanstack/react-query';
 import { useScopeStore } from '@/stores/scope';
 import { cn } from '@/lib/utils';
@@ -61,8 +61,7 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
 function FindingActions({ finding, onStatusChange }: { finding: Finding; onStatusChange: (id: string, status: string) => void }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
-  const acceptRisk = useAcceptRisk();
-  const suppressFinding = useSuppressFinding();
+  const updateStatus = useUpdateFindingStatus();
 
   React.useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -83,19 +82,10 @@ function FindingActions({ finding, onStatusChange }: { finding: Finding; onStatu
   const handleAction = async (e: React.MouseEvent, status: string) => {
     e.stopPropagation();
     setOpen(false);
-    if (status === 'accepted_risk') {
-      try {
-        await acceptRisk.mutateAsync({ id: finding.id, justification: 'Accepted via findings table' });
-        onStatusChange(finding.id, status);
-      } catch {}
-    } else if (status === 'suppressed') {
-      try {
-        await suppressFinding.mutateAsync({ id: finding.id, reason: 'Suppressed via findings table action' });
-        onStatusChange(finding.id, status);
-      } catch {}
-    } else {
+    try {
+      await updateStatus.mutateAsync({ id: finding.id, status });
       onStatusChange(finding.id, status);
-    }
+    } catch {}
   };
 
   return (
@@ -162,20 +152,17 @@ export function FindingsTab() {
   }, [showDetailPanel]);
 
   const queryParams = React.useMemo(() => {
-    const params: Record<string, any> = { limit: PAGE_SIZE, offset };
+    const params: Record<string, any> = { page_size: PAGE_SIZE, page: Math.floor(offset / PAGE_SIZE) + 1 };
     if (selectedSeverities.size > 0) params.severity = Array.from(selectedSeverities).join(',');
     if (selectedStatuses.size > 0) params.status = Array.from(selectedStatuses).join(',');
     return params;
   }, [selectedSeverities, selectedStatuses, offset]);
 
-  const { data: findingsData, isLoading: loading, isError, error: queryError, refetch } = useFindings(queryParams);
-  const { data: statsData } = useFindingStats();
-  const updateFinding = useUpdateFinding();
-  const bulkUpdate = useBulkUpdateFindings();
+  const { data: findingsData, isLoading: loading, isError, error: queryError, refetch } = useCSPMFindings(queryParams);
+  const updateFinding = useUpdateFindingStatus();
 
-  const findings: Finding[] = (findingsData?.data as Finding[]) ?? [];
-  const total: number = (findingsData as any)?.total ?? (findingsData as any)?.meta?.total ?? 0;
-  const stats: Record<string, any> = (statsData?.data as any) ?? {};
+  const findings: Finding[] = (findingsData?.items as Finding[]) ?? [];
+  const total: number = (findingsData as any)?.total ?? 0;
   const error = isError ? (queryError instanceof Error ? queryError.message : 'Failed to load findings') : null;
 
   const filteredFindings = React.useMemo(() => {
@@ -188,20 +175,21 @@ export function FindingsTab() {
     );
   }, [findings, debouncedSearch]);
 
+  const openFindings = findings.filter(f => f.status === 'open');
   const severityCounts: Record<string, number> = {
-    CRITICAL: stats?.by_severity?.CRITICAL ?? 0,
-    HIGH: stats?.by_severity?.HIGH ?? 0,
-    MEDIUM: stats?.by_severity?.MEDIUM ?? 0,
-    LOW: stats?.by_severity?.LOW ?? 0,
-    INFO: stats?.by_severity?.INFO ?? 0,
+    CRITICAL: openFindings.filter(f => f.severity === 'CRITICAL').length,
+    HIGH: openFindings.filter(f => f.severity === 'HIGH').length,
+    MEDIUM: openFindings.filter(f => f.severity === 'MEDIUM').length,
+    LOW: openFindings.filter(f => f.severity === 'LOW').length,
+    INFO: openFindings.filter(f => f.severity === 'INFO').length,
   };
 
   const statusCounts: Record<string, number> = {
-    open: stats?.by_status?.open ?? 0,
-    in_progress: stats?.by_status?.in_progress ?? 0,
-    resolved: stats?.by_status?.resolved ?? 0,
-    suppressed: stats?.by_status?.suppressed ?? 0,
-    accepted_risk: stats?.by_status?.accepted_risk ?? 0,
+    open: findings.filter(f => f.status === 'open').length,
+    in_progress: findings.filter(f => f.status === 'in_progress').length,
+    resolved: findings.filter(f => f.status === 'resolved').length,
+    suppressed: findings.filter(f => f.status === 'suppressed').length,
+    accepted_risk: findings.filter(f => f.status === 'accepted_risk').length,
   };
 
   const activeFilterCount = selectedSeverities.size + selectedStatuses.size;
@@ -224,9 +212,10 @@ export function FindingsTab() {
 
   const handleStatusChange = async (findingId: string, newStatus: string) => {
     try {
-      await updateFinding.mutateAsync({ id: findingId, data: { status: newStatus } });
+      await updateFinding.mutateAsync({ id: findingId, status: newStatus });
       setSuccessMsg('Finding updated');
       setTimeout(() => setSuccessMsg(null), 3000);
+      refetch();
     } catch {}
   };
 
@@ -234,16 +223,19 @@ export function FindingsTab() {
     if (selectedRows.size === 0) return;
     const count = selectedRows.size;
     try {
-      await bulkUpdate.mutateAsync({ ids: Array.from(selectedRows), status });
+      for (const id of selectedRows) {
+        await updateFinding.mutateAsync({ id, status });
+      }
       setSelectedRows(new Set());
       setSuccessMsg(`${count} findings updated`);
       setTimeout(() => setSuccessMsg(null), 3000);
+      refetch();
     } catch {}
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
-  const actionLoading = updateFinding.isPending ? updateFinding.variables?.id : bulkUpdate.isPending ? 'bulk' : null;
+  const actionLoading = updateFinding.isPending ? updateFinding.variables?.id : null;
 
   const activeFilters: { label: string; clear: () => void }[] = [];
   Array.from(selectedSeverities).forEach(sev => activeFilters.push({ label: `Severity: ${sev}`, clear: () => toggleSeverity(sev) }));

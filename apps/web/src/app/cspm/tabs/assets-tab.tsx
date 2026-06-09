@@ -410,6 +410,7 @@ export function AssetsTab() {
       
       if (debSearch && debSearch.length >= 2) {
         // Search: try graph service ES-backed search first (has risk scores)
+        let searchReturnedEmpty = false;
         try {
           const searchResp = await graphAPI.searchAssets({
             q: debSearch,
@@ -417,9 +418,16 @@ export function AssetsTab() {
             limit: 200,
           });
           items = searchResp?.hits ?? [];
+          if (items.length === 0) {
+            searchReturnedEmpty = true;
+          }
         } catch (err) {
           console.warn('Graph search failed, falling back to connector:', err);
-          // Fallback to connector search
+          searchReturnedEmpty = true;
+        }
+
+        // Fallback to connector search if graph returned empty or failed
+        if (searchReturnedEmpty) {
           try {
             const resp = await connectorAPI.listResources({ 
               account_id: globalAccountId, 
@@ -430,13 +438,20 @@ export function AssetsTab() {
               offset: 0 
             });
             items = (resp?.resources as any[]) ?? [];
+            if (items.length > 0) {
+              console.log(`Search returned ${items.length} results from connector`);
+            }
           } catch (err2) {
             console.warn('Connector search failed, falling back to API client:', err2);
-            const searchResp = await apiClient.assets.search(debSearch, { 
-              provider: globalProvider || undefined, 
-              limit: 200,
-            });
-            items = (searchResp?.data as any[]) ?? [];
+            try {
+              const searchResp = await apiClient.assets.search(debSearch, { 
+                provider: globalProvider || undefined, 
+                limit: 200,
+              });
+              items = (searchResp?.data as any[]) ?? [];
+            } catch (err3) {
+              console.warn('API client search also failed:', err3);
+            }
           }
         }
         // Client-side filter by account if in account mode
@@ -447,21 +462,42 @@ export function AssetsTab() {
           items = items.filter((a: any) => currentAccountIds.includes(a.account_id));
         }
       } else {
-        // Regular listing: try graph service first (has risk_score + open_findings_count)
+        // Regular listing: paginate through all pages of the graph service
+        let graphReturnedEmpty = false;
         try {
-          const graphResp = await graphAPI.listAssets({
-            provider: globalProvider || undefined,
-            resource_type: typeFilter || undefined,
-            limit: 100,
-          });
-          items = graphResp?.assets ?? [];
-          // If graph returned data with risk scores, use it
-          if (items.length > 0) {
+          let allGraphItems: any[] = [];
+          let currentPage = 1;
+          const pageSize = 200;
+          let hasMore = true;
+
+          while (hasMore && allGraphItems.length < 10000) {
+            const graphResp = await graphAPI.listAssets({
+              provider: globalProvider || undefined,
+              resource_type: typeFilter || undefined,
+              page: currentPage,
+              page_size: pageSize,
+              account_ids: currentAccountIds.length > 0 ? currentAccountIds : undefined,
+            });
+            const batch = graphResp?.assets ?? [];
+            allGraphItems = [...allGraphItems, ...batch];
+            const total = graphResp?.total ?? 0;
+            hasMore = allGraphItems.length < total && batch.length === pageSize;
+            currentPage++;
+          }
+
+          if (allGraphItems.length > 0) {
+            items = allGraphItems;
             console.log(`Fetched ${items.length} assets from graph service`);
+          } else {
+            graphReturnedEmpty = true;
           }
         } catch (err) {
           console.warn('Graph listAssets failed, falling back to connector:', err);
-          // Fallback: fetch from connector (no risk scores, but complete inventory)
+          graphReturnedEmpty = true;
+        }
+
+        // Fallback to connector if graph returned empty or failed
+        if (graphReturnedEmpty) {
           try {
             let allItems: any[] = [];
             let offset = 0;
@@ -482,21 +518,28 @@ export function AssetsTab() {
               hasMore = batch.length === batchSize;
               offset += batchSize;
             }
-            items = allItems;
-            console.log(`Fetched ${items.length} assets from connector service`);
+            if (allItems.length > 0) {
+              items = allItems;
+              console.log(`Fetched ${items.length} assets from connector service (graph was empty)`);
+            }
           } catch (err2) {
             console.warn('Connector listResources failed, falling back to API client:', err2);
-            const resp = await apiClient.assets.list({ 
-              account_id: globalAccountId, 
-              provider: !globalAccountId ? globalProvider : undefined, 
-              resource_type: typeFilter || undefined, 
-              limit: 200,
-            });
-            items = (resp?.data as any[]) ?? [];
+            try {
+              const resp = await apiClient.assets.list({ 
+                account_id: globalAccountId, 
+                provider: !globalAccountId ? globalProvider : undefined, 
+                resource_type: typeFilter || undefined, 
+                limit: 200,
+              });
+              items = (resp?.data as any[]) ?? [];
+            } catch (err3) {
+              console.warn('API client also failed:', err3);
+            }
           }
         }
-        // Filter to only show resources from accounts in current scope
-        if (currentAccountIds.length > 0 && items.length > 0) {
+        // Only apply client-side account filter for connector results.
+        // Graph results are already scoped server-side by the account_ids param.
+        if (graphReturnedEmpty && currentAccountIds.length > 0 && items.length > 0) {
           items = items.filter((a: any) => currentAccountIds.includes(a.account_id));
         }
       }
@@ -680,7 +723,7 @@ export function AssetsTab() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? Array.from({ length: 10 }).map((_, i) => <tr key={i} className="border-b border-[var(--border-faint)]"><td colSpan={9} className="px-3 py-4"><div className="h-4 bg-[var(--bg-elevated)] animate-pulse rounded w-full" /></td></tr>) : pageItems.length === 0 ? <tr><td colSpan={9} className="px-6 py-12 text-center text-[var(--text-secondary)]">{scopeAccountIds.length === 0 ? 'No accounts connected.' : 'No resources found.'}</td></tr> : pageItems.map(r => (
+                {loading ? Array.from({ length: 10 }).map((_, i) => <tr key={i} className="border-b border-[var(--border-faint)]"><td colSpan={9} className="px-3 py-4"><div className="h-4 bg-[var(--bg-elevated)] animate-pulse rounded w-full" /></td></tr>) : pageItems.length === 0 ? <tr><td colSpan={9} className="px-6 py-12 text-center text-[var(--text-secondary)]">{scopeAccounts.length === 0 ? 'No accounts connected.' : 'No resources found.'}</td></tr> : pageItems.map(r => (
                   <tr key={r.id} className="border-b border-[var(--border-faint)] hover:bg-[var(--bg-elevated)] transition-colors">
                     <td className="px-3 py-2.5 w-10"><AwsIcon type={getAssetTypeKey(r.resource_type)} size={24} /></td>
                     <td className="px-3 py-2.5 max-w-[200px]"><div className="font-medium truncate text-[var(--accent)]">{r.name}</div><div className="text-[10px] font-mono text-[var(--text-tertiary)] truncate">{r.cloud_resource_id}</div></td>

@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_kms_rotation
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::kms::key"
     not input.resource.raw.KeyRotationEnabled

@@ -18,8 +18,6 @@
 
 package cspm.aws.rds_publicly_accessible
 
-import future.keywords.if
-
 deny[finding] if {
     input.resource_type == "aws::rds::dbinstance"
     input.raw.PubliclyAccessible == true

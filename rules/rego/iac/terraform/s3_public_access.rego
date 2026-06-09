@@ -10,8 +10,6 @@
 
 package cloudvisor.iac.terraform_s3_public_access
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "terraform::aws_s3_bucket"
     not input.resource.raw.block_public_acls

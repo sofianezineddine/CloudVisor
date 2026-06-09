@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:2.2.1, SOC2:CC6.7, PCI-DSS:3.4
 package cspm.aws.ec2
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::ec2::volume"
     not input.raw.Encrypted
     finding := {

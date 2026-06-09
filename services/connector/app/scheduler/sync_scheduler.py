@@ -62,12 +62,32 @@ class SyncScheduler:
         self._running = True
         logger.info("Sync scheduler started")
 
+        # Clear any stale sync locks left by a previous crashed process.
+        # Without this, a crash during a sync leaves a lock with a long TTL
+        # (sync_timeout * 2 + headroom) that blocks all future syncs until
+        # it naturally expires — which can be 10+ minutes.
+        await self._clear_stale_locks()
+
         # Re-register all active accounts from DB into Redis.
         # This ensures schedules survive connector restarts.
         await self._restore_schedules_from_db()
 
         # Start monitoring loop
         asyncio.create_task(self._monitor_loop())
+
+    async def _clear_stale_locks(self) -> None:
+        """Delete all sync locks on startup — they are process-local and stale
+        after a restart. The lock TTL provides safety during normal operation;
+        on a clean restart we always want a clean slate."""
+        try:
+            lock_keys = await self._redis.keys("connector:sync_lock:*")
+            if lock_keys:
+                await self._redis.delete(*lock_keys)
+                logger.info(f"Cleared {len(lock_keys)} stale sync lock(s) on startup: {lock_keys}")
+            else:
+                logger.info("No stale sync locks found on startup")
+        except Exception as e:
+            logger.warning(f"Failed to clear stale sync locks on startup: {e}")
 
     async def _restore_schedules_from_db(self) -> None:
         """Re-register all active accounts from DB into Redis on startup.
@@ -164,6 +184,12 @@ class SyncScheduler:
         # TTL = 7 days — long enough to survive any reasonable downtime.
         # The scheduler re-registers on startup anyway.
         await self._redis.expire(key, 7 * 24 * 60 * 60)
+
+        # Always clear any stale lock for this account when (re-)scheduling.
+        # If the previous process crashed mid-sync the lock would otherwise
+        # block all syncs until its TTL expires (up to ~10 minutes).
+        lock_key = _SYNC_LOCK_KEY.format(account_id=account_id)
+        await self._redis.delete(lock_key)
 
         logger.info(
             f"Scheduled sync for account {account_id} every {interval_minutes} minutes"
@@ -413,7 +439,8 @@ class SyncScheduler:
                 started_at=now,
                 finished_at=now,
             )
-            async with self._db_session_factory() as session:
+            from ..core.database import create_db_session
+            async with create_db_session(self._db_session_factory, account.organization_id) as session:
                 session.add(record)
                 await session.commit()
         except Exception as e:
@@ -473,7 +500,7 @@ class SyncScheduler:
                     result = await session.execute(stmt)
                     account = result.scalar_one_or_none()
 
-                    if account and account.status == "active":
+                    if account and account.status in ("active", "pending", "error", "partial_sync"):
                         # Update last_sync_at BEFORE triggering so concurrent
                         # ticks don't double-fire.
                         await self._redis.hset(key, "last_sync_at", utcnow().isoformat())
@@ -553,7 +580,8 @@ class SyncScheduler:
         so callers can compare ``account.status`` before/after and emit health
         events.
         """
-        async with self._db_session_factory() as session:
+        from ..core.database import create_db_session
+        async with create_db_session(self._db_session_factory, account.organization_id) as session:
             db_account = await session.get(CloudAccountModel, account.id)
             if not db_account:
                 return

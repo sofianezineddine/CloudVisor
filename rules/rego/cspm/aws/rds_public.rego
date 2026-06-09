@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_rds_public
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::rds::dbinstance"
     input.resource.raw.PubliclyAccessible == true

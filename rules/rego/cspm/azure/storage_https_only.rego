@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.azure_storage_https_only
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "azure::storage::storageaccount"
     not input.resource.raw.properties.supportsHttpsTrafficOnly

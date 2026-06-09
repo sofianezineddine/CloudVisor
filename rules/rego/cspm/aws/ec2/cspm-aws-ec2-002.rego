@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:5.6, SOC2:CC6.1
 package cspm.aws.ec2
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::ec2::instance"
     input.raw.MetadataOptions.HttpTokens != "required"
     finding := {

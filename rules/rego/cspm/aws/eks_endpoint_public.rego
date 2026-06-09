@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_eks_endpoint_public
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::eks::cluster"
     input.resource.raw.ResourcesVpcConfig.EndpointPublicAccess == true

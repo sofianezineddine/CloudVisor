@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.azure_vm_no_managed_identity
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "azure::compute::virtualmachine"
     not input.resource.raw.identity

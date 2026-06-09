@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:5.2, SOC2:CC6.1, PCI-DSS:1.2.1
 package cspm.aws.ec2
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::ec2::security_group"
     some perm in input.raw.IpPermissions
     perm.FromPort <= 22
@@ -28,7 +26,7 @@ deny[finding] {
     }
 }
 
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::ec2::security_group"
     some perm in input.raw.IpPermissions
     perm.FromPort <= 22

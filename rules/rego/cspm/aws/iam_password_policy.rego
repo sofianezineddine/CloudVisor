@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_iam_password_policy
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::iam::passwordpolicy"
     input.resource.raw.MinimumPasswordLength < 14

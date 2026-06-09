@@ -9,10 +9,6 @@
 
 package cloudvisor.iac.cloudformation.s3_encryption
 
-import future.keywords.if
-import future.keywords.in
-import future.keywords.contains
-
 violation contains finding if {
     input.resource.type == "AWS::S3::Bucket"
     properties := input.resource.properties

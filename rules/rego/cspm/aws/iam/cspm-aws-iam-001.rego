@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:1.1, SOC2:CC6.1, PCI-DSS:8.3
 package cspm.aws.iam
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::iam::root_account"
     not input.raw.mfa_active
     finding := {

@@ -9,8 +9,6 @@
 
 package cloudvisor.cicd.secrets_in_env
 
-import future.keywords.if
-
 # Common secret patterns in env var names
 secret_patterns := {
     "password", "passwd", "secret", "api_key", "apikey",

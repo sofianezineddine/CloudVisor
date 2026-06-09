@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.azure_sql_auditing_disabled
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "azure::sql::server"
     not input.resource.raw.auditingEnabled

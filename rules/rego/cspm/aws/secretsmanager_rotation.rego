@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_secretsmanager_rotation
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::secretsmanager::secret"
     not input.resource.raw.RotationEnabled

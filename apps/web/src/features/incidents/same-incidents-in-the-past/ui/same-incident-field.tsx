@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { Link } from "@/components/ui";
 import { getIncidentName } from "@/entities/incidents/lib/utils";
 import { IncidentDto } from "@/entities/incidents/model";

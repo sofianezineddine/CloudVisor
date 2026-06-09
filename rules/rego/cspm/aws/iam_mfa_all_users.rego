@@ -20,8 +20,6 @@
 
 package cspm.aws.iam_mfa_all_users
 
-import future.keywords.if
-
 deny[finding] if {
     input.resource_type == "aws::iam::user"
     input.raw.PasswordLastUsed

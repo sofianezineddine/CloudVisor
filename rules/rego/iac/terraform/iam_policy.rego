@@ -9,10 +9,6 @@
 
 package cloudvisor.iac.terraform.iam_policy
 
-import future.keywords.if
-import future.keywords.in
-import future.keywords.contains
-
 # Dangerous actions that should never use wildcards
 dangerous_action_prefixes := {"iam:*", "s3:*", "ec2:*", "sts:*", "kms:*", "lambda:*", "rds:*"}
 

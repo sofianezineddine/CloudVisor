@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_sg_unrestricted_ssh
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::ec2::securitygroup"
     rule := input.resource.raw.IpPermissions[_]

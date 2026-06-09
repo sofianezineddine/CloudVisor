@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.azure_storage_public_access
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "azure::storage::storageaccount"
     input.resource.raw.allow_blob_public_access == true

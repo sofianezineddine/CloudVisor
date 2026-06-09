@@ -78,6 +78,8 @@ def create_app() -> FastAPI:
             "http://localhost:3001",
             "http://127.0.0.1:3000",
             "http://127.0.0.1:3001",
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
         ],
         allow_credentials=True,
         allow_methods=["*"],
@@ -111,13 +113,10 @@ def create_app() -> FastAPI:
             except Exception as e:
                 logger.warning(f"Neo4j constraints: {e}")
 
-        if app.state.elasticsearch:
-            try:
-                from app.clients.elasticsearch import ASSET_MAPPINGS
-                await app.state.elasticsearch.create_index("assets", ASSET_MAPPINGS)
-                logger.info("Elasticsearch index ready")
-            except Exception as e:
-                logger.warning(f"Elasticsearch index: {e}")
+        # ES index creation moved to init_dependencies (before startup sync)
+        # Startup sync is handled inside _init_after_neo4j_connected
+        # which runs either inline (if Neo4j was available at startup) or
+        # as part of the background recovery task.
 
     @app.on_event("shutdown")
     async def shutdown_event() -> None:
@@ -126,11 +125,20 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     async def health_check() -> dict:
-        return {"status": "healthy", "service": "graph"}
+        import app.core.dependencies as deps
+        neo4j_status = "connected" if deps._neo4j_client is not None else "disconnected"
+        return {"status": "healthy", "service": "graph", "neo4j": neo4j_status}
 
     @app.get("/ready")
     async def readiness_check() -> dict:
-        return {"status": "ready", "service": "graph"}
+        import app.core.dependencies as deps
+        if deps._neo4j_client is None:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=503,
+                content={"status": "not_ready", "service": "graph", "reason": "Neo4j not connected"},
+            )
+        return {"status": "ready", "service": "graph", "neo4j": "connected"}
 
     app.include_router(assets_router, prefix="/internal")
 

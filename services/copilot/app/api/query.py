@@ -2,7 +2,7 @@
 
 import logging
 import re
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +19,16 @@ _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.I,
 )
+def _resolve_bearer_token(authorization: str | None, request: Request) -> str:
+    """Resolve Bearer token from Authorization header or cv_access cookie."""
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+        if token:
+            return token
+    cookie_token = request.cookies.get("cv_access")
+    if cookie_token:
+        return cookie_token.strip()
+    raise HTTPException(status_code=401, detail="Not authenticated")
 
 
 @router.post(
@@ -32,6 +42,7 @@ async def query_copilot(
     query_request: CopilotQueryRequest,
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_org_id: str | None = Header(default=None, alias="X-Org-ID"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
 ) -> CopilotQueryResponse | StreamingResponse:
@@ -47,10 +58,7 @@ async def query_copilot(
     6. Response parsing + audit logging
     """
     # ── Authentication ──────────────────────────────────────────────────────
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    token = authorization.removeprefix("Bearer ").strip()
+    token = _resolve_bearer_token(authorization, request)
 
     extracted_org_id: str | None = None
     extracted_user_id: str | None = None
@@ -264,6 +272,7 @@ async def get_query_history(
     user_only: bool = True,
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_org_id: str | None = Header(default=None, alias="X-Org-ID"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
@@ -273,11 +282,8 @@ async def get_query_history(
     - user_only=false: returns all queries for the organization
     Returns full history: query, response, intent, model, latency, timestamps.
     """
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
     # Extract org_id and user_id from JWT
-    token = authorization.removeprefix("Bearer ").strip()
+    token = _resolve_bearer_token(authorization, request)
     extracted_org_id: str | None = None
     extracted_user_id: str | None = None
 
@@ -338,13 +344,11 @@ async def get_query_detail(
     query_id: str,
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_org_id: str | None = Header(default=None, alias="X-Org-ID"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Get full detail for a single query including the complete response."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    token = authorization.removeprefix("Bearer ").strip()
+    token = _resolve_bearer_token(authorization, request)
     extracted_org_id: str | None = None
 
     if token != "dev-token":

@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:2.1.1, SOC2:CC6.7, PCI-DSS:3.4
 package cspm.aws.s3
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::s3::bucket"
     not input.raw.ServerSideEncryptionConfiguration
     finding := {

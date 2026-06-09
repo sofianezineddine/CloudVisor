@@ -9,10 +9,6 @@
 
 package cloudvisor.iac.terraform.security_group
 
-import future.keywords.if
-import future.keywords.in
-import future.keywords.contains
-
 # Sensitive ports that should never be open to the internet
 sensitive_ports := {22, 3389, 3306, 5432, 1433, 27017, 6379, 9200, 8080, 8443}
 

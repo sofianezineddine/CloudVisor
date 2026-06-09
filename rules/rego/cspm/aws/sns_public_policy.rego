@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_sns_public_policy
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::sns::topic"
     policy := input.resource.raw.Policy

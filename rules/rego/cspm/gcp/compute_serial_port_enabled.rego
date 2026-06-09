@@ -15,8 +15,6 @@
 
 package cloudvisor.cspm.gcp_compute_serial_port_enabled
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "gcp::compute::instance"
     input.resource.raw.metadata["serial-port-enable"] == "true"

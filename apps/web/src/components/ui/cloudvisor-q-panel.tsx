@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useCopilotSessions } from '@/hooks/use-copilot-sessions';
+import { useAuth } from '@/hooks/use-auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Message {
@@ -262,6 +263,8 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
   const scopeAccountIds = useScopeStore(s => s.accountIds);
   const scopeAccounts   = useScopeStore(s => s.accounts);
 
+  const { user } = useAuth();
+
   const [messages, setMessages]             = useState<Message[]>([]);
   const [inputValue, setInputValue]         = useState('');
   const [isProcessing, setIsProcessing]     = useState(false);
@@ -384,13 +387,10 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
     setIsProcessing(true);
 
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_COPILOT_URL || 'http://localhost:8010';
       const GW_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
-      const token = typeof window !== 'undefined' ? null /* token in HttpOnly cookie */ : null;
 
-      let orgId: string | null = null;
-      if (token) { try { const p = JSON.parse(atob(token.split('.')[1])); orgId = p?.organization_id ?? p?.org_id ?? null; } catch {} }
-      if (!orgId) { try { const u = typeof window !== 'undefined' ? localStorage.getItem('cloudvisor-user') : null; if (u) orgId = JSON.parse(u)?.organization_id ?? null; } catch {} }
+      // org_id comes from the authenticated user — gateway also derives it from the JWT cookie
+      const orgId = user?.organization_id ?? null;
       if (!orgId) throw new Error('Unable to determine your organization. Please log in again.');
 
       const pageMap: Record<string, string> = {
@@ -432,15 +432,15 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
       const authHeaders = {
         'Content-Type': 'application/json',
         'X-Org-ID': orgId,
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      // Try gateway first (POST /v1/copilot/query), fall back to direct copilot service
+      // Send query through the API gateway — auth via HttpOnly cookies
       let res: Response | null = null;
       try {
         res = await fetch(`${GW_BASE}/v1/copilot/query`, {
           method: 'POST',
           headers: authHeaders,
+          credentials: 'include', // Send HttpOnly auth cookies
           body: requestBody,
         });
         if (!res.ok) res = null; // fall through to direct
@@ -449,9 +449,11 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
       }
 
       if (!res) {
+        const API_BASE = process.env.NEXT_PUBLIC_COPILOT_URL || 'http://localhost:8010';
         res = await fetch(`${API_BASE}/v1/copilot/query`, {
           method: 'POST',
           headers: authHeaders,
+          credentials: 'include',
           body: requestBody,
         });
       }
@@ -492,7 +494,7 @@ export function CloudVisorQPanel({}: CloudVisorQPanelProps) {
     } finally {
       setIsProcessing(false);
     }
-  }, [inputValue, isProcessing, pathname, scopeMode, scopeProvider, scopeLabel, scopeAccountIds, scopeAccounts]);
+  }, [inputValue, isProcessing, pathname, scopeMode, scopeProvider, scopeLabel, scopeAccountIds, scopeAccounts, user]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }

@@ -366,59 +366,77 @@ class CloudDiscoveryService:
         result.duration_seconds = time.time() - start_time
         return result
 
-    async def _upsert_resources(self, resources: list) -> None:
-        """Upsert discovered resources into the database."""
+    async def _upsert_resources(self, resources: list, batch_size: int = 100) -> None:
+        """Upsert discovered resources into the database in batches.
+
+        Processing resources in chunks of ``batch_size`` keeps each transaction
+        small so the SQLAlchemy identity map never balloons and the process
+        stays well within its memory budget even for accounts with thousands
+        of resources (e.g. 1500+ IAM entities).
+        """
         if not self._db_session_factory:
             return
+
+        total = len(resources)
+        upserted = 0
+
         try:
-            async with self._db_session_factory() as session:
-                for resource in resources:
-                    resource_hash = self._compute_hash(resource)
+            for chunk_start in range(0, total, batch_size):
+                chunk = resources[chunk_start: chunk_start + batch_size]
+                async with self._db_session_factory() as session:
+                    for resource in chunk:
+                        resource_hash = self._compute_hash(resource)
 
-                    # Sanitize raw field — strip non-serializable objects (datetimes, etc.)
-                    raw_data = self._sanitize_for_json(resource.raw)
+                        # Sanitize raw field — strip non-serializable objects (datetimes, etc.)
+                        raw_data = self._sanitize_for_json(resource.raw)
 
-                    stmt = pg_insert(DiscoveredResourceModel).values(
-                        id=resource.id,
-                        cloud_resource_id=resource.cloud_resource_id,
-                        provider=resource.provider.value,
-                        account_id=resource.account_id,
-                        organization_id=resource.organization_id,
-                        region=resource.region,
-                        resource_type=resource.resource_type,
-                        name=resource.name,
-                        tags=resource.tags,
-                        raw=raw_data,
-                        is_public=resource.is_public,
-                        environment=resource.environment.value,
-                        first_seen_at=resource.first_seen_at,
-                        last_seen_at=resource.last_seen_at,
-                        last_synced_at=utcnow(),
-                        resource_hash=resource_hash,
-                        is_deleted=False,
-                        freshness_state="fresh",
-                        missed_sync_count=0,
-                    ).on_conflict_do_update(
-                        constraint="uq_resource_org",
-                        set_={
-                            "name": resource.name,
-                            "tags": resource.tags,
-                            "raw": raw_data,
-                            "is_public": resource.is_public,
-                            "environment": resource.environment.value,
-                            "last_seen_at": resource.last_seen_at,
-                            "last_synced_at": utcnow(),
-                            "resource_hash": resource_hash,
-                            "is_deleted": False,
-                            "deleted_at": None,
-                            # Resource was seen → reset the freshness state.
-                            "freshness_state": "fresh",
-                            "missed_sync_count": 0,
-                        }
+                        stmt = pg_insert(DiscoveredResourceModel).values(
+                            id=resource.id,
+                            cloud_resource_id=resource.cloud_resource_id,
+                            provider=resource.provider.value,
+                            account_id=resource.account_id,
+                            organization_id=resource.organization_id,
+                            region=resource.region,
+                            resource_type=resource.resource_type,
+                            name=resource.name,
+                            tags=resource.tags,
+                            raw=raw_data,
+                            is_public=resource.is_public,
+                            environment=resource.environment.value,
+                            first_seen_at=resource.first_seen_at,
+                            last_seen_at=resource.last_seen_at,
+                            last_synced_at=utcnow(),
+                            resource_hash=resource_hash,
+                            is_deleted=False,
+                            freshness_state="fresh",
+                            missed_sync_count=0,
+                        ).on_conflict_do_update(
+                            constraint="uq_resource_org",
+                            set_={
+                                "name": resource.name,
+                                "tags": resource.tags,
+                                "raw": raw_data,
+                                "is_public": resource.is_public,
+                                "environment": resource.environment.value,
+                                "last_seen_at": resource.last_seen_at,
+                                "last_synced_at": utcnow(),
+                                "resource_hash": resource_hash,
+                                "is_deleted": False,
+                                "deleted_at": None,
+                                # Resource was seen → reset the freshness state.
+                                "freshness_state": "fresh",
+                                "missed_sync_count": 0,
+                            }
+                        )
+                        await session.execute(stmt)
+                    await session.commit()
+                    upserted += len(chunk)
+                    logger.debug(
+                        f"Upserted batch {chunk_start // batch_size + 1} "
+                        f"({upserted}/{total}) for account {self._account.id}"
                     )
-                    await session.execute(stmt)
-                await session.commit()
-                logger.info(f"Upserted {len(resources)} resources for account {self._account.id}")
+
+            logger.info(f"Upserted {upserted} resources for account {self._account.id}")
         except Exception as e:
             logger.error(f"Failed to upsert resources: {e}")
 

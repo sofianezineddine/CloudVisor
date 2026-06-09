@@ -20,8 +20,6 @@
 
 package cspm.aws.cloudtrail_multiregion
 
-import future.keywords.if
-
 deny[finding] if {
     input.resource_type == "aws::cloudtrail::trail"
     not input.raw.IsMultiRegionTrail

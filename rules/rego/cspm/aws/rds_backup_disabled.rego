@@ -18,8 +18,6 @@
 
 package cspm.aws.rds_backup_disabled
 
-import future.keywords.if
-
 deny[finding] if {
     input.resource_type == "aws::rds::dbinstance"
     input.raw.BackupRetentionPeriod == 0

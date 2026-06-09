@@ -10,8 +10,6 @@
 
 package cloudvisor.cdr.iam_privilege_escalation
 
-import future.keywords.if
-
 # Attaching AdministratorAccess policy
 deny[msg] if {
     input.resource.resource_type == "aws::cloudtrail::event"

@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.azure_nsg_unrestricted_ssh
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "azure::network::networksecuritygroup"
     input.resource.is_public == true

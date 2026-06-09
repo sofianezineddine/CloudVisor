@@ -17,8 +17,6 @@
 
 package cloudvisor.cspm.azure_ad_mfa_disabled
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "azure::aad::user"
     not input.resource.raw.mfa_enabled

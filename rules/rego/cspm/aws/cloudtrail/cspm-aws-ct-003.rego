@@ -9,9 +9,7 @@
 # compliance: CIS-AWS:3.1, SOC2:CC7.2
 package cspm.aws.cloudtrail
 
-import future.keywords
-
-deny[finding] {
+deny[finding] if {
     input.resource_type == "aws::cloudtrail::trail"
     not input.raw.IsMultiRegionTrail
     finding := {

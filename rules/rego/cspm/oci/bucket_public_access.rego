@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.oci_bucket_public_access
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "oci::objectstorage::bucket"
     input.resource.raw.public_access_type != "NoPublicAccess"

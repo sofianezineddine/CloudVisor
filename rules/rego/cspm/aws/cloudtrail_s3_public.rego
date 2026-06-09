@@ -10,8 +10,6 @@
 
 package cloudvisor.cspm.aws_cloudtrail_s3_public
 
-import future.keywords.if
-
 deny[msg] if {
     input.resource.resource_type == "aws::cloudtrail::trail"
     input.resource.raw.S3BucketIsPublic == true
